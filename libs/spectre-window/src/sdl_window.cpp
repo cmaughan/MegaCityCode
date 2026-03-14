@@ -33,13 +33,23 @@ static void log_display_info(SDL_Window* window) {
     // CoreGraphics display info
     CGDirectDisplayID displayID = CGMainDisplayID();
     CGSize physicalSize = CGDisplayScreenSize(displayID); // millimeters
-    size_t cgPixelW = CGDisplayPixelsWide(displayID);
-    size_t cgPixelH = CGDisplayPixelsHigh(displayID);
-    fprintf(stderr, "  CG display pixels      : %zu x %zu\n", cgPixelW, cgPixelH);
+    size_t cgLogicalW = CGDisplayPixelsWide(displayID);
+    size_t cgLogicalH = CGDisplayPixelsHigh(displayID);
+    size_t cgPhysicalW = cgLogicalW, cgPhysicalH = cgLogicalH;
+    CGDisplayModeRef mode = CGDisplayCopyDisplayMode(displayID);
+    if (mode) {
+        cgPhysicalW = CGDisplayModeGetPixelWidth(mode);
+        cgPhysicalH = CGDisplayModeGetPixelHeight(mode);
+        CGDisplayModeRelease(mode);
+    }
+    fprintf(stderr, "  CG logical pixels      : %zu x %zu\n", cgLogicalW, cgLogicalH);
+    fprintf(stderr, "  CG physical pixels     : %zu x %zu\n", cgPhysicalW, cgPhysicalH);
     fprintf(stderr, "  CG physical size       : %.1f x %.1f mm\n", physicalSize.width, physicalSize.height);
     if (physicalSize.width > 0) {
-        float ppi = (float)(cgPixelW / (physicalSize.width / 25.4));
-        fprintf(stderr, "  Computed physical PPI  : %.1f\n", ppi);
+        float ppi_logical  = (float)(cgLogicalW  / (physicalSize.width / 25.4));
+        float ppi_physical = (float)(cgPhysicalW / (physicalSize.width / 25.4));
+        fprintf(stderr, "  Computed PPI (logical) : %.1f  (WRONG for HiDPI)\n", ppi_logical);
+        fprintf(stderr, "  Computed PPI (physical): %.1f\n", ppi_physical);
     }
     SDL_DisplayID sdlDisplay = SDL_GetDisplayForWindow(window);
     float contentScale = sdlDisplay ? SDL_GetDisplayContentScale(sdlDisplay) : 1.0f;
@@ -232,10 +242,19 @@ std::pair<int,int> SdlWindow::size_pixels() const {
 
 float SdlWindow::display_ppi() const {
 #ifdef __APPLE__
-    // Get actual physical PPI from CoreGraphics
+    // Get actual physical PPI from CoreGraphics.
+    // CGDisplayPixelsWide returns logical pixels on HiDPI displays (e.g. 1920
+    // on a 4K display at 2x scale). CGDisplayModeGetPixelWidth returns the true
+    // hardware pixel count (e.g. 3840), which is what we need for correct sizing.
     CGDirectDisplayID displayID = CGMainDisplayID();
     CGSize physicalSize = CGDisplayScreenSize(displayID); // millimeters
-    size_t pixelWidth = CGDisplayPixelsWide(displayID);
+    size_t pixelWidth = 0;
+    CGDisplayModeRef mode = CGDisplayCopyDisplayMode(displayID);
+    if (mode) {
+        pixelWidth = CGDisplayModeGetPixelWidth(mode);
+        CGDisplayModeRelease(mode);
+    }
+    if (pixelWidth == 0) pixelWidth = CGDisplayPixelsWide(displayID); // fallback
     if (physicalSize.width > 0) {
         return (float)(pixelWidth / (physicalSize.width / 25.4));
     }
