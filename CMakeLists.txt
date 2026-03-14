@@ -94,6 +94,6 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/fonts/JetBrainsMonoNerdFontMono-Regular.ttf)
 endif()
 
 if(WIN32)
-    target_link_libraries(spectre PRIVATE ws2_32)
+    target_link_libraries(spectre PRIVATE ws2_32 Vulkan::Headers GPUOpen::VulkanMemoryAllocator)
     set_target_properties(spectre PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
