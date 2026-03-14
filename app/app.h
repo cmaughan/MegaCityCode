@@ -37,7 +37,7 @@ private:
     UiEventHandler ui_events_;
     NvimInput input_;
 
-    static constexpr int DEFAULT_FONT_SIZE = 18; // points (physical size)
+    static constexpr int DEFAULT_FONT_SIZE = 16; // points (physical size)
     static constexpr int MIN_FONT_SIZE = 6;
     static constexpr int MAX_FONT_SIZE = 36;
     std::string font_path_;
