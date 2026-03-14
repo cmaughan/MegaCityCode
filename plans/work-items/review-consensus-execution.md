@@ -8,7 +8,10 @@ This file now tracks only the remaining optional follow-up work.
 
 ## Remaining Work
 
-There are no active remaining items in this plan.
+Optional follow-up:
+
+- Idle scheduler validation and diagnostics
+  Check CPU/GPU idle behavior properly after the event-driven main-loop change. If we need better visibility, add a lightweight diagnostic such as a brief flash/overlay/log pulse on frame submission so unnecessary redraws are obvious during manual testing.
 
 The original consensus work is complete. Any further work from here is new optimization or product-direction work, not unfinished consensus cleanup.
 

@@ -1,6 +1,7 @@
 #pragma once
 #include "grid_rendering_pipeline.h"
 #include <chrono>
+#include <optional>
 #include <spectre/sdl_window.h>
 #ifdef __APPLE__
 // Metal renderer header is internal to spectre-renderer, forward declare
@@ -25,10 +26,26 @@ public:
     void shutdown();
 
 private:
-    bool pump_once();
+    enum class CursorBlinkPhase
+    {
+        Steady,
+        Wait,
+        Off,
+        On,
+    };
+
+    bool pump_once(std::optional<std::chrono::steady_clock::time_point> wait_deadline = std::nullopt);
     void on_flush();
+    void on_busy(bool busy);
     void on_resize(int pixel_w, int pixel_h);
     void change_font_size(int new_size);
+    void request_frame();
+    void request_quit();
+    void refresh_cursor_style(bool restart_blink);
+    void restart_cursor_blink(std::chrono::steady_clock::time_point now);
+    void advance_cursor_blink(std::chrono::steady_clock::time_point now);
+    void apply_cursor_visibility();
+    int wait_timeout_ms(std::optional<std::chrono::steady_clock::time_point> wait_deadline) const;
 
     SdlWindow window_;
     std::unique_ptr<IRenderer> renderer_;
@@ -46,6 +63,12 @@ private:
     bool pending_window_activation_ = true;
     bool saw_flush_ = false;
     bool saw_frame_ = false;
+    bool frame_requested_ = false;
+    bool cursor_visible_ = true;
+    bool cursor_busy_ = false;
+    CursorStyle cursor_style_ = {};
+    CursorBlinkPhase cursor_blink_phase_ = CursorBlinkPhase::Steady;
+    std::optional<std::chrono::steady_clock::time_point> next_blink_deadline_;
     int grid_cols_ = 0, grid_rows_ = 0;
 };
 

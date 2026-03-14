@@ -84,6 +84,7 @@ bool App::initialize()
         SPECTRE_LOG_ERROR(LogCategory::App, "Failed to init RPC");
         return false;
     }
+    rpc_.on_notification_available = [this]() { window_.wake(); };
 
     // 7. Setup UI event handler
     ui_events_.set_grid(&grid_);
@@ -96,9 +97,12 @@ bool App::initialize()
         renderer_->set_grid_size(cols, rows);
         grid_pipeline_.force_full_atlas_upload();
     };
+    ui_events_.on_cursor_goto = [this](int, int) { restart_cursor_blink(std::chrono::steady_clock::now()); };
+    ui_events_.on_mode_change = [this](int) { refresh_cursor_style(true); };
     ui_events_.on_option_set = [this](const std::string& name, const MpackValue& value) {
         apply_ui_option(ui_options_, name, value);
     };
+    ui_events_.on_busy = [this](bool busy) { on_busy(busy); };
 
     // 8. Setup input handler
     input_.initialize(&rpc_, metrics.cell_width, metrics.cell_height);
@@ -145,6 +149,10 @@ bool App::initialize()
     SPECTRE_LOG_INFO(LogCategory::App, "UI attached: %dx%d", grid_cols_, grid_rows_);
     saw_flush_ = false;
     saw_frame_ = false;
+    frame_requested_ = false;
+    cursor_visible_ = true;
+    cursor_busy_ = false;
+    next_blink_deadline_.reset();
     running_ = true;
     return true;
 }
@@ -162,13 +170,12 @@ bool App::run_smoke_test(std::chrono::milliseconds timeout)
     auto deadline = std::chrono::steady_clock::now() + timeout;
     while (running_ && std::chrono::steady_clock::now() < deadline)
     {
-        pump_once();
+        pump_once(deadline);
         if (saw_flush_ && saw_frame_)
         {
             SPECTRE_LOG_INFO(LogCategory::App, "Smoke test passed");
             return true;
         }
-        SDL_Delay(10);
     }
 
     SPECTRE_LOG_ERROR(LogCategory::App, "Smoke test timed out (flush=%d frame=%d)",
@@ -176,76 +183,81 @@ bool App::run_smoke_test(std::chrono::milliseconds timeout)
     return false;
 }
 
-bool App::pump_once()
+bool App::pump_once(std::optional<std::chrono::steady_clock::time_point> wait_deadline)
 {
-    if (pending_window_activation_)
+    while (running_)
     {
-        window_.activate();
-        pending_window_activation_ = false;
-    }
-
-    if (!window_.poll_events())
-    {
-        rpc_.notify("nvim_input", { NvimRpc::make_str("<C-\\><C-n>:qa!<CR>") });
-        running_ = false;
-        return false;
-    }
-
-    if (!nvim_process_.is_running())
-    {
-        running_ = false;
-        return false;
-    }
-
-    auto notifications = rpc_.drain_notifications();
-    for (auto& notif : notifications)
-    {
-        if (notif.method == "redraw")
+        if (pending_window_activation_)
         {
-            ui_events_.process_redraw(notif.params);
+            window_.activate();
+            pending_window_activation_ = false;
+        }
+
+        if (!window_.poll_events())
+        {
+            request_quit();
+            return false;
+        }
+
+        if (!nvim_process_.is_running())
+        {
+            running_ = false;
+            return false;
+        }
+
+        auto notifications = rpc_.drain_notifications();
+        for (auto& notif : notifications)
+        {
+            if (notif.method == "redraw")
+            {
+                ui_events_.process_redraw(notif.params);
+            }
+        }
+
+        advance_cursor_blink(std::chrono::steady_clock::now());
+
+        if (frame_requested_)
+        {
+            if (renderer_->begin_frame())
+            {
+                saw_frame_ = true;
+                renderer_->end_frame();
+                frame_requested_ = false;
+            }
+            return running_;
+        }
+
+        if (wait_deadline && std::chrono::steady_clock::now() >= *wait_deadline)
+            return running_;
+
+        int timeout_ms = wait_timeout_ms(wait_deadline);
+        if (!window_.wait_events(timeout_ms))
+        {
+            request_quit();
+            return false;
         }
     }
 
-    if (renderer_->begin_frame())
-    {
-        saw_frame_ = true;
-        renderer_->end_frame();
-    }
-
-    return running_;
+    return false;
 }
 
 void App::on_flush()
 {
     saw_flush_ = true;
     grid_pipeline_.flush();
+    refresh_cursor_style(true);
+}
 
-    CursorStyle cursor_style;
-    cursor_style.bg = highlights_.default_fg();
-    cursor_style.fg = highlights_.default_bg();
-
-    int mode = ui_events_.current_mode();
-    if (mode >= 0 && mode < (int)ui_events_.modes().size())
-    {
-        const auto& mode_info = ui_events_.modes()[mode];
-        cursor_style.shape = mode_info.cursor_shape;
-        cursor_style.cell_percentage = mode_info.cell_percentage;
-        if (mode_info.attr_id != 0)
-        {
-            Color fg;
-            Color bg;
-            highlights_.resolve(highlights_.get((uint16_t)mode_info.attr_id), fg, bg);
-            cursor_style.fg = fg;
-            cursor_style.bg = bg;
-            cursor_style.use_explicit_colors = true;
-        }
-    }
-    renderer_->set_cursor(ui_events_.cursor_col(), ui_events_.cursor_row(), cursor_style);
+void App::on_busy(bool busy)
+{
+    cursor_busy_ = busy;
+    restart_cursor_blink(std::chrono::steady_clock::now());
 }
 
 void App::on_resize(int pixel_w, int pixel_h)
 {
     renderer_->resize(pixel_w, pixel_h);
+    request_frame();
 
     auto [cell_w, cell_h] = renderer_->cell_size_pixels();
     int pad = renderer_->padding();
@@ -294,6 +306,7 @@ void App::change_font_size(int new_size)
         new_rows = 1;
 
     grid_pipeline_.flush();
+    refresh_cursor_style(true);
 
     if (new_cols != grid_cols_ || new_rows != grid_rows_)
     {
@@ -303,6 +316,149 @@ void App::change_font_size(int new_size)
             SPECTRE_LOG_WARN(LogCategory::App, "nvim_ui_try_resize failed during font resize");
         }
     }
+}
+
+void App::request_frame()
+{
+    frame_requested_ = true;
+    window_.wake();
+}
+
+void App::request_quit()
+{
+    if (nvim_process_.is_running())
+    {
+        rpc_.notify("nvim_input", { NvimRpc::make_str("<C-\\><C-n>:qa!<CR>") });
+    }
+    running_ = false;
+}
+
+void App::refresh_cursor_style(bool restart_blink)
+{
+    cursor_style_ = {};
+    cursor_style_.bg = highlights_.default_fg();
+    cursor_style_.fg = highlights_.default_bg();
+
+    int mode = ui_events_.current_mode();
+    if (mode >= 0 && mode < (int)ui_events_.modes().size())
+    {
+        const auto& mode_info = ui_events_.modes()[mode];
+        cursor_style_.shape = mode_info.cursor_shape;
+        cursor_style_.cell_percentage = mode_info.cell_percentage;
+        if (mode_info.attr_id != 0)
+        {
+            Color fg;
+            Color bg;
+            highlights_.resolve(highlights_.get((uint16_t)mode_info.attr_id), fg, bg);
+            cursor_style_.fg = fg;
+            cursor_style_.bg = bg;
+            cursor_style_.use_explicit_colors = true;
+        }
+    }
+
+    if (restart_blink)
+    {
+        restart_cursor_blink(std::chrono::steady_clock::now());
+    }
+    else
+    {
+        apply_cursor_visibility();
+    }
+}
+
+void App::restart_cursor_blink(std::chrono::steady_clock::time_point now)
+{
+    const ModeInfo* mode_info = nullptr;
+    int mode = ui_events_.current_mode();
+    if (mode >= 0 && mode < (int)ui_events_.modes().size())
+        mode_info = &ui_events_.modes()[mode];
+
+    if (cursor_busy_)
+    {
+        cursor_visible_ = false;
+        cursor_blink_phase_ = CursorBlinkPhase::Steady;
+        next_blink_deadline_.reset();
+        apply_cursor_visibility();
+        return;
+    }
+
+    bool blink_enabled = mode_info && mode_info->blinkwait > 0 && mode_info->blinkon > 0 && mode_info->blinkoff > 0;
+    cursor_visible_ = true;
+    if (!blink_enabled)
+    {
+        cursor_blink_phase_ = CursorBlinkPhase::Steady;
+        next_blink_deadline_.reset();
+    }
+    else
+    {
+        cursor_blink_phase_ = CursorBlinkPhase::Wait;
+        next_blink_deadline_ = now + std::chrono::milliseconds(mode_info->blinkwait);
+    }
+    apply_cursor_visibility();
+}
+
+void App::advance_cursor_blink(std::chrono::steady_clock::time_point now)
+{
+    if (!next_blink_deadline_ || now < *next_blink_deadline_)
+        return;
+
+    const ModeInfo* mode_info = nullptr;
+    int mode = ui_events_.current_mode();
+    if (mode >= 0 && mode < (int)ui_events_.modes().size())
+        mode_info = &ui_events_.modes()[mode];
+
+    if (cursor_busy_ || !mode_info || mode_info->blinkwait <= 0 || mode_info->blinkon <= 0 || mode_info->blinkoff <= 0)
+    {
+        restart_cursor_blink(now);
+        return;
+    }
+
+    switch (cursor_blink_phase_)
+    {
+    case CursorBlinkPhase::Wait:
+    case CursorBlinkPhase::On:
+        cursor_visible_ = false;
+        cursor_blink_phase_ = CursorBlinkPhase::Off;
+        next_blink_deadline_ = now + std::chrono::milliseconds(mode_info->blinkoff);
+        break;
+
+    case CursorBlinkPhase::Off:
+        cursor_visible_ = true;
+        cursor_blink_phase_ = CursorBlinkPhase::On;
+        next_blink_deadline_ = now + std::chrono::milliseconds(mode_info->blinkon);
+        break;
+
+    case CursorBlinkPhase::Steady:
+        restart_cursor_blink(now);
+        return;
+    }
+
+    apply_cursor_visibility();
+}
+
+void App::apply_cursor_visibility()
+{
+    int cursor_col = cursor_visible_ ? ui_events_.cursor_col() : -1;
+    int cursor_row = cursor_visible_ ? ui_events_.cursor_row() : -1;
+    renderer_->set_cursor(cursor_col, cursor_row, cursor_style_);
+    request_frame();
+}
+
+int App::wait_timeout_ms(std::optional<std::chrono::steady_clock::time_point> wait_deadline) const
+{
+    auto deadline = next_blink_deadline_;
+    if (wait_deadline && (!deadline || *wait_deadline < *deadline))
+        deadline = wait_deadline;
+
+    if (!deadline)
+        return -1;
+
+    auto now = std::chrono::steady_clock::now();
+    if (now >= *deadline)
+        return 0;
+
+    auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(*deadline - now);
+    return std::max(1, (int)delta.count());
 }
 
 void App::shutdown()

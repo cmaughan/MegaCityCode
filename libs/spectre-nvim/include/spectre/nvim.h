@@ -197,6 +197,8 @@ public:
     static MpackValue make_map(std::vector<std::pair<MpackValue, MpackValue>> v);
     static MpackValue make_nil();
 
+    std::function<void()> on_notification_available;
+
 private:
     void reader_thread_func();
 
@@ -227,6 +229,9 @@ struct ModeInfo
     CursorShape cursor_shape = CursorShape::Block;
     int cell_percentage = 0;
     int attr_id = 0;
+    int blinkwait = 0;
+    int blinkon = 0;
+    int blinkoff = 0;
 };
 
 class UiEventHandler
@@ -250,7 +255,9 @@ public:
     std::function<void()> on_flush;
     std::function<void(int, int)> on_grid_resize;
     std::function<void(int, int)> on_cursor_goto;
+    std::function<void(int)> on_mode_change;
     std::function<void(const std::string&, const MpackValue&)> on_option_set;
+    std::function<void(bool)> on_busy;
 
     const std::vector<ModeInfo>& modes() const
     {

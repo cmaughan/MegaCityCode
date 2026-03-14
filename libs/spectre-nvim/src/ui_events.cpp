@@ -23,6 +23,20 @@ void UiEventHandler::process_redraw(const std::vector<MpackValue>& params)
             continue;
         }
 
+        if (name == "busy_start")
+        {
+            if (on_busy)
+                on_busy(true);
+            continue;
+        }
+
+        if (name == "busy_stop")
+        {
+            if (on_busy)
+                on_busy(false);
+            continue;
+        }
+
         for (size_t i = 1; i < event_array.size(); i++)
         {
             const auto& args = event_array[i];
@@ -240,6 +254,12 @@ void UiEventHandler::handle_mode_info_set(const MpackValue& args)
                     info.cell_percentage = (int)val.as_int();
                 else if (k == "attr_id")
                     info.attr_id = (int)val.as_int();
+                else if (k == "blinkwait")
+                    info.blinkwait = (int)val.as_int();
+                else if (k == "blinkon")
+                    info.blinkon = (int)val.as_int();
+                else if (k == "blinkoff")
+                    info.blinkoff = (int)val.as_int();
             }
         }
         modes_.push_back(std::move(info));
@@ -251,6 +271,8 @@ void UiEventHandler::handle_mode_change(const MpackValue& args)
     if (args.type() != MpackValue::Array || args.as_array().size() < 2)
         return;
     current_mode_ = (int)args.as_array()[1].as_int();
+    if (on_mode_change)
+        on_mode_change(current_mode_);
 }
 
 void UiEventHandler::handle_option_set(const MpackValue& args)

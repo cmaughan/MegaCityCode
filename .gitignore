@@ -6,3 +6,4 @@ Testing/
 *.user
 CMakeUserPresets.json
 out/
+/plans/prompts/history/

@@ -128,6 +128,8 @@ void NvimRpc::reader_thread_func()
             read_failed_ = true;
             running_ = false;
             response_cv_.notify_all();
+            if (on_notification_available)
+                on_notification_available();
             break;
         }
 
@@ -171,8 +173,12 @@ void NvimRpc::reader_thread_func()
                         notif.params = msg_array[2].as_array();
                     }
 
-                    std::lock_guard<std::mutex> lock(notif_mutex_);
-                    notifications_.push(std::move(notif));
+                    {
+                        std::lock_guard<std::mutex> lock(notif_mutex_);
+                        notifications_.push(std::move(notif));
+                    }
+                    if (on_notification_available)
+                        on_notification_available();
                 }
             }
         }

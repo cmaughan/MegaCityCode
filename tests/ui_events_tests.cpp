@@ -83,7 +83,7 @@ void run_ui_events_tests()
             redraw_event("hl_attr_define", { arr({ i(7), map({ { s("foreground"), i(0x123456) }, { s("background"), i(0x654321) }, { s("bold"), b(true) } }) }) }),
             redraw_event("grid_line", { grid_line_batch(1, 0, 0, { cell("A", 7), cell("B", std::nullopt, 2) }) }),
             redraw_event("grid_cursor_goto", { arr({ i(1), i(1), i(2) }) }),
-            redraw_event("mode_info_set", { arr({ b(true), arr({ map({ { s("name"), s("normal") }, { s("cursor_shape"), s("vertical") }, { s("cell_percentage"), i(25) }, { s("attr_id"), i(7) } }) }) }) }),
+            redraw_event("mode_info_set", { arr({ b(true), arr({ map({ { s("name"), s("normal") }, { s("cursor_shape"), s("vertical") }, { s("cell_percentage"), i(25) }, { s("attr_id"), i(7) }, { s("blinkwait"), i(700) }, { s("blinkon"), i(400) }, { s("blinkoff"), i(250) } }) }) }) }),
             redraw_event("mode_change", { arr({ s("normal"), i(0) }) }),
             redraw_event("flush", {}) });
 
@@ -98,8 +98,42 @@ void run_ui_events_tests()
         expect_eq(static_cast<int>(handler.modes().size()), 1, "mode table is populated");
         expect_eq(handler.modes()[0].attr_id, 7, "mode attr id is preserved");
         expect_eq(handler.modes()[0].cell_percentage, 25, "mode cell percentage is preserved");
+        expect_eq(handler.modes()[0].blinkwait, 700, "mode blinkwait is preserved");
+        expect_eq(handler.modes()[0].blinkon, 400, "mode blinkon is preserved");
+        expect_eq(handler.modes()[0].blinkoff, 250, "mode blinkoff is preserved");
         expect_eq(highlights.get(7).bold, true, "highlight attributes are stored");
         expect_eq(highlights.default_bg(), Color::from_rgb(0x101010), "default background is updated");
+    });
+
+    run_test("ui event handler forwards busy state transitions", []() {
+        UiEventHandler handler;
+        bool busy = false;
+        int transitions = 0;
+        handler.on_busy = [&](bool value) {
+            busy = value;
+            transitions++;
+        };
+
+        handler.process_redraw({
+            redraw_event("busy_start", {}),
+            redraw_event("busy_stop", {}),
+        });
+
+        expect_eq(transitions, 2, "busy callbacks fire for both transitions");
+        expect_eq(busy, false, "busy stop clears busy state");
+    });
+
+    run_test("ui event handler forwards mode changes immediately", []() {
+        UiEventHandler handler;
+        int seen_mode = -1;
+        handler.on_mode_change = [&](int mode) { seen_mode = mode; };
+
+        handler.process_redraw({
+            redraw_event("mode_change", { arr({ s("insert"), i(3) }) }),
+        });
+
+        expect_eq(handler.current_mode(), 3, "mode index updates immediately");
+        expect_eq(seen_mode, 3, "mode change callback fires immediately");
     });
 
     run_test("ui event handler forwards grid resize callbacks", []() {
@@ -232,10 +266,10 @@ void run_ui_events_tests()
 
         handler.process_redraw({
             redraw_event("grid_line", { grid_line_batch(1, 0, 0, {
-                                                           cell("A", 2),
-                                                           cell("", 3, 3),
-                                                           cell("B", 4),
-                                                       }) }),
+                                                                     cell("A", 2),
+                                                                     cell("", 3, 3),
+                                                                     cell("B", 4),
+                                                                 }) }),
         });
 
         expect_eq(grid.get_cell(0, 0).text, std::string("A"), "first cell is written");

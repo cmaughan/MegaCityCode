@@ -115,3 +115,7 @@ The result should read like a conversation and planning review for fixes, with a
 ## Consensus Shortcut
 
 When the user says `come to consensus`, treat that as a direct instruction to execute the saved consensus prompt in `plans/prompts/consensus_review.md`.
+
+## Prompt History
+
+When the user asks to store prompts from the current thread, write them to a dated markdown file under `plans/prompts/history/` in chronological order and mark interrupted or partial prompts inline.

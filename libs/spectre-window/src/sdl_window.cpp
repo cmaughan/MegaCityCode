@@ -133,6 +133,13 @@ bool SdlWindow::initialize(const std::string& title, int width, int height)
         return false;
     }
 
+    wake_event_type_ = SDL_RegisterEvents(1);
+    if (wake_event_type_ == static_cast<Uint32>(-1))
+    {
+        SPECTRE_LOG_ERROR(LogCategory::Window, "SDL_RegisterEvents failed: %s", SDL_GetError());
+        return false;
+    }
+
 #ifdef __APPLE__
     Uint64 window_flags = SDL_WINDOW_METAL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
 #else
@@ -216,74 +223,116 @@ void SdlWindow::shutdown()
     SDL_Quit();
 }
 
+bool SdlWindow::handle_event(const SDL_Event& event)
+{
+    if (event.type == wake_event_type_)
+        return true;
+
+    switch (event.type)
+    {
+    case SDL_EVENT_QUIT:
+        return false;
+
+    case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+        if (on_resize)
+        {
+            // Use pixel dimensions (not points) for correct Retina/HiDPI rendering
+            int pw, ph;
+            SDL_GetWindowSizeInPixels(window_, &pw, &ph);
+            on_resize({ pw, ph });
+        }
+        break;
+
+    case SDL_EVENT_KEY_DOWN:
+    case SDL_EVENT_KEY_UP:
+        if (on_key)
+        {
+            on_key({ (int)event.key.scancode,
+                (int)event.key.key,
+                event.key.mod,
+                event.type == SDL_EVENT_KEY_DOWN });
+        }
+        break;
+
+    case SDL_EVENT_TEXT_INPUT:
+        if (on_text_input)
+        {
+            on_text_input({ event.text.text });
+        }
+        break;
+
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (on_mouse_button)
+        {
+            on_mouse_button({ (int)event.button.button,
+                event.type == SDL_EVENT_MOUSE_BUTTON_DOWN,
+                SDL_GetModState(),
+                (int)event.button.x,
+                (int)event.button.y });
+        }
+        break;
+
+    case SDL_EVENT_MOUSE_MOTION:
+        if (on_mouse_move)
+        {
+            on_mouse_move({ SDL_GetModState(), (int)event.motion.x, (int)event.motion.y });
+        }
+        break;
+
+    case SDL_EVENT_MOUSE_WHEEL:
+        if (on_mouse_wheel)
+        {
+            on_mouse_wheel({ event.wheel.x, event.wheel.y,
+                SDL_GetModState(),
+                (int)event.wheel.mouse_x, (int)event.wheel.mouse_y });
+        }
+        break;
+    }
+
+    return true;
+}
+
 bool SdlWindow::poll_events()
 {
     SDL_Event event;
     while (SDL_PollEvent(&event))
     {
-        switch (event.type)
-        {
-        case SDL_EVENT_QUIT:
+        if (!handle_event(event))
             return false;
-
-        case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
-            if (on_resize)
-            {
-                // Use pixel dimensions (not points) for correct Retina/HiDPI rendering
-                int pw, ph;
-                SDL_GetWindowSizeInPixels(window_, &pw, &ph);
-                on_resize({ pw, ph });
-            }
-            break;
-
-        case SDL_EVENT_KEY_DOWN:
-        case SDL_EVENT_KEY_UP:
-            if (on_key)
-            {
-                on_key({ (int)event.key.scancode,
-                    (int)event.key.key,
-                    event.key.mod,
-                    event.type == SDL_EVENT_KEY_DOWN });
-            }
-            break;
-
-        case SDL_EVENT_TEXT_INPUT:
-            if (on_text_input)
-            {
-                on_text_input({ event.text.text });
-            }
-            break;
-
-        case SDL_EVENT_MOUSE_BUTTON_DOWN:
-        case SDL_EVENT_MOUSE_BUTTON_UP:
-            if (on_mouse_button)
-            {
-                on_mouse_button({ (int)event.button.button,
-                    event.type == SDL_EVENT_MOUSE_BUTTON_DOWN,
-                    SDL_GetModState(),
-                    (int)event.button.x,
-                    (int)event.button.y });
-            }
-            break;
-
-        case SDL_EVENT_MOUSE_MOTION:
-            if (on_mouse_move)
-            {
-                on_mouse_move({ SDL_GetModState(), (int)event.motion.x, (int)event.motion.y });
-            }
-            break;
-
-        case SDL_EVENT_MOUSE_WHEEL:
-            if (on_mouse_wheel)
-            {
-                on_mouse_wheel({ event.wheel.x, event.wheel.y,
-                    SDL_GetModState(),
-                    (int)event.wheel.mouse_x, (int)event.wheel.mouse_y });
-            }
-            break;
-        }
     }
     return true;
+}
+
+bool SdlWindow::wait_events(int timeout_ms)
+{
+    SDL_Event event;
+    SDL_ClearError();
+    bool got_event = timeout_ms < 0 ? SDL_WaitEvent(&event) : SDL_WaitEventTimeout(&event, timeout_ms);
+    if (!got_event)
+    {
+        const char* err = SDL_GetError();
+        if (err && err[0] != '\0')
+        {
+            SPECTRE_LOG_WARN(LogCategory::Window, "SDL wait failed: %s", err);
+        }
+        return true;
+    }
+
+    if (!handle_event(event))
+        return false;
+
+    return poll_events();
+}
+
+void SdlWindow::wake()
+{
+    if (!window_ || wake_event_type_ == 0 || wake_event_type_ == static_cast<Uint32>(-1))
+        return;
+
+    SDL_Event event = {};
+    event.type = wake_event_type_;
+    SDL_PushEvent(&event);
 }
 
 std::pair<int, int> SdlWindow::size_pixels() const
