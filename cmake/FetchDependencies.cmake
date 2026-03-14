@@ -63,6 +63,8 @@ set(HB_HAVE_GOBJECT OFF CACHE BOOL "" FORCE)
 set(HB_HAVE_GLIB OFF CACHE BOOL "" FORCE)
 set(HB_HAVE_ICU OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(harfbuzz)
+# Suppress warnings from HarfBuzz's macOS SDK headers (deprecated CoreText/QD types)
+target_compile_options(harfbuzz PRIVATE -w)
 
 # MPack
 FetchContent_Declare(

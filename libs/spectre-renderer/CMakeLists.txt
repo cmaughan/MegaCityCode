@@ -10,6 +10,7 @@ if(APPLE)
         ${QUARTZCORE_FRAMEWORK}
         ${FOUNDATION_FRAMEWORK}
     )
+    target_compile_options(spectre-renderer PRIVATE -Wno-deprecated-declarations)
 else()
     add_library(spectre-renderer
         src/vulkan/vk_renderer.cpp

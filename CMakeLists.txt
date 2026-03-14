@@ -55,10 +55,8 @@ target_include_directories(spectre PRIVATE libs/spectre-renderer/src)
 
 target_link_libraries(spectre PRIVATE
     spectre-types
-    spectre-window
     spectre-renderer
     spectre-font
-    spectre-grid
     spectre-nvim
 )
 

@@ -15,7 +15,7 @@
 
 namespace spectre {
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
 static void log_display_info(SDL_Window* window) {
     fprintf(stderr, "\n=== Display / DPI Diagnostics ===\n");
 
@@ -29,6 +29,24 @@ static void log_display_info(SDL_Window* window) {
     fprintf(stderr, "  SDL display scale      : %.3f  (= pixel/logical ratio)\n", sdl_scale);
     fprintf(stderr, "  SDL effective DPI      : %.1f  (96 * scale)\n", 96.0f * sdl_scale);
 
+#ifdef __APPLE__
+    // CoreGraphics display info
+    CGDirectDisplayID displayID = CGMainDisplayID();
+    CGSize physicalSize = CGDisplayScreenSize(displayID); // millimeters
+    size_t cgPixelW = CGDisplayPixelsWide(displayID);
+    size_t cgPixelH = CGDisplayPixelsHigh(displayID);
+    fprintf(stderr, "  CG display pixels      : %zu x %zu\n", cgPixelW, cgPixelH);
+    fprintf(stderr, "  CG physical size       : %.1f x %.1f mm\n", physicalSize.width, physicalSize.height);
+    if (physicalSize.width > 0) {
+        float ppi = (float)(cgPixelW / (physicalSize.width / 25.4));
+        fprintf(stderr, "  Computed physical PPI  : %.1f\n", ppi);
+    }
+    SDL_DisplayID sdlDisplay = SDL_GetDisplayForWindow(window);
+    float contentScale = sdlDisplay ? SDL_GetDisplayContentScale(sdlDisplay) : 1.0f;
+    fprintf(stderr, "  SDL content scale      : %.3f\n", contentScale);
+#endif
+
+#ifdef _WIN32
     // Win32 HWND-based queries
     HWND hwnd = (HWND)SDL_GetPointerProperty(
         SDL_GetWindowProperties(window), SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
@@ -81,9 +99,10 @@ static void log_display_info(SDL_Window* window) {
             }
         }
     }
+#endif
     fprintf(stderr, "=================================\n\n");
 }
-#endif
+#endif // _WIN32 || __APPLE__
 
 bool SdlWindow::initialize(const std::string& title, int width, int height) {
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
@@ -123,7 +142,7 @@ bool SdlWindow::initialize(const std::string& title, int width, int height) {
     // Enable text input events (required in SDL3)
     SDL_StartTextInput(window_);
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
     log_display_info(window_);
 #endif
 
