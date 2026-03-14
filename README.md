@@ -14,9 +14,11 @@ Spectre is a cross-platform Neovim GUI frontend with native GPU rendering:
 
 - Ext_linegrid-based UI rendering
 - FreeType + HarfBuzz text pipeline with a dynamic glyph atlas
+- Font fallback for newer Nerd Font and emoji/plugin glyph coverage
 - Runtime font size changes with `Ctrl+=`, `Ctrl+-`, and `Ctrl+0`
 - Mouse input support for click, drag, and wheel events
 - HiDPI / Retina-aware rendering
+- Shared logging with console/file fallback and category filtering
 - Thin app layer with separate window, renderer, font, grid, and Neovim modules
 
 ## Requirements
@@ -100,6 +102,27 @@ To open a console window for logs:
 
 Spectre starts an embedded Neovim child process automatically.
 
+## Convenience Scripts
+
+Root wrappers:
+
+```powershell
+r.bat
+r.bat --console
+r.bat release --console
+t.bat
+t.bat both
+```
+
+```bash
+sh ./r.sh
+sh ./r.sh release
+sh ./t.sh
+sh ./t.sh both
+```
+
+The root wrappers delegate to the larger scripts under `scripts/`.
+
 ## Testing
 
 The repository includes lightweight native tests for grid logic, redraw parsing, and input translation.
@@ -138,6 +161,27 @@ Other modes:
 
 The test scripts reuse the existing CMake cache when possible and only reconfigure when needed.
 
+The CTest suite also includes an app startup smoke test when `nvim` is available on `PATH`.
+
+## Logging
+
+Spectre now uses a shared repo-local logger across the app, RPC/process layer, windowing, font stack, and renderers.
+
+Environment controls:
+
+```powershell
+$env:SPECTRE_LOG = "debug"
+$env:SPECTRE_LOG_CATEGORIES = "app,rpc,font"
+$env:SPECTRE_LOG_FILE = "logs\\spectre.log"
+```
+
+Notes:
+
+- Default level is `info`.
+- Categories are comma-separated.
+- GUI launches without a console will fall back to a log file automatically.
+- The DPI diagnostics in the window layer are now `debug`-only instead of always-on.
+
 ## Project Layout
 
 ```text
@@ -163,10 +207,10 @@ GitHub Actions builds and tests the project on:
 - Windows
 - macOS
 
-The workflow uses the same repo-local test scripts as local development.
+The workflow uses the same repo-local test scripts as local development, including the startup smoke test.
 
 ## Notes
 
 - Windows uses a multi-config Visual Studio generator through `CMakePresets.json`.
 - The renderer boundary is owned by `spectre-renderer`; app code should not include backend-private headers.
-- Unicode rendering is still primarily cell-oriented. Basic wide-character support exists, but complex grapheme-cluster rendering is still an area for future work.
+- Grapheme handling is much better than the original single-codepoint path, but broad Unicode width conformance against Neovim is still future hardening work.
