@@ -7,11 +7,13 @@
 #include <mutex>
 #include <queue>
 #include <spectre/events.h>
-#include <spectre/grid.h>
+#include <spectre/grid_sink.h>
+#include <spectre/highlight.h>
 #include <spectre/types.h>
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 #ifdef _WIN32
@@ -69,31 +71,70 @@ struct MpackValue
         Map,
         Ext
     };
-    Type type = Nil;
 
-    bool bool_val = false;
-    int64_t int_val = 0;
-    uint64_t uint_val = 0;
-    double float_val = 0;
-    std::string str_val;
-    std::vector<MpackValue> array_val;
-    std::vector<std::pair<MpackValue, MpackValue>> map_val;
+    using ArrayStorage = std::vector<MpackValue>;
+    using MapStorage = std::vector<std::pair<MpackValue, MpackValue>>;
+    using Storage = std::variant<std::monostate, bool, int64_t, uint64_t, double, std::string, ArrayStorage, MapStorage>;
+
+    Storage storage = std::monostate{};
+
+    Type type() const
+    {
+        switch (storage.index())
+        {
+        case 0:
+            return Nil;
+        case 1:
+            return Bool;
+        case 2:
+            return Int;
+        case 3:
+            return UInt;
+        case 4:
+            return Float;
+        case 5:
+            return String;
+        case 6:
+            return Array;
+        case 7:
+            return Map;
+        default:
+            return Nil;
+        }
+    }
+
+    bool is_nil() const
+    {
+        return std::holds_alternative<std::monostate>(storage);
+    }
 
     int64_t as_int() const
     {
-        return type == UInt ? (int64_t)uint_val : int_val;
+        if (auto value = std::get_if<int64_t>(&storage))
+            return *value;
+        if (auto value = std::get_if<uint64_t>(&storage))
+            return (int64_t)*value;
+        throw std::bad_variant_access();
     }
+
     const std::string& as_str() const
     {
-        return str_val;
+        return std::get<std::string>(storage);
     }
+
     bool as_bool() const
     {
-        return bool_val;
+        return std::get<bool>(storage);
     }
-    const std::vector<MpackValue>& as_array() const
+
+    const ArrayStorage& as_array() const
     {
-        return array_val;
+        return std::get<ArrayStorage>(storage);
+    }
+
+    const MapStorage& as_map() const
+    {
+        return std::get<MapStorage>(storage);
     }
 };
 
@@ -110,11 +151,28 @@ struct RpcResponse
     MpackValue result;
 };
 
+struct RpcResult
+{
+    MpackValue result;
+    MpackValue error;
+    bool transport_ok = false;
+
+    bool is_error() const
+    {
+        return !error.is_nil();
+    }
+
+    bool ok() const
+    {
+        return transport_ok && !is_error();
+    }
+};
+
 class IRpcChannel
 {
 public:
     virtual ~IRpcChannel() = default;
-    virtual MpackValue request(const std::string& method, const std::vector<MpackValue>& params) = 0;
+    virtual RpcResult request(const std::string& method, const std::vector<MpackValue>& params) = 0;
     virtual void notify(const std::string& method, const std::vector<MpackValue>& params) = 0;
 };
 
@@ -126,7 +184,7 @@ public:
     bool initialize(NvimProcess& process);
     void shutdown();
 
-    MpackValue request(const std::string& method, const std::vector<MpackValue>& params) override;
+    RpcResult request(const std::string& method, const std::vector<MpackValue>& params) override;
     void notify(const std::string& method, const std::vector<MpackValue>& params) override;
 
     std::vector<RpcNotification> drain_notifications();
@@ -141,8 +199,6 @@ public:
 
 private:
     void reader_thread_func();
-    void write_value(mpack_writer_t* writer, const MpackValue& val);
-    MpackValue read_value(mpack_reader_t* reader);
 
     NvimProcess* process_ = nullptr;
     std::thread reader_thread_;
@@ -176,13 +232,17 @@ struct ModeInfo
 class UiEventHandler
 {
 public:
-    void set_grid(Grid* grid)
+    void set_grid(IGridSink* grid)
     {
         grid_ = grid;
     }
     void set_highlights(HighlightTable* hl)
     {
         highlights_ = hl;
+    }
+    void set_options(const UiOptions* options)
+    {
+        options_ = options;
     }
 
     void process_redraw(const std::vector<MpackValue>& params);
@@ -221,8 +281,9 @@ private:
     void handle_mode_change(const MpackValue& args);
     void handle_option_set(const MpackValue& args);
 
-    Grid* grid_ = nullptr;
+    IGridSink* grid_ = nullptr;
     HighlightTable* highlights_ = nullptr;
+    const UiOptions* options_ = nullptr;
 
     std::vector<ModeInfo> modes_;
     int current_mode_ = 0;
@@ -250,11 +311,13 @@ public:
 private:
     void send_input(const std::string& keys);
     std::string translate_key(int keycode, uint16_t mod);
+    std::string mouse_modifiers(uint16_t mod) const;
 
     IRpcChannel* rpc_ = nullptr;
     int cell_w_ = 10, cell_h_ = 20;
     bool suppress_next_text_ = false;
     bool mouse_pressed_ = false;
+    std::string mouse_button_;
 };
 
 } // namespace spectre

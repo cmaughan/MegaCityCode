@@ -60,7 +60,7 @@ private:
 class GlyphCache
 {
 public:
-    static constexpr int ATLAS_SIZE = 2048;
+    static constexpr int ATLAS_SIZE = GLYPH_ATLAS_SIZE;
 
     bool initialize(FT_Face face, int pixel_size);
     void reset(FT_Face face, int pixel_size);
@@ -75,6 +75,7 @@ public:
     void clear_dirty()
     {
         dirty_ = false;
+        dirty_rect_ = {};
     }
 
     const uint8_t* atlas_data() const

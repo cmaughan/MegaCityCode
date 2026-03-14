@@ -202,13 +202,9 @@ void MetalRenderer::shutdown()
 
 void MetalRenderer::set_grid_size(int cols, int rows)
 {
-    grid_cols_ = cols;
-    grid_rows_ = rows;
-    cursor_applied_ = false;
-    cursor_overlay_active_ = false;
+    state_.set_grid_size(cols, rows, padding_);
 
-    // +1 for cursor overlay cell
-    size_t required = ((size_t)cols * rows + 1) * sizeof(GpuCell);
+    size_t required = state_.buffer_size_bytes();
 
     id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
     id<MTLBuffer> existing = (__bridge id<MTLBuffer>)grid_buffer_;
@@ -225,66 +221,15 @@ void MetalRenderer::set_grid_size(int cols, int rows)
         grid_buffer_ = (__bridge_retained void*)newBuf;
     }
 
-    gpu_cells_.resize(cols * rows);
-    memset(gpu_cells_.data(), 0, gpu_cells_.size() * sizeof(GpuCell));
-
-    // Initialize cell positions
-    for (int r = 0; r < rows; r++)
-    {
-        for (int c = 0; c < cols; c++)
-        {
-            auto& cell = gpu_cells_[r * cols + c];
-            cell.pos_x = (float)(c * cell_w_ + padding_);
-            cell.pos_y = (float)(r * cell_h_ + padding_);
-            cell.size_x = (float)cell_w_;
-            cell.size_y = (float)cell_h_;
-            cell.bg_r = 0.1f;
-            cell.bg_g = 0.1f;
-            cell.bg_b = 0.1f;
-            cell.bg_a = 1.0f;
-            cell.fg_r = 1.0f;
-            cell.fg_g = 1.0f;
-            cell.fg_b = 1.0f;
-            cell.fg_a = 1.0f;
-        }
-    }
-
-    // Upload to GPU
     id<MTLBuffer> buf = (__bridge id<MTLBuffer>)grid_buffer_;
-    memcpy([buf contents], gpu_cells_.data(), gpu_cells_.size() * sizeof(GpuCell));
+    state_.copy_to([buf contents]);
 }
 
 void MetalRenderer::update_cells(std::span<const CellUpdate> updates)
 {
-    restore_cursor();
-
-    for (const auto& u : updates)
-    {
-        if (u.col < 0 || u.col >= grid_cols_ || u.row < 0 || u.row >= grid_rows_)
-            continue;
-        auto& cell = gpu_cells_[u.row * grid_cols_ + u.col];
-        cell.bg_r = u.bg.r;
-        cell.bg_g = u.bg.g;
-        cell.bg_b = u.bg.b;
-        cell.bg_a = u.bg.a;
-        cell.fg_r = u.fg.r;
-        cell.fg_g = u.fg.g;
-        cell.fg_b = u.fg.b;
-        cell.fg_a = u.fg.a;
-        cell.uv_x0 = u.glyph.u0;
-        cell.uv_y0 = u.glyph.v0;
-        cell.uv_x1 = u.glyph.u1;
-        cell.uv_y1 = u.glyph.v1;
-        cell.glyph_offset_x = (float)u.glyph.bearing_x;
-        cell.glyph_offset_y = (float)(cell_h_ - ascender_ + u.glyph.bearing_y);
-        cell.glyph_size_x = (float)u.glyph.width;
-        cell.glyph_size_y = (float)u.glyph.height;
-        cell.style_flags = u.style_flags;
-    }
-
-    // Upload to GPU
+    state_.update_cells(updates);
     id<MTLBuffer> buf = (__bridge id<MTLBuffer>)grid_buffer_;
-    memcpy([buf contents], gpu_cells_.data(), gpu_cells_.size() * sizeof(GpuCell));
+    state_.copy_to([buf contents]);
 }
 
 void MetalRenderer::set_atlas_texture(const uint8_t* data, int w, int h)
@@ -303,11 +248,7 @@ void MetalRenderer::update_atlas_region(int x, int y, int w, int h, const uint8_
 
 void MetalRenderer::set_cursor(int col, int row, const CursorStyle& style)
 {
-    restore_cursor();
-
-    cursor_col_ = col;
-    cursor_row_ = row;
-    cursor_style_ = style;
+    state_.set_cursor(col, row, style);
 }
 
 void MetalRenderer::resize(int pixel_w, int pixel_h)
@@ -327,100 +268,13 @@ void MetalRenderer::set_cell_size(int w, int h)
 {
     cell_w_ = w;
     cell_h_ = h;
+    state_.set_cell_size(w, h);
 }
 
 void MetalRenderer::set_ascender(int a)
 {
     ascender_ = a;
-}
-
-void MetalRenderer::apply_cursor()
-{
-    if (cursor_col_ < 0 || cursor_col_ >= grid_cols_ || cursor_row_ < 0 || cursor_row_ >= grid_rows_)
-        return;
-
-    int idx = cursor_row_ * grid_cols_ + cursor_col_;
-    auto& cell = gpu_cells_[idx];
-
-    cursor_saved_cell_ = cell;
-    cursor_applied_ = true;
-    cursor_overlay_active_ = false;
-
-    id<MTLBuffer> buf = (__bridge id<MTLBuffer>)grid_buffer_;
-
-    if (cursor_style_.shape == CursorShape::Block)
-    {
-        if (cursor_style_.use_explicit_colors)
-        {
-            cell.fg_r = cursor_style_.fg.r;
-            cell.fg_g = cursor_style_.fg.g;
-            cell.fg_b = cursor_style_.fg.b;
-            cell.fg_a = cursor_style_.fg.a;
-            cell.bg_r = cursor_style_.bg.r;
-            cell.bg_g = cursor_style_.bg.g;
-            cell.bg_b = cursor_style_.bg.b;
-            cell.bg_a = cursor_style_.bg.a;
-        }
-        else
-        {
-            std::swap(cell.fg_r, cell.bg_r);
-            std::swap(cell.fg_g, cell.bg_g);
-            std::swap(cell.fg_b, cell.bg_b);
-            std::swap(cell.fg_a, cell.bg_a);
-        }
-
-        memcpy((char*)[buf contents] + idx * sizeof(GpuCell), &cell, sizeof(GpuCell));
-    }
-    else
-    {
-        int overlay_idx = grid_cols_ * grid_rows_;
-        GpuCell overlay = {};
-        overlay.bg_r = cursor_style_.bg.r;
-        overlay.bg_g = cursor_style_.bg.g;
-        overlay.bg_b = cursor_style_.bg.b;
-        overlay.bg_a = cursor_style_.bg.a;
-
-        int percentage = cursor_style_.cell_percentage;
-        if (percentage <= 0)
-            percentage = (cursor_style_.shape == CursorShape::Vertical) ? 25 : 20;
-
-        if (cursor_style_.shape == CursorShape::Vertical)
-        {
-            overlay.pos_x = cell.pos_x;
-            overlay.pos_y = cell.pos_y;
-            overlay.size_x = std::max(1.0f, cell.size_x * percentage / 100.0f);
-            overlay.size_y = cell.size_y;
-        }
-        else
-        {
-            overlay.pos_x = cell.pos_x;
-            overlay.size_y = std::max(1.0f, cell.size_y * percentage / 100.0f);
-            overlay.pos_y = cell.pos_y + cell.size_y - overlay.size_y;
-            overlay.size_x = cell.size_x;
-        }
-
-        memcpy((char*)[buf contents] + overlay_idx * sizeof(GpuCell),
-            &overlay, sizeof(GpuCell));
-        cursor_overlay_active_ = true;
-    }
-}
-
-void MetalRenderer::restore_cursor()
-{
-    if (!cursor_applied_)
-        return;
-    cursor_applied_ = false;
-    cursor_overlay_active_ = false;
-
-    if (cursor_col_ < 0 || cursor_col_ >= grid_cols_ || cursor_row_ < 0 || cursor_row_ >= grid_rows_)
-        return;
-
-    int idx = cursor_row_ * grid_cols_ + cursor_col_;
-    gpu_cells_[idx] = cursor_saved_cell_;
-
-    id<MTLBuffer> buf = (__bridge id<MTLBuffer>)grid_buffer_;
-    memcpy((char*)[buf contents] + idx * sizeof(GpuCell),
-        &cursor_saved_cell_, sizeof(GpuCell));
+    state_.set_ascender(a);
 }
 
 bool MetalRenderer::begin_frame()
@@ -428,7 +282,8 @@ bool MetalRenderer::begin_frame()
     dispatch_semaphore_t sema = (__bridge dispatch_semaphore_t)frame_semaphore_;
     dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
 
-    restore_cursor();
+    state_.restore_cursor();
+    state_.copy_to([(__bridge id<MTLBuffer>)grid_buffer_ contents]);
 
     CAMetalLayer* layer = (__bridge CAMetalLayer*)layer_;
     id<CAMetalDrawable> drawable = [layer nextDrawable];
@@ -444,7 +299,8 @@ bool MetalRenderer::begin_frame()
 
 void MetalRenderer::end_frame()
 {
-    apply_cursor();
+    state_.apply_cursor();
+    state_.copy_to([(__bridge id<MTLBuffer>)grid_buffer_ contents]);
 
     id<CAMetalDrawable> drawable = (__bridge_transfer id<CAMetalDrawable>)current_drawable_;
     current_drawable_ = nullptr;
@@ -461,8 +317,8 @@ void MetalRenderer::end_frame()
 
     id<MTLRenderCommandEncoder> encoder = [cmdBuf renderCommandEncoderWithDescriptor:rpDesc];
 
-    int total_cells = grid_cols_ * grid_rows_;
-    int bg_instances = total_cells + (cursor_overlay_active_ ? 1 : 0);
+    int total_cells = state_.total_cells();
+    int bg_instances = state_.bg_instances();
 
     if (total_cells > 0)
     {

@@ -1,4 +1,5 @@
 #pragma once
+#include <spectre/types.h>
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
 
@@ -11,7 +12,7 @@ class VkStagingBuffer;
 class VkAtlas
 {
 public:
-    static constexpr int ATLAS_SIZE = 2048;
+    static constexpr int ATLAS_SIZE = GLYPH_ATLAS_SIZE;
 
     bool initialize(VkContext& ctx);
     void shutdown(VkContext& ctx);

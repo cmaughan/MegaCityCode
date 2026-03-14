@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <spectre/types.h>
 #include <string_view>
 
 namespace spectre
@@ -128,6 +129,176 @@ inline bool is_east_asian_wide(uint32_t cp)
         || (cp >= 0xFE30 && cp <= 0xFE6F) || (cp >= 0xFF01 && cp <= 0xFF60)
         || (cp >= 0xFFE0 && cp <= 0xFFE6) || (cp >= 0x20000 && cp <= 0x2FFFD)
         || (cp >= 0x30000 && cp <= 0x3FFFD);
+}
+
+inline bool is_east_asian_ambiguous(uint32_t cp)
+{
+    static constexpr std::array kRanges = {
+        UnicodeRange{ 0x00A1, 0x00A1 },
+        UnicodeRange{ 0x00A4, 0x00A4 },
+        UnicodeRange{ 0x00A7, 0x00A8 },
+        UnicodeRange{ 0x00AA, 0x00AA },
+        UnicodeRange{ 0x00AD, 0x00AE },
+        UnicodeRange{ 0x00B0, 0x00B4 },
+        UnicodeRange{ 0x00B6, 0x00BA },
+        UnicodeRange{ 0x00BC, 0x00BF },
+        UnicodeRange{ 0x00C6, 0x00C6 },
+        UnicodeRange{ 0x00D0, 0x00D0 },
+        UnicodeRange{ 0x00D7, 0x00D8 },
+        UnicodeRange{ 0x00DE, 0x00E1 },
+        UnicodeRange{ 0x00E6, 0x00E6 },
+        UnicodeRange{ 0x00E8, 0x00EA },
+        UnicodeRange{ 0x00EC, 0x00ED },
+        UnicodeRange{ 0x00F0, 0x00F0 },
+        UnicodeRange{ 0x00F2, 0x00F3 },
+        UnicodeRange{ 0x00F7, 0x00FA },
+        UnicodeRange{ 0x00FC, 0x00FC },
+        UnicodeRange{ 0x00FE, 0x00FE },
+        UnicodeRange{ 0x0101, 0x0101 },
+        UnicodeRange{ 0x0111, 0x0111 },
+        UnicodeRange{ 0x0113, 0x0113 },
+        UnicodeRange{ 0x011B, 0x011B },
+        UnicodeRange{ 0x0126, 0x0127 },
+        UnicodeRange{ 0x012B, 0x012B },
+        UnicodeRange{ 0x0131, 0x0133 },
+        UnicodeRange{ 0x0138, 0x0138 },
+        UnicodeRange{ 0x013F, 0x0142 },
+        UnicodeRange{ 0x0144, 0x0144 },
+        UnicodeRange{ 0x0148, 0x014B },
+        UnicodeRange{ 0x014D, 0x014D },
+        UnicodeRange{ 0x0152, 0x0153 },
+        UnicodeRange{ 0x0166, 0x0167 },
+        UnicodeRange{ 0x016B, 0x016B },
+        UnicodeRange{ 0x01CE, 0x01CE },
+        UnicodeRange{ 0x01D0, 0x01D0 },
+        UnicodeRange{ 0x01D2, 0x01D2 },
+        UnicodeRange{ 0x01D4, 0x01D4 },
+        UnicodeRange{ 0x01D6, 0x01D6 },
+        UnicodeRange{ 0x01D8, 0x01D8 },
+        UnicodeRange{ 0x01DA, 0x01DA },
+        UnicodeRange{ 0x01DC, 0x01DC },
+        UnicodeRange{ 0x0251, 0x0251 },
+        UnicodeRange{ 0x0261, 0x0261 },
+        UnicodeRange{ 0x02C4, 0x02C4 },
+        UnicodeRange{ 0x02C7, 0x02C7 },
+        UnicodeRange{ 0x02C9, 0x02CB },
+        UnicodeRange{ 0x02CD, 0x02CD },
+        UnicodeRange{ 0x02D0, 0x02D0 },
+        UnicodeRange{ 0x02D8, 0x02DB },
+        UnicodeRange{ 0x02DD, 0x02DD },
+        UnicodeRange{ 0x02DF, 0x02DF },
+        UnicodeRange{ 0x0300, 0x036F },
+        UnicodeRange{ 0x0391, 0x03A1 },
+        UnicodeRange{ 0x03A3, 0x03A9 },
+        UnicodeRange{ 0x03B1, 0x03C1 },
+        UnicodeRange{ 0x03C3, 0x03C9 },
+        UnicodeRange{ 0x0401, 0x0401 },
+        UnicodeRange{ 0x0410, 0x044F },
+        UnicodeRange{ 0x0451, 0x0451 },
+        UnicodeRange{ 0x2010, 0x2010 },
+        UnicodeRange{ 0x2013, 0x2016 },
+        UnicodeRange{ 0x2018, 0x2019 },
+        UnicodeRange{ 0x201C, 0x201D },
+        UnicodeRange{ 0x2020, 0x2022 },
+        UnicodeRange{ 0x2024, 0x2027 },
+        UnicodeRange{ 0x2030, 0x2030 },
+        UnicodeRange{ 0x2032, 0x2033 },
+        UnicodeRange{ 0x2035, 0x2035 },
+        UnicodeRange{ 0x203B, 0x203B },
+        UnicodeRange{ 0x203E, 0x203E },
+        UnicodeRange{ 0x2074, 0x2074 },
+        UnicodeRange{ 0x207F, 0x207F },
+        UnicodeRange{ 0x2081, 0x2084 },
+        UnicodeRange{ 0x20AC, 0x20AC },
+        UnicodeRange{ 0x2103, 0x2103 },
+        UnicodeRange{ 0x2105, 0x2105 },
+        UnicodeRange{ 0x2109, 0x2109 },
+        UnicodeRange{ 0x2113, 0x2113 },
+        UnicodeRange{ 0x2116, 0x2116 },
+        UnicodeRange{ 0x2121, 0x2122 },
+        UnicodeRange{ 0x2126, 0x2126 },
+        UnicodeRange{ 0x212B, 0x212B },
+        UnicodeRange{ 0x2153, 0x2154 },
+        UnicodeRange{ 0x215B, 0x215E },
+        UnicodeRange{ 0x2160, 0x216B },
+        UnicodeRange{ 0x2170, 0x2179 },
+        UnicodeRange{ 0x2189, 0x2189 },
+        UnicodeRange{ 0x2190, 0x2199 },
+        UnicodeRange{ 0x21B8, 0x21B9 },
+        UnicodeRange{ 0x21D2, 0x21D2 },
+        UnicodeRange{ 0x21D4, 0x21D4 },
+        UnicodeRange{ 0x21E7, 0x21E7 },
+        UnicodeRange{ 0x2200, 0x2200 },
+        UnicodeRange{ 0x2202, 0x2203 },
+        UnicodeRange{ 0x2207, 0x2208 },
+        UnicodeRange{ 0x220B, 0x220B },
+        UnicodeRange{ 0x220F, 0x220F },
+        UnicodeRange{ 0x2211, 0x2211 },
+        UnicodeRange{ 0x2215, 0x2215 },
+        UnicodeRange{ 0x221A, 0x221A },
+        UnicodeRange{ 0x221D, 0x2220 },
+        UnicodeRange{ 0x2223, 0x2223 },
+        UnicodeRange{ 0x2225, 0x2225 },
+        UnicodeRange{ 0x2227, 0x222C },
+        UnicodeRange{ 0x222E, 0x222E },
+        UnicodeRange{ 0x2234, 0x2237 },
+        UnicodeRange{ 0x223C, 0x223D },
+        UnicodeRange{ 0x2248, 0x2248 },
+        UnicodeRange{ 0x224C, 0x224C },
+        UnicodeRange{ 0x2252, 0x2252 },
+        UnicodeRange{ 0x2260, 0x2261 },
+        UnicodeRange{ 0x2264, 0x2267 },
+        UnicodeRange{ 0x226A, 0x226B },
+        UnicodeRange{ 0x226E, 0x226F },
+        UnicodeRange{ 0x2282, 0x2283 },
+        UnicodeRange{ 0x2286, 0x2287 },
+        UnicodeRange{ 0x2295, 0x2295 },
+        UnicodeRange{ 0x2299, 0x2299 },
+        UnicodeRange{ 0x22A5, 0x22A5 },
+        UnicodeRange{ 0x22BF, 0x22BF },
+        UnicodeRange{ 0x2312, 0x2312 },
+        UnicodeRange{ 0x2460, 0x24E9 },
+        UnicodeRange{ 0x24EB, 0x254B },
+        UnicodeRange{ 0x2550, 0x2573 },
+        UnicodeRange{ 0x2580, 0x258F },
+        UnicodeRange{ 0x2592, 0x2595 },
+        UnicodeRange{ 0x25A0, 0x25A1 },
+        UnicodeRange{ 0x25A3, 0x25A9 },
+        UnicodeRange{ 0x25B2, 0x25B3 },
+        UnicodeRange{ 0x25B6, 0x25B7 },
+        UnicodeRange{ 0x25BC, 0x25BD },
+        UnicodeRange{ 0x25C0, 0x25C1 },
+        UnicodeRange{ 0x25C6, 0x25C8 },
+        UnicodeRange{ 0x25CB, 0x25CB },
+        UnicodeRange{ 0x25CE, 0x25D1 },
+        UnicodeRange{ 0x25E2, 0x25E5 },
+        UnicodeRange{ 0x25EF, 0x25EF },
+        UnicodeRange{ 0x2605, 0x2606 },
+        UnicodeRange{ 0x2609, 0x2609 },
+        UnicodeRange{ 0x260E, 0x260F },
+        UnicodeRange{ 0x2614, 0x2615 },
+        UnicodeRange{ 0x261C, 0x261C },
+        UnicodeRange{ 0x261E, 0x261E },
+        UnicodeRange{ 0x2640, 0x2640 },
+        UnicodeRange{ 0x2642, 0x2642 },
+        UnicodeRange{ 0x2660, 0x2661 },
+        UnicodeRange{ 0x2663, 0x2665 },
+        UnicodeRange{ 0x2667, 0x266A },
+        UnicodeRange{ 0x266C, 0x266D },
+        UnicodeRange{ 0x266F, 0x266F },
+        UnicodeRange{ 0x269E, 0x269F },
+        UnicodeRange{ 0x26BE, 0x26BF },
+        UnicodeRange{ 0x26C4, 0x26CD },
+        UnicodeRange{ 0x26CF, 0x26E1 },
+        UnicodeRange{ 0x26E3, 0x26E3 },
+        UnicodeRange{ 0x26E8, 0x26FF },
+        UnicodeRange{ 0x273D, 0x273D },
+        UnicodeRange{ 0x2776, 0x277F },
+        UnicodeRange{ 0x2B55, 0x2B59 },
+        UnicodeRange{ 0x3248, 0x324F },
+        UnicodeRange{ 0xFFFD, 0xFFFD },
+    };
+    return in_ranges(cp, kRanges);
 }
 
 inline bool is_default_emoji_presentation(uint32_t cp)
@@ -271,7 +442,7 @@ inline bool is_ascii_keycap_base(uint32_t cp)
     return cp == '#' || cp == '*' || (cp >= '0' && cp <= '9');
 }
 
-inline int cluster_cell_width(std::string_view text)
+inline int cluster_cell_width(std::string_view text, const UiOptions& options = {})
 {
     if (text.empty())
         return 1;
@@ -307,6 +478,9 @@ inline int cluster_cell_width(std::string_view text)
         return 1;
 
     if (is_east_asian_wide(base) || is_default_emoji_presentation(base) || is_regional_indicator(base))
+        return 2;
+
+    if (options.ambiwidth == AmbiWidth::Double && is_east_asian_ambiguous(base))
         return 2;
 
     if ((has_vs16 || has_zwj || has_emoji_modifier) && is_emoji_text_presentation_candidate(base)

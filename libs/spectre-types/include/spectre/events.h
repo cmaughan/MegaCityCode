@@ -24,15 +24,18 @@ struct MouseButtonEvent
 {
     int button;
     bool pressed;
+    uint16_t mod;
     int x, y;
 };
 struct MouseMoveEvent
 {
+    uint16_t mod;
     int x, y;
 };
 struct MouseWheelEvent
 {
     float dx, dy;
+    uint16_t mod;
     int x, y;
 };
 

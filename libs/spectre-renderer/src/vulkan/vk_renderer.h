@@ -3,8 +3,8 @@
 #include "vk_buffers.h"
 #include "vk_context.h"
 #include "vk_pipeline.h"
+#include "renderer_state.h"
 #include <spectre/renderer.h>
-#include <vector>
 
 namespace spectre
 {
@@ -39,9 +39,6 @@ private:
     void update_descriptor_sets_for_frame(int frame);
     void update_all_descriptor_sets();
     void record_command_buffer(VkCommandBuffer cmd, uint32_t image_index);
-    void apply_cursor();
-    void restore_cursor();
-
     VkContext ctx_;
     VkPipelineManager pipeline_;
     VkAtlas atlas_;
@@ -63,8 +60,6 @@ private:
     uint32_t current_image_ = 0;
     bool framebuffer_resized_ = false;
 
-    int grid_cols_ = 0;
-    int grid_rows_ = 0;
     int cell_w_ = 10;
     int cell_h_ = 20;
     int ascender_ = 16;
@@ -72,16 +67,9 @@ private:
     int pixel_w_ = 0;
     int pixel_h_ = 0;
 
-    // Cursor
-    int cursor_col_ = 0, cursor_row_ = 0;
-    CursorStyle cursor_style_ = {};
-
-    std::vector<GpuCell> gpu_cells_;
+    RendererState state_;
     bool needs_descriptor_update_ = true;
     uint32_t desc_update_pending_frames_ = 0;
-    GpuCell cursor_saved_cell_ = {};
-    bool cursor_applied_ = false;
-    bool cursor_overlay_active_ = false;
 };
 
 } // namespace spectre

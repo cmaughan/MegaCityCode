@@ -259,6 +259,7 @@ bool SdlWindow::poll_events()
             {
                 on_mouse_button({ (int)event.button.button,
                     event.type == SDL_EVENT_MOUSE_BUTTON_DOWN,
+                    SDL_GetModState(),
                     (int)event.button.x,
                     (int)event.button.y });
             }
@@ -267,7 +268,7 @@ bool SdlWindow::poll_events()
         case SDL_EVENT_MOUSE_MOTION:
             if (on_mouse_move)
             {
-                on_mouse_move({ (int)event.motion.x, (int)event.motion.y });
+                on_mouse_move({ SDL_GetModState(), (int)event.motion.x, (int)event.motion.y });
             }
             break;
 
@@ -275,6 +276,7 @@ bool SdlWindow::poll_events()
             if (on_mouse_wheel)
             {
                 on_mouse_wheel({ event.wheel.x, event.wheel.y,
+                    SDL_GetModState(),
                     (int)event.wheel.mouse_x, (int)event.wheel.mouse_y });
             }
             break;

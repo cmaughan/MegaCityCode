@@ -44,11 +44,13 @@ if(APPLE)
     add_executable(spectre
         app/main.cpp
         app/app.cpp
+        app/grid_rendering_pipeline.cpp
     )
 else()
     add_executable(spectre
         app/main.cpp
         app/app.cpp
+        app/grid_rendering_pipeline.cpp
     )
 endif()
 
@@ -58,6 +60,7 @@ target_link_libraries(spectre PRIVATE
     spectre-types
     spectre-renderer
     spectre-font
+    spectre-grid
     spectre-nvim
 )
 

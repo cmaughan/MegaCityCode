@@ -21,5 +21,9 @@ void run_unicode_tests()
         expect_eq(cluster_cell_width("\xE0\xA4\x95\xE0\xA5\x8D\xE0\xA4\xB7"), 1, "indic conjunct remains single width");
         expect_eq(cluster_cell_width("\xF3\xB0\x92\xB2"), 1, "lazy nerd-font icon remains single width");
         expect_eq(cluster_cell_width("\xEE\x98\xA0"), 1, "devicon pua icon remains single width");
+        UiOptions ambi_double;
+        ambi_double.ambiwidth = AmbiWidth::Double;
+        expect_eq(cluster_cell_width("\xCE\xA9", ambi_double), 2, "ambiwidth=double widens ambiguous characters");
+        expect_eq(cluster_cell_width("\xCE\xA9"), 1, "ambiwidth defaults to single width");
     });
 }

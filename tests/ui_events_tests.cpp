@@ -7,6 +7,64 @@
 using namespace spectre;
 using namespace spectre::tests;
 
+namespace
+{
+
+class RecordingGridSink final : public IGridSink
+{
+public:
+    struct SetCellCall
+    {
+        int col = 0;
+        int row = 0;
+        std::string text;
+        uint16_t hl_id = 0;
+        bool double_width = false;
+    };
+
+    struct ResizeCall
+    {
+        int cols = 0;
+        int rows = 0;
+    };
+
+    struct ScrollCall
+    {
+        int top = 0;
+        int bot = 0;
+        int left = 0;
+        int right = 0;
+        int rows = 0;
+    };
+
+    void resize(int cols, int rows) override
+    {
+        resize_calls.push_back({ cols, rows });
+    }
+
+    void clear() override
+    {
+        clear_count++;
+    }
+
+    void set_cell(int col, int row, const std::string& text, uint16_t hl_id, bool double_width) override
+    {
+        set_cell_calls.push_back({ col, row, text, hl_id, double_width });
+    }
+
+    void scroll(int top, int bot, int left, int right, int rows) override
+    {
+        scroll_calls.push_back({ top, bot, left, right, rows });
+    }
+
+    std::vector<SetCellCall> set_cell_calls;
+    std::vector<ResizeCall> resize_calls;
+    std::vector<ScrollCall> scroll_calls;
+    int clear_count = 0;
+};
+
+} // namespace
+
 void run_ui_events_tests()
 {
     run_test("ui event handler replays redraw batches into the grid", []() {
@@ -66,6 +124,33 @@ void run_ui_events_tests()
         expect_eq(grid.rows(), 4, "grid resize updates rows");
         expect_eq(resized_cols, 6, "resize callback receives columns");
         expect_eq(resized_rows, 4, "resize callback receives rows");
+    });
+
+    run_test("ui event handler can target a grid sink without the concrete grid type", []() {
+        RecordingGridSink sink;
+        HighlightTable highlights;
+        UiEventHandler handler;
+        handler.set_grid(&sink);
+        handler.set_highlights(&highlights);
+
+        handler.process_redraw({
+            redraw_event("grid_line", { grid_line_batch(1, 3, 4, { cell("X", 9) }) }),
+            redraw_event("grid_scroll", { arr({ i(1), i(0), i(4), i(1), i(8), i(1), i(0) }) }),
+            redraw_event("grid_clear", { arr({ i(1) }) }),
+            redraw_event("grid_resize", { arr({ i(1), i(10), i(6) }) }),
+        });
+
+        expect_eq(static_cast<int>(sink.set_cell_calls.size()), 1, "grid sink receives cell writes");
+        expect_eq(sink.set_cell_calls[0].col, 4, "grid sink receives cell column");
+        expect_eq(sink.set_cell_calls[0].row, 3, "grid sink receives cell row");
+        expect_eq(sink.set_cell_calls[0].text, std::string("X"), "grid sink receives cell text");
+        expect_eq(sink.set_cell_calls[0].hl_id, static_cast<uint16_t>(9), "grid sink receives highlight id");
+        expect_eq(static_cast<int>(sink.scroll_calls.size()), 1, "grid sink receives scroll calls");
+        expect_eq(sink.scroll_calls[0].bot, 4, "grid sink receives scroll bounds");
+        expect_eq(sink.clear_count, 1, "grid sink receives clear calls");
+        expect_eq(static_cast<int>(sink.resize_calls.size()), 1, "grid sink receives resize calls");
+        expect_eq(sink.resize_calls[0].cols, 10, "grid sink receives resize columns");
+        expect_eq(sink.resize_calls[0].rows, 6, "grid sink receives resize rows");
     });
 
     run_test("ui event handler applies grapheme widths like nvim", []() {
@@ -130,5 +215,59 @@ void run_ui_events_tests()
         expect_eq(grid.get_cell(14, 0).double_width, false, "lazy icon stays single width");
         expect_eq(grid.get_cell(15, 0).text, devicon, "devicon remains single width");
         expect_eq(grid.get_cell(15, 0).double_width, false, "devicon stays single width");
+    });
+
+    run_test("ui event handler preserves alignment for empty-text repeated cells", []() {
+        Grid grid;
+        grid.resize(8, 1);
+        grid.set_cell(0, 0, "x", 1);
+        grid.set_cell(1, 0, "y", 1);
+        grid.set_cell(2, 0, "z", 1);
+        grid.clear_dirty();
+
+        HighlightTable highlights;
+        UiEventHandler handler;
+        handler.set_grid(&grid);
+        handler.set_highlights(&highlights);
+
+        handler.process_redraw({
+            redraw_event("grid_line", { grid_line_batch(1, 0, 0, {
+                                                           cell("A", 2),
+                                                           cell("", 3, 3),
+                                                           cell("B", 4),
+                                                       }) }),
+        });
+
+        expect_eq(grid.get_cell(0, 0).text, std::string("A"), "first cell is written");
+        expect_eq(grid.get_cell(1, 0).text, std::string(), "empty-text cell clears the target column");
+        expect_eq(grid.get_cell(2, 0).text, std::string(), "repeat applies to the second cleared column");
+        expect_eq(grid.get_cell(3, 0).text, std::string(), "repeat applies to the third cleared column");
+        expect_eq(grid.get_cell(4, 0).text, std::string("B"), "subsequent cells stay aligned after repeats");
+    });
+
+    run_test("ui event handler consults option state for ambiwidth", []() {
+        Grid grid;
+        grid.resize(4, 1);
+
+        HighlightTable highlights;
+        UiEventHandler handler;
+        UiOptions options;
+        handler.set_grid(&grid);
+        handler.set_highlights(&highlights);
+        handler.set_options(&options);
+        handler.on_option_set = [&](const std::string& name, const MpackValue& value) {
+            if (name == "ambiwidth" && value.type() == MpackValue::String)
+                options.ambiwidth = (value.as_str() == "double") ? AmbiWidth::Double : AmbiWidth::Single;
+        };
+
+        const std::string ambiguous = "\xCE\xA9"; // Greek capital omega
+        handler.process_redraw({
+            redraw_event("option_set", { arr({ s("ambiwidth"), s("double") }) }),
+            redraw_event("grid_line", { grid_line_batch(1, 0, 0, { cell(ambiguous, 1) }) }),
+        });
+
+        expect_eq(grid.get_cell(0, 0).text, ambiguous, "ambiguous-width glyph is written");
+        expect_eq(grid.get_cell(0, 0).double_width, true, "ambiwidth=double makes ambiguous glyph double width");
+        expect(grid.get_cell(1, 0).double_width_cont, "ambiguous-width continuation cell is marked");
     });
 }

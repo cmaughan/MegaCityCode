@@ -1,6 +1,6 @@
 #pragma once
+#include "renderer_state.h"
 #include <spectre/renderer.h>
-#include <vector>
 
 // Forward declarations for Objective-C types
 #ifdef __OBJC__
@@ -22,7 +22,7 @@ class MetalRenderer : public IRenderer
 {
 public:
     static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
-    static constexpr int ATLAS_SIZE = 2048;
+    static constexpr int ATLAS_SIZE = GLYPH_ATLAS_SIZE;
 
     bool initialize(IWindow& window) override;
     void shutdown() override;
@@ -43,9 +43,6 @@ public:
     }
 
 private:
-    void apply_cursor();
-    void restore_cursor();
-
     // Opaque pointers to Metal objects (avoid ObjC in header)
     void* device_ = nullptr; // id<MTLDevice>
     void* command_queue_ = nullptr; // id<MTLCommandQueue>
@@ -57,8 +54,6 @@ private:
     void* atlas_sampler_ = nullptr; // id<MTLSamplerState>
     void* frame_semaphore_ = nullptr; // dispatch_semaphore_t
 
-    int grid_cols_ = 0;
-    int grid_rows_ = 0;
     int cell_w_ = 10;
     int cell_h_ = 20;
     int ascender_ = 16;
@@ -66,14 +61,7 @@ private:
     int pixel_w_ = 0;
     int pixel_h_ = 0;
 
-    // Cursor
-    int cursor_col_ = 0, cursor_row_ = 0;
-    CursorStyle cursor_style_ = {};
-
-    std::vector<GpuCell> gpu_cells_;
-    GpuCell cursor_saved_cell_ = {};
-    bool cursor_applied_ = false;
-    bool cursor_overlay_active_ = false;
+    RendererState state_;
 
     // Current drawable for the frame
     void* current_drawable_ = nullptr; // id<CAMetalDrawable>

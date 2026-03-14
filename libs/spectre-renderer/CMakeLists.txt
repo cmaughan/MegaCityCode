@@ -1,5 +1,6 @@
 if(APPLE)
     add_library(spectre-renderer
+        src/renderer_state.cpp
         src/renderer_factory.cpp
         src/metal/metal_renderer.mm
     )
@@ -14,6 +15,7 @@ if(APPLE)
     target_compile_options(spectre-renderer PRIVATE -Wno-deprecated-declarations)
 else()
     add_library(spectre-renderer
+        src/renderer_state.cpp
         src/renderer_factory.cpp
         src/vulkan/vk_renderer.cpp
         src/vulkan/vk_context.cpp

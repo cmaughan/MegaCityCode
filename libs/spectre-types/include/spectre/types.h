@@ -5,6 +5,8 @@
 namespace spectre
 {
 
+inline constexpr int GLYPH_ATLAS_SIZE = 2048;
+
 struct Color
 {
     float r = 0.0f, g = 0.0f, b = 0.0f, a = 1.0f;
@@ -37,6 +39,17 @@ struct AtlasRegion
     float u0 = 0, v0 = 0, u1 = 0, v1 = 0; // UV coordinates in atlas
     int bearing_x = 0, bearing_y = 0; // Glyph bearing from baseline
     int width = 0, height = 0; // Pixel dimensions
+};
+
+enum class AmbiWidth
+{
+    Single,
+    Double
+};
+
+struct UiOptions
+{
+    AmbiWidth ambiwidth = AmbiWidth::Single;
 };
 
 enum class CursorShape

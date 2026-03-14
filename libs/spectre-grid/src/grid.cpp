@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cassert>
 #include <spectre/grid.h>
 #include <spectre/unicode.h>
 
@@ -81,6 +82,12 @@ const Cell& Grid::get_cell(int col, int row) const
 void Grid::scroll(int top, int bot, int left, int right, int rows)
 {
     if (rows == 0)
+        return;
+
+    bool valid = top >= 0 && top < bot && bot <= rows_
+        && left >= 0 && left < right && right <= cols_;
+    assert(valid && "Grid::scroll received out-of-bounds region");
+    if (!valid)
         return;
 
     if (rows > 0)

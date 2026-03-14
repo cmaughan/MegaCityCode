@@ -19,6 +19,18 @@ void NvimInput::send_input(const std::string& keys)
     rpc_->notify("nvim_input", { NvimRpc::make_str(keys) });
 }
 
+std::string NvimInput::mouse_modifiers(uint16_t mod) const
+{
+    std::string result;
+    if (mod & SDL_KMOD_SHIFT)
+        result += "S";
+    if (mod & SDL_KMOD_CTRL)
+        result += "C";
+    if (mod & SDL_KMOD_ALT)
+        result += "A";
+    return result;
+}
+
 std::string NvimInput::translate_key(int keycode, uint16_t mod)
 {
     std::string key;
@@ -213,24 +225,32 @@ void NvimInput::on_mouse_button(const MouseButtonEvent& event)
     }
 
     if (event.pressed)
+    {
         mouse_pressed_ = true;
+        mouse_button_ = button;
+    }
     else
+    {
         mouse_pressed_ = false;
+        mouse_button_.clear();
+    }
 
     std::string action = event.pressed ? "press" : "release";
+    std::string modifiers = mouse_modifiers(event.mod);
 
-    rpc_->notify("nvim_input_mouse", { NvimRpc::make_str(button), NvimRpc::make_str(action), NvimRpc::make_str(""), NvimRpc::make_int(0), NvimRpc::make_int(grid_row), NvimRpc::make_int(grid_col) });
+    rpc_->notify("nvim_input_mouse", { NvimRpc::make_str(button), NvimRpc::make_str(action), NvimRpc::make_str(modifiers), NvimRpc::make_int(0), NvimRpc::make_int(grid_row), NvimRpc::make_int(grid_col) });
 }
 
 void NvimInput::on_mouse_move(const MouseMoveEvent& event)
 {
-    if (!mouse_pressed_)
+    if (!mouse_pressed_ || mouse_button_.empty())
         return;
 
     int grid_col = event.x / cell_w_;
     int grid_row = event.y / cell_h_;
+    std::string modifiers = mouse_modifiers(event.mod);
 
-    rpc_->notify("nvim_input_mouse", { NvimRpc::make_str("left"), NvimRpc::make_str("drag"), NvimRpc::make_str(""), NvimRpc::make_int(0), NvimRpc::make_int(grid_row), NvimRpc::make_int(grid_col) });
+    rpc_->notify("nvim_input_mouse", { NvimRpc::make_str(mouse_button_), NvimRpc::make_str("drag"), NvimRpc::make_str(modifiers), NvimRpc::make_int(0), NvimRpc::make_int(grid_row), NvimRpc::make_int(grid_col) });
 }
 
 void NvimInput::on_mouse_wheel(const MouseWheelEvent& event)
@@ -250,7 +270,7 @@ void NvimInput::on_mouse_wheel(const MouseWheelEvent& event)
     else
         return;
 
-    rpc_->notify("nvim_input_mouse", { NvimRpc::make_str("wheel"), NvimRpc::make_str(direction), NvimRpc::make_str(""), NvimRpc::make_int(0), NvimRpc::make_int(grid_row), NvimRpc::make_int(grid_col) });
+    rpc_->notify("nvim_input_mouse", { NvimRpc::make_str("wheel"), NvimRpc::make_str(direction), NvimRpc::make_str(mouse_modifiers(event.mod)), NvimRpc::make_int(0), NvimRpc::make_int(grid_row), NvimRpc::make_int(grid_col) });
 }
 
 } // namespace spectre

@@ -49,4 +49,31 @@ void run_grid_tests()
         expect_eq(grid.get_cell(1, 2).text, std::string(" "), "scrolled-in row text is cleared");
         expect(grid.is_dirty(0, 0), "scroll marks destination cells dirty");
     });
+
+    run_test("grid clears stale continuations when overwriting double-width cells", []() {
+        Grid grid;
+        grid.resize(4, 1);
+
+        grid.set_cell(1, 0, "X", 3, true);
+        grid.set_cell(1, 0, "Y", 4, false);
+
+        expect_eq(grid.get_cell(1, 0).text, std::string("Y"), "overwriting cell replaces text");
+        expect_eq(grid.get_cell(1, 0).double_width, false, "overwriting cell clears double-width flag");
+        expect_eq(grid.get_cell(2, 0).text, std::string(), "continuation cell text is cleared");
+        expect_eq(grid.get_cell(2, 0).double_width_cont, false, "continuation marker is cleared");
+    });
+
+    run_test("grid scroll preserves double-width cells and continuations together", []() {
+        Grid grid;
+        grid.resize(4, 2);
+        grid.set_cell(0, 1, "Z", 9, true);
+        grid.clear_dirty();
+
+        grid.scroll(0, 2, 0, 4, 1);
+
+        expect_eq(grid.get_cell(0, 0).text, std::string("Z"), "double-width source cell scrolls into destination row");
+        expect_eq(grid.get_cell(0, 0).double_width, true, "double-width flag scrolls with the cell");
+        expect(grid.get_cell(1, 0).double_width_cont, "continuation cell scrolls with the source cell");
+        expect_eq(grid.get_cell(0, 1).text, std::string(" "), "vacated row is cleared after scroll");
+    });
 }

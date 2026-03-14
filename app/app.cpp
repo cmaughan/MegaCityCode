@@ -2,8 +2,6 @@
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <cstdio>
-#include <cstdlib>
-#include <filesystem>
 #include <vector>
 
 namespace spectre
@@ -12,87 +10,12 @@ namespace spectre
 namespace
 {
 
-std::vector<std::string> fallback_font_candidates()
+void apply_ui_option(UiOptions& options, const std::string& name, const MpackValue& value)
 {
-#ifdef _WIN32
-    const char* windir = std::getenv("WINDIR");
-    std::string windows_dir = windir ? windir : "C:\\Windows";
-    return {
-        windows_dir + "\\Fonts\\seguisym.ttf",
-        windows_dir + "\\Fonts\\seguiemj.ttf",
-    };
-#elif defined(__APPLE__)
-    return {
-        "/System/Library/Fonts/Apple Color Emoji.ttc",
-        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
-    };
-#else
-    return {
-        "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
-        "/usr/share/fonts/truetype/noto/NotoEmoji-Regular.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    };
-#endif
-}
-
-std::vector<std::string> primary_font_candidates()
-{
-#ifdef _WIN32
-    const char* windir = std::getenv("WINDIR");
-    const char* local_app_data = std::getenv("LOCALAPPDATA");
-    std::string windows_dir = windir ? windir : "C:\\Windows";
-    std::string local_fonts = local_app_data
-        ? (std::string(local_app_data) + "\\Microsoft\\Windows\\Fonts\\")
-        : "";
-
-    std::vector<std::string> candidates;
-    if (!local_fonts.empty())
+    if (name == "ambiwidth" && value.type() == MpackValue::String)
     {
-        candidates.push_back(local_fonts + "JetBrainsMonoNerdFontMono-Regular.ttf");
-        candidates.push_back(local_fonts + "JetBrainsMonoNerdFont-Regular.ttf");
+        options.ambiwidth = (value.as_str() == "double") ? AmbiWidth::Double : AmbiWidth::Single;
     }
-    candidates.push_back(windows_dir + "\\Fonts\\JetBrainsMonoNerdFontMono-Regular.ttf");
-    candidates.push_back(windows_dir + "\\Fonts\\JetBrainsMonoNerdFont-Regular.ttf");
-    candidates.push_back(windows_dir + "\\Fonts\\JetBrains Mono Regular Nerd Font Complete Mono Windows Compatible.ttf");
-    candidates.push_back(windows_dir + "\\Fonts\\JetBrains Mono Regular Nerd Font Complete Windows Compatible.ttf");
-    candidates.push_back("fonts/JetBrainsMonoNerdFont-Regular.ttf");
-    return candidates;
-#else
-    return { "fonts/JetBrainsMonoNerdFont-Regular.ttf" };
-#endif
-}
-
-std::string resolve_primary_font_path()
-{
-    for (const auto& path : primary_font_candidates())
-    {
-        if (std::filesystem::exists(path))
-            return path;
-    }
-
-    return "fonts/JetBrainsMonoNerdFont-Regular.ttf";
-}
-
-bool can_render_cluster(FT_Face face, TextShaper& shaper, const std::string& text)
-{
-    if (!face)
-        return false;
-
-    auto shaped = shaper.shape(text);
-    if (shaped.empty())
-        return false;
-
-    bool has_glyph = false;
-    for (const auto& glyph : shaped)
-    {
-        if (glyph.glyph_id == 0)
-            return false;
-        if (FT_Load_Glyph(face, glyph.glyph_id, FT_LOAD_DEFAULT))
-            return false;
-        has_glyph = true;
-    }
-
-    return has_glyph;
 }
 
 } // namespace
@@ -119,11 +42,9 @@ bool App::initialize()
     fprintf(stderr, "[spectre] Renderer initialized\n");
 
     // 3. Load font
-    display_ppi_ = window_.display_ppi();
-    fprintf(stderr, "[spectre] Display PPI: %.0f\n", display_ppi_);
-    font_path_ = resolve_primary_font_path();
-    fprintf(stderr, "[spectre] Primary font path: %s\n", font_path_.c_str());
-    if (!font_.initialize(font_path_, font_size_, display_ppi_))
+    float display_ppi = window_.display_ppi();
+    fprintf(stderr, "[spectre] Display PPI: %.0f\n", display_ppi);
+    if (!text_service_.initialize(TextService::DEFAULT_POINT_SIZE, display_ppi))
     {
         fprintf(stderr, "[spectre] Failed to load font\n");
         return false;
@@ -131,14 +52,9 @@ bool App::initialize()
     fprintf(stderr, "[spectre] Font loaded\n");
 
     // Set cell size from font metrics
-    auto& metrics = font_.metrics();
+    const auto& metrics = text_service_.metrics();
     renderer_->set_cell_size(metrics.cell_width, metrics.cell_height);
     renderer_->set_ascender(metrics.ascender);
-
-    // Init glyph cache and shaper
-    glyph_cache_.initialize(font_.face(), font_.point_size());
-    shaper_.initialize(font_.hb_font());
-    initialize_fallback_fonts();
 
     // 4. Calculate grid dimensions
     auto [pw, ph] = window_.size_pixels();
@@ -152,11 +68,7 @@ bool App::initialize()
 
     grid_.resize(grid_cols_, grid_rows_);
     renderer_->set_grid_size(grid_cols_, grid_rows_);
-
-    // Upload initial (empty) atlas
-    renderer_->set_atlas_texture(glyph_cache_.atlas_data(),
-        glyph_cache_.atlas_width(), glyph_cache_.atlas_height());
-    atlas_needs_full_upload_ = false;
+    grid_pipeline_.initialize(renderer_.get(), &grid_, &highlights_, &text_service_);
 
     // 5. Spawn nvim
     if (!nvim_process_.spawn())
@@ -175,11 +87,16 @@ bool App::initialize()
     // 7. Setup UI event handler
     ui_events_.set_grid(&grid_);
     ui_events_.set_highlights(&highlights_);
+    ui_events_.set_options(&ui_options_);
     ui_events_.on_flush = [this]() { on_flush(); };
     ui_events_.on_grid_resize = [this](int cols, int rows) {
         grid_cols_ = cols;
         grid_rows_ = rows;
         renderer_->set_grid_size(cols, rows);
+        grid_pipeline_.force_full_atlas_upload();
+    };
+    ui_events_.on_option_set = [this](const std::string& name, const MpackValue& value) {
+        apply_ui_option(ui_options_, name, value);
     };
 
     // 8. Setup input handler
@@ -191,17 +108,17 @@ bool App::initialize()
         {
             if (e.keycode == SDLK_EQUALS || e.keycode == SDLK_PLUS)
             {
-                change_font_size(font_size_ + 1);
+                change_font_size(text_service_.point_size() + 1);
                 return;
             }
             else if (e.keycode == SDLK_MINUS)
             {
-                change_font_size(font_size_ - 1);
+                change_font_size(text_service_.point_size() - 1);
                 return;
             }
             else if (e.keycode == SDLK_0)
             {
-                change_font_size(DEFAULT_FONT_SIZE);
+                change_font_size(TextService::DEFAULT_POINT_SIZE);
                 return;
             }
         }
@@ -214,10 +131,15 @@ bool App::initialize()
     window_.on_resize = [this](const WindowResizeEvent& e) { on_resize(e.width, e.height); };
 
     // 10. Attach UI
-    rpc_.request("nvim_ui_attach", { NvimRpc::make_int(grid_cols_), NvimRpc::make_int(grid_rows_), NvimRpc::make_map({
-                                                                                                       { NvimRpc::make_str("rgb"), NvimRpc::make_bool(true) },
-                                                                                                       { NvimRpc::make_str("ext_linegrid"), NvimRpc::make_bool(true) },
-                                                                                                   }) });
+    auto attach = rpc_.request("nvim_ui_attach", { NvimRpc::make_int(grid_cols_), NvimRpc::make_int(grid_rows_), NvimRpc::make_map({
+                                                                                                                     { NvimRpc::make_str("rgb"), NvimRpc::make_bool(true) },
+                                                                                                                     { NvimRpc::make_str("ext_linegrid"), NvimRpc::make_bool(true) },
+                                                                                                                 }) });
+    if (!attach.ok())
+    {
+        fprintf(stderr, "[spectre] nvim_ui_attach failed\n");
+        return false;
+    }
 
     fprintf(stderr, "[spectre] UI attached: %dx%d\n", grid_cols_, grid_rows_);
     running_ = true;
@@ -265,8 +187,7 @@ void App::run()
 
 void App::on_flush()
 {
-    flush_count_++;
-    update_grid_to_renderer();
+    grid_pipeline_.flush();
 
     CursorStyle cursor_style;
     cursor_style.bg = highlights_.default_fg();
@@ -291,56 +212,6 @@ void App::on_flush()
     renderer_->set_cursor(ui_events_.cursor_col(), ui_events_.cursor_row(), cursor_style);
 }
 
-void App::update_grid_to_renderer()
-{
-    auto dirty = grid_.get_dirty_cells();
-    if (dirty.empty())
-        return;
-
-    std::vector<CellUpdate> updates;
-    updates.reserve(dirty.size());
-
-    bool atlas_updated = false;
-
-    for (auto& [col, row] : dirty)
-    {
-        const auto& cell = grid_.get_cell(col, row);
-        const auto& hl = highlights_.get(cell.hl_attr_id);
-
-        Color fg, bg;
-        highlights_.resolve(hl, fg, bg);
-
-        CellUpdate update;
-        update.col = col;
-        update.row = row;
-        update.bg = bg;
-        update.fg = fg;
-        update.style_flags = hl.style_flags();
-
-        if (!cell.double_width_cont && !cell.text.empty() && cell.text != " ")
-        {
-            auto [face, text_shaper] = resolve_font_for_text(cell.text);
-            update.glyph = glyph_cache_.get_cluster(cell.text, face, *text_shaper);
-            if (glyph_cache_.atlas_dirty())
-            {
-                atlas_updated = true;
-            }
-        }
-        updates.push_back(update);
-    }
-
-    if (atlas_updated || atlas_needs_full_upload_)
-    {
-        renderer_->set_atlas_texture(glyph_cache_.atlas_data(),
-            glyph_cache_.atlas_width(), glyph_cache_.atlas_height());
-        glyph_cache_.clear_dirty();
-        atlas_needs_full_upload_ = false;
-    }
-
-    renderer_->update_cells(updates);
-    grid_.clear_dirty();
-}
-
 void App::on_resize(int pixel_w, int pixel_h)
 {
     renderer_->resize(pixel_w, pixel_h);
@@ -357,35 +228,30 @@ void App::on_resize(int pixel_w, int pixel_h)
 
     if (new_cols != grid_cols_ || new_rows != grid_rows_)
     {
-        rpc_.request("nvim_ui_try_resize", { NvimRpc::make_int(new_cols), NvimRpc::make_int(new_rows) });
+        auto resize = rpc_.request("nvim_ui_try_resize", { NvimRpc::make_int(new_cols), NvimRpc::make_int(new_rows) });
+        if (!resize.ok())
+        {
+            fprintf(stderr, "[spectre] nvim_ui_try_resize failed during window resize\n");
+        }
     }
 }
 
 void App::change_font_size(int new_size)
 {
-    new_size = std::max(MIN_FONT_SIZE, std::min(MAX_FONT_SIZE, new_size));
-    if (new_size == font_size_)
+    new_size = std::max(TextService::MIN_POINT_SIZE, std::min(TextService::MAX_POINT_SIZE, new_size));
+    if (new_size == text_service_.point_size())
         return;
-    font_size_ = new_size;
+    if (!text_service_.set_point_size(new_size))
+        return;
 
-    font_.set_point_size(font_size_);
-    auto& metrics = font_.metrics();
-
-    glyph_cache_.reset(font_.face(), font_.point_size());
-    shaper_.initialize(font_.hb_font());
-    font_choice_cache_.clear();
-
-    for (auto& fallback : fallback_fonts_)
-    {
-        fallback.font.set_point_size(font_size_);
-        fallback.shaper.initialize(fallback.font.hb_font());
-    }
+    const auto& metrics = text_service_.metrics();
 
     renderer_->set_cell_size(metrics.cell_width, metrics.cell_height);
     renderer_->set_ascender(metrics.ascender);
     renderer_->set_grid_size(grid_cols_, grid_rows_);
     input_.set_cell_size(metrics.cell_width, metrics.cell_height);
     grid_.mark_all_dirty();
+    grid_pipeline_.force_full_atlas_upload();
 
     auto [pw, ph] = window_.size_pixels();
     int pad = renderer_->padding();
@@ -396,12 +262,15 @@ void App::change_font_size(int new_size)
     if (new_rows < 1)
         new_rows = 1;
 
-    atlas_needs_full_upload_ = true;
-    update_grid_to_renderer();
+    grid_pipeline_.flush();
 
     if (new_cols != grid_cols_ || new_rows != grid_rows_)
     {
-        rpc_.request("nvim_ui_try_resize", { NvimRpc::make_int(new_cols), NvimRpc::make_int(new_rows) });
+        auto resize = rpc_.request("nvim_ui_try_resize", { NvimRpc::make_int(new_cols), NvimRpc::make_int(new_rows) });
+        if (!resize.ok())
+        {
+            fprintf(stderr, "[spectre] nvim_ui_try_resize failed during font resize\n");
+        }
     }
 }
 
@@ -414,78 +283,10 @@ void App::shutdown()
     nvim_process_.shutdown();
     rpc_.shutdown();
 
-    shaper_.shutdown();
-    for (auto& fallback : fallback_fonts_)
-    {
-        fallback.shaper.shutdown();
-        fallback.font.shutdown();
-    }
-    fallback_fonts_.clear();
-    font_choice_cache_.clear();
-    font_.shutdown();
+    text_service_.shutdown();
     if (renderer_)
         renderer_->shutdown();
     window_.shutdown();
-}
-
-void App::initialize_fallback_fonts()
-{
-    fallback_fonts_.clear();
-    font_choice_cache_.clear();
-
-    auto candidates = fallback_font_candidates();
-    fallback_fonts_.reserve(candidates.size());
-
-    for (const auto& path : candidates)
-    {
-        if (path == font_path_ || !std::filesystem::exists(path))
-            continue;
-
-        fallback_fonts_.emplace_back();
-        auto& fallback = fallback_fonts_.back();
-        fallback.path = path;
-        if (!fallback.font.initialize(path, font_size_, display_ppi_))
-        {
-            fallback.font.shutdown();
-            fallback_fonts_.pop_back();
-            continue;
-        }
-
-        fallback.shaper.initialize(fallback.font.hb_font());
-        fprintf(stderr, "[spectre] Fallback font loaded: %s\n", path.c_str());
-    }
-}
-
-std::pair<FT_Face, TextShaper*> App::resolve_font_for_text(const std::string& text)
-{
-    auto cached = font_choice_cache_.find(text);
-    if (cached != font_choice_cache_.end())
-    {
-        if (cached->second < 0)
-            return { font_.face(), &shaper_ };
-
-        int idx = cached->second;
-        if (idx >= 0 && idx < (int)fallback_fonts_.size())
-            return { fallback_fonts_[idx].font.face(), &fallback_fonts_[idx].shaper };
-    }
-
-    if (can_render_cluster(font_.face(), shaper_, text))
-    {
-        font_choice_cache_[text] = -1;
-        return { font_.face(), &shaper_ };
-    }
-
-    for (int i = 0; i < (int)fallback_fonts_.size(); i++)
-    {
-        if (can_render_cluster(fallback_fonts_[i].font.face(), fallback_fonts_[i].shaper, text))
-        {
-            font_choice_cache_[text] = i;
-            return { fallback_fonts_[i].font.face(), &fallback_fonts_[i].shaper };
-        }
-    }
-
-    font_choice_cache_[text] = -1;
-    return { font_.face(), &shaper_ };
 }
 
 } // namespace spectre

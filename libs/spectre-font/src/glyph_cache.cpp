@@ -78,6 +78,21 @@ bool bitmap_to_grayscale(const FT_Bitmap& bmp, std::vector<uint8_t>& out)
     return false;
 }
 
+void expand_dirty_rect(GlyphCache::DirtyRect& dirty_rect, bool dirty, int x, int y, int w, int h)
+{
+    if (!dirty)
+    {
+        dirty_rect = { x, y, w, h };
+        return;
+    }
+
+    int left = std::min(dirty_rect.x, x);
+    int top = std::min(dirty_rect.y, y);
+    int right = std::max(dirty_rect.x + dirty_rect.w, x + w);
+    int bottom = std::max(dirty_rect.y + dirty_rect.h, y + h);
+    dirty_rect = { left, top, right - left, bottom - top };
+}
+
 } // namespace
 
 bool GlyphCache::initialize(FT_Face face, int pixel_size)
@@ -85,6 +100,8 @@ bool GlyphCache::initialize(FT_Face face, int pixel_size)
     face_ = face;
     pixel_size_ = pixel_size;
     atlas_.resize(ATLAS_SIZE * ATLAS_SIZE, 0);
+    dirty_ = false;
+    dirty_rect_ = {};
     return true;
 }
 
@@ -99,6 +116,7 @@ void GlyphCache::reset(FT_Face face, int pixel_size)
     shelf_y_ = 0;
     shelf_height_ = 0;
     dirty_ = true;
+    dirty_rect_ = { 0, 0, ATLAS_SIZE, ATLAS_SIZE };
 }
 
 size_t GlyphCache::ClusterKeyHash::operator()(const ClusterKey& key) const
@@ -220,7 +238,7 @@ bool GlyphCache::rasterize_glyph(uint32_t glyph_id, AtlasRegion& region)
     region.width = w;
     region.height = h;
 
-    dirty_rect_ = { atlas_x, atlas_y, w, h };
+    expand_dirty_rect(dirty_rect_, dirty_, atlas_x, atlas_y, w, h);
     dirty_ = true;
 
     return true;
@@ -319,7 +337,7 @@ bool GlyphCache::rasterize_cluster(const std::string& text, FT_Face face, TextSh
     region.width = cluster_width;
     region.height = cluster_height;
 
-    dirty_rect_ = { atlas_x, atlas_y, cluster_width, cluster_height };
+    expand_dirty_rect(dirty_rect_, dirty_, atlas_x, atlas_y, cluster_width, cluster_height);
     dirty_ = true;
     return true;
 }
