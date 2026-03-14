@@ -1,7 +1,7 @@
 #include "vk_pipeline.h"
 #include "vk_context.h"
-#include <cstdio>
 #include <fstream>
+#include <spectre/log.h>
 #include <vector>
 
 namespace spectre
@@ -12,7 +12,7 @@ VkShaderModule VkPipelineManager::load_shader(VkDevice device, const std::string
     std::ifstream file(path, std::ios::ate | std::ios::binary);
     if (!file.is_open())
     {
-        fprintf(stderr, "Failed to open shader: %s\n", path.c_str());
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to open shader: %s", path.c_str());
         return VK_NULL_HANDLE;
     }
 
@@ -28,7 +28,7 @@ VkShaderModule VkPipelineManager::load_shader(VkDevice device, const std::string
     VkShaderModule module;
     if (vkCreateShaderModule(device, &ci, nullptr, &module) != VK_SUCCESS)
     {
-        fprintf(stderr, "Failed to create shader module: %s\n", path.c_str());
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create shader module: %s", path.c_str());
         return VK_NULL_HANDLE;
     }
     return module;

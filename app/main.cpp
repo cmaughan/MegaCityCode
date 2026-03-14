@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <spectre/log.h>
 #include <string_view>
 
 #ifdef _WIN32
@@ -61,11 +62,14 @@ int main(int argc, char* argv[])
     }
 #endif
 
+    spectre::configure_default_logging();
+
     spectre::App app;
 
     if (!app.initialize())
     {
-        fprintf(stderr, "Failed to initialize spectre\n");
+        SPECTRE_LOG_ERROR(spectre::LogCategory::App, "Failed to initialize spectre");
+        spectre::shutdown_logging();
         return 1;
     }
 
@@ -80,6 +84,7 @@ int main(int argc, char* argv[])
         app.run();
     }
     app.shutdown();
+    spectre::shutdown_logging();
 
     return status;
 }

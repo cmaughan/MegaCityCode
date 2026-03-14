@@ -2,7 +2,7 @@
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <chrono>
-#include <cstdio>
+#include <spectre/log.h>
 #include <vector>
 
 namespace spectre
@@ -23,34 +23,34 @@ void apply_ui_option(UiOptions& options, const std::string& name, const MpackVal
 
 bool App::initialize()
 {
-    fprintf(stderr, "[spectre] Initializing...\n");
+    SPECTRE_LOG_INFO(LogCategory::App, "Initializing");
 
     // 1. Create window
     if (!window_.initialize("Spectre", 1280, 800))
     {
-        fprintf(stderr, "[spectre] Failed to create window\n");
+        SPECTRE_LOG_ERROR(LogCategory::App, "Failed to create window");
         return false;
     }
-    fprintf(stderr, "[spectre] Window created\n");
+    SPECTRE_LOG_INFO(LogCategory::App, "Window created");
 
     // 2. Init renderer
     renderer_ = create_renderer();
     if (!renderer_ || !renderer_->initialize(window_))
     {
-        fprintf(stderr, "[spectre] Failed to init renderer\n");
+        SPECTRE_LOG_ERROR(LogCategory::App, "Failed to init renderer");
         return false;
     }
-    fprintf(stderr, "[spectre] Renderer initialized\n");
+    SPECTRE_LOG_INFO(LogCategory::App, "Renderer initialized");
 
     // 3. Load font
     float display_ppi = window_.display_ppi();
-    fprintf(stderr, "[spectre] Display PPI: %.0f\n", display_ppi);
+    SPECTRE_LOG_INFO(LogCategory::App, "Display PPI: %.0f", display_ppi);
     if (!text_service_.initialize(TextService::DEFAULT_POINT_SIZE, display_ppi))
     {
-        fprintf(stderr, "[spectre] Failed to load font\n");
+        SPECTRE_LOG_ERROR(LogCategory::App, "Failed to load font");
         return false;
     }
-    fprintf(stderr, "[spectre] Font loaded\n");
+    SPECTRE_LOG_INFO(LogCategory::App, "Font loaded");
 
     // Set cell size from font metrics
     const auto& metrics = text_service_.metrics();
@@ -74,14 +74,14 @@ bool App::initialize()
     // 5. Spawn nvim
     if (!nvim_process_.spawn())
     {
-        fprintf(stderr, "Failed to spawn nvim\n");
+        SPECTRE_LOG_ERROR(LogCategory::App, "Failed to spawn nvim");
         return false;
     }
 
     // 6. Init RPC
     if (!rpc_.initialize(nvim_process_))
     {
-        fprintf(stderr, "Failed to init RPC\n");
+        SPECTRE_LOG_ERROR(LogCategory::App, "Failed to init RPC");
         return false;
     }
 
@@ -138,11 +138,11 @@ bool App::initialize()
                                                                                                                  }) });
     if (!attach.ok())
     {
-        fprintf(stderr, "[spectre] nvim_ui_attach failed\n");
+        SPECTRE_LOG_ERROR(LogCategory::App, "nvim_ui_attach failed");
         return false;
     }
 
-    fprintf(stderr, "[spectre] UI attached: %dx%d\n", grid_cols_, grid_rows_);
+    SPECTRE_LOG_INFO(LogCategory::App, "UI attached: %dx%d", grid_cols_, grid_rows_);
     saw_flush_ = false;
     saw_frame_ = false;
     running_ = true;
@@ -165,13 +165,13 @@ bool App::run_smoke_test(std::chrono::milliseconds timeout)
         pump_once();
         if (saw_flush_ && saw_frame_)
         {
-            fprintf(stderr, "[spectre] Smoke test passed\n");
+            SPECTRE_LOG_INFO(LogCategory::App, "Smoke test passed");
             return true;
         }
         SDL_Delay(10);
     }
 
-    fprintf(stderr, "[spectre] Smoke test timed out (flush=%d frame=%d)\n",
+    SPECTRE_LOG_ERROR(LogCategory::App, "Smoke test timed out (flush=%d frame=%d)",
         saw_flush_ ? 1 : 0, saw_frame_ ? 1 : 0);
     return false;
 }
@@ -262,7 +262,7 @@ void App::on_resize(int pixel_w, int pixel_h)
         auto resize = rpc_.request("nvim_ui_try_resize", { NvimRpc::make_int(new_cols), NvimRpc::make_int(new_rows) });
         if (!resize.ok())
         {
-            fprintf(stderr, "[spectre] nvim_ui_try_resize failed during window resize\n");
+            SPECTRE_LOG_WARN(LogCategory::App, "nvim_ui_try_resize failed during window resize");
         }
     }
 }
@@ -300,7 +300,7 @@ void App::change_font_size(int new_size)
         auto resize = rpc_.request("nvim_ui_try_resize", { NvimRpc::make_int(new_cols), NvimRpc::make_int(new_rows) });
         if (!resize.ok())
         {
-            fprintf(stderr, "[spectre] nvim_ui_try_resize failed during font resize\n");
+            SPECTRE_LOG_WARN(LogCategory::App, "nvim_ui_try_resize failed during font resize");
         }
     }
 }

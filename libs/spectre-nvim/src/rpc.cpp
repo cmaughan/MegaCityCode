@@ -1,7 +1,7 @@
 #include "mpack_codec.h"
 #include <chrono>
-#include <cstdio>
 #include <cstring>
+#include <spectre/log.h>
 #include <spectre/nvim.h>
 
 namespace spectre
@@ -46,13 +46,13 @@ RpcResult NvimRpc::request(const std::string& method, const std::vector<MpackVal
     std::vector<char> encoded;
     if (!encode_rpc_request(msgid, method, params, encoded))
     {
-        fprintf(stderr, "[rpc] failed to encode request %s\n", method.c_str());
+        SPECTRE_LOG_ERROR(LogCategory::Rpc, "Failed to encode request %s", method.c_str());
         return rpc_result;
     }
 
     if (!process_->write(reinterpret_cast<const uint8_t*>(encoded.data()), encoded.size()))
     {
-        fprintf(stderr, "[rpc] write failed for request %s\n", method.c_str());
+        SPECTRE_LOG_ERROR(LogCategory::Rpc, "Write failed for request %s", method.c_str());
         read_failed_ = true;
         response_cv_.notify_all();
         return rpc_result;
@@ -65,7 +65,7 @@ RpcResult NvimRpc::request(const std::string& method, const std::vector<MpackVal
 
     if (!ready || responses_.count(msgid) == 0)
     {
-        fprintf(stderr, "[rpc] request timed out or aborted: %s\n", method.c_str());
+        SPECTRE_LOG_WARN(LogCategory::Rpc, "Request timed out or aborted: %s", method.c_str());
         responses_.erase(msgid);
         return rpc_result;
     }
@@ -88,13 +88,13 @@ void NvimRpc::notify(const std::string& method, const std::vector<MpackValue>& p
     std::vector<char> encoded;
     if (!encode_rpc_notification(method, params, encoded))
     {
-        fprintf(stderr, "[rpc] failed to encode notification %s\n", method.c_str());
+        SPECTRE_LOG_ERROR(LogCategory::Rpc, "Failed to encode notification %s", method.c_str());
         return;
     }
 
     if (!process_->write(reinterpret_cast<const uint8_t*>(encoded.data()), encoded.size()))
     {
-        fprintf(stderr, "[rpc] write failed for notification %s\n", method.c_str());
+        SPECTRE_LOG_ERROR(LogCategory::Rpc, "Write failed for notification %s", method.c_str());
         read_failed_ = true;
         response_cv_.notify_all();
     }
@@ -124,7 +124,7 @@ void NvimRpc::reader_thread_func()
         {
             if (!running_)
                 break;
-            fprintf(stderr, "nvim pipe read error\n");
+            SPECTRE_LOG_ERROR(LogCategory::Rpc, "nvim pipe read error");
             read_failed_ = true;
             running_ = false;
             response_cv_.notify_all();

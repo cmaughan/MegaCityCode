@@ -1,4 +1,4 @@
-#include <cstdio>
+#include <spectre/log.h>
 #include <spectre/nvim.h>
 
 #ifndef _WIN32
@@ -25,14 +25,14 @@ bool NvimProcess::spawn(const std::string& nvim_path)
 
     if (!CreatePipe(&stdin_read, &stdin_write, &sa, 0))
     {
-        fprintf(stderr, "Failed to create stdin pipe\n");
+        SPECTRE_LOG_ERROR(LogCategory::Nvim, "Failed to create stdin pipe");
         return false;
     }
     SetHandleInformation(stdin_write, HANDLE_FLAG_INHERIT, 0);
 
     if (!CreatePipe(&stdout_read, &stdout_write, &sa, 0))
     {
-        fprintf(stderr, "Failed to create stdout pipe\n");
+        SPECTRE_LOG_ERROR(LogCategory::Nvim, "Failed to create stdout pipe");
         CloseHandle(stdin_read);
         CloseHandle(stdin_write);
         return false;
@@ -60,7 +60,7 @@ bool NvimProcess::spawn(const std::string& nvim_path)
             nullptr, nullptr,
             &si, &proc_info_))
     {
-        fprintf(stderr, "Failed to spawn nvim: error %lu\n", GetLastError());
+        SPECTRE_LOG_ERROR(LogCategory::Nvim, "Failed to spawn nvim: error %lu", GetLastError());
         CloseHandle(stdin_read);
         CloseHandle(stdin_write);
         CloseHandle(stdout_read);
@@ -77,7 +77,7 @@ bool NvimProcess::spawn(const std::string& nvim_path)
     child_stdout_read_ = stdout_read;
     started_ = true;
 
-    fprintf(stderr, "[spectre] nvim spawned (PID %lu)\n", proc_info_.dwProcessId);
+    SPECTRE_LOG_INFO(LogCategory::Nvim, "nvim spawned (PID %lu)", proc_info_.dwProcessId);
     return true;
 }
 
@@ -142,12 +142,12 @@ bool NvimProcess::spawn(const std::string& nvim_path)
 
     if (pipe(stdin_pipe) != 0)
     {
-        fprintf(stderr, "Failed to create stdin pipe: %s\n", strerror(errno));
+        SPECTRE_LOG_ERROR(LogCategory::Nvim, "Failed to create stdin pipe: %s", strerror(errno));
         return false;
     }
     if (pipe(stdout_pipe) != 0)
     {
-        fprintf(stderr, "Failed to create stdout pipe: %s\n", strerror(errno));
+        SPECTRE_LOG_ERROR(LogCategory::Nvim, "Failed to create stdout pipe: %s", strerror(errno));
         close(stdin_pipe[0]);
         close(stdin_pipe[1]);
         return false;
@@ -156,7 +156,7 @@ bool NvimProcess::spawn(const std::string& nvim_path)
     pid_t pid = fork();
     if (pid < 0)
     {
-        fprintf(stderr, "Failed to fork: %s\n", strerror(errno));
+        SPECTRE_LOG_ERROR(LogCategory::Nvim, "Failed to fork: %s", strerror(errno));
         close(stdin_pipe[0]);
         close(stdin_pipe[1]);
         close(stdout_pipe[0]);
@@ -194,7 +194,7 @@ bool NvimProcess::spawn(const std::string& nvim_path)
     child_pid_ = pid;
     started_ = true;
 
-    fprintf(stderr, "[spectre] nvim spawned (PID %d)\n", (int)child_pid_);
+    SPECTRE_LOG_INFO(LogCategory::Nvim, "nvim spawned (PID %d)", (int)child_pid_);
     return true;
 }
 

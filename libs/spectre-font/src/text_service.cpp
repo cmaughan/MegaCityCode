@@ -1,9 +1,9 @@
 #include <spectre/text_service.h>
 
 #include <algorithm>
-#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <spectre/log.h>
 
 namespace spectre
 {
@@ -100,7 +100,7 @@ bool TextService::initialize(int point_size, float display_ppi)
 {
     display_ppi_ = display_ppi;
     font_path_ = resolve_primary_font_path();
-    fprintf(stderr, "[spectre] Primary font path: %s\n", font_path_.c_str());
+    SPECTRE_LOG_INFO(LogCategory::Font, "Primary font path: %s", font_path_.c_str());
 
     if (!font_.initialize(font_path_, point_size, display_ppi_))
         return false;
@@ -221,7 +221,7 @@ void TextService::initialize_fallback_fonts()
         }
 
         fallback.shaper.initialize(fallback.font.hb_font());
-        fprintf(stderr, "[spectre] Fallback font loaded: %s\n", path.c_str());
+        SPECTRE_LOG_INFO(LogCategory::Font, "Fallback font loaded: %s", path.c_str());
     }
 }
 

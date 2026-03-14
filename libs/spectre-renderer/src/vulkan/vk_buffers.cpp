@@ -1,6 +1,6 @@
 #include "vk_buffers.h"
 #include "vk_context.h"
-#include <cstdio>
+#include <spectre/log.h>
 
 namespace spectre
 {
@@ -21,7 +21,7 @@ bool VkGridBuffer::initialize(VkContext& ctx, size_t initial_size)
     VmaAllocationInfo alloc_info;
     if (vmaCreateBuffer(allocator_, &buf_ci, &alloc_ci, &buffer_, &allocation_, &alloc_info) != VK_SUCCESS)
     {
-        fprintf(stderr, "Failed to create grid SSBO\n");
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create grid SSBO");
         return false;
     }
 
@@ -78,7 +78,7 @@ bool VkStagingBuffer::initialize(VmaAllocator allocator, size_t size)
     VmaAllocationInfo alloc_info;
     if (vmaCreateBuffer(allocator, &buf_ci, &alloc_ci, &buffer_, &allocation_, &alloc_info) != VK_SUCCESS)
     {
-        fprintf(stderr, "Failed to create staging buffer\n");
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create staging buffer");
         return false;
     }
 

@@ -11,7 +11,7 @@
 #include <SDL3/SDL_vulkan.h>
 #endif
 #include <cmath>
-#include <cstdio>
+#include <spectre/log.h>
 
 namespace spectre
 {
@@ -19,17 +19,17 @@ namespace spectre
 #if defined(_WIN32) || defined(__APPLE__)
 static void log_display_info(SDL_Window* window)
 {
-    fprintf(stderr, "\n=== Display / DPI Diagnostics ===\n");
+    SPECTRE_LOG_DEBUG(LogCategory::Window, "Display / DPI diagnostics begin");
 
     // SDL window sizes
     int lw = 0, lh = 0, pw = 0, ph = 0;
     SDL_GetWindowSize(window, &lw, &lh);
     SDL_GetWindowSizeInPixels(window, &pw, &ph);
     float sdl_scale = SDL_GetWindowDisplayScale(window);
-    fprintf(stderr, "  SDL logical size       : %d x %d\n", lw, lh);
-    fprintf(stderr, "  SDL pixel size         : %d x %d\n", pw, ph);
-    fprintf(stderr, "  SDL display scale      : %.3f  (= pixel/logical ratio)\n", sdl_scale);
-    fprintf(stderr, "  SDL effective DPI      : %.1f  (96 * scale)\n", 96.0f * sdl_scale);
+    SPECTRE_LOG_DEBUG(LogCategory::Window, "SDL logical size: %d x %d", lw, lh);
+    SPECTRE_LOG_DEBUG(LogCategory::Window, "SDL pixel size: %d x %d", pw, ph);
+    SPECTRE_LOG_DEBUG(LogCategory::Window, "SDL display scale: %.3f", sdl_scale);
+    SPECTRE_LOG_DEBUG(LogCategory::Window, "SDL effective DPI: %.1f", 96.0f * sdl_scale);
 
 #ifdef __APPLE__
     // CoreGraphics display info
@@ -45,19 +45,19 @@ static void log_display_info(SDL_Window* window)
         cgPhysicalH = CGDisplayModeGetPixelHeight(mode);
         CGDisplayModeRelease(mode);
     }
-    fprintf(stderr, "  CG logical pixels      : %zu x %zu\n", cgLogicalW, cgLogicalH);
-    fprintf(stderr, "  CG physical pixels     : %zu x %zu\n", cgPhysicalW, cgPhysicalH);
-    fprintf(stderr, "  CG physical size       : %.1f x %.1f mm\n", physicalSize.width, physicalSize.height);
+    SPECTRE_LOG_DEBUG(LogCategory::Window, "CG logical pixels: %zu x %zu", cgLogicalW, cgLogicalH);
+    SPECTRE_LOG_DEBUG(LogCategory::Window, "CG physical pixels: %zu x %zu", cgPhysicalW, cgPhysicalH);
+    SPECTRE_LOG_DEBUG(LogCategory::Window, "CG physical size: %.1f x %.1f mm", physicalSize.width, physicalSize.height);
     if (physicalSize.width > 0)
     {
         float ppi_logical = (float)(cgLogicalW / (physicalSize.width / 25.4));
         float ppi_physical = (float)(cgPhysicalW / (physicalSize.width / 25.4));
-        fprintf(stderr, "  Computed PPI (logical) : %.1f  (WRONG for HiDPI)\n", ppi_logical);
-        fprintf(stderr, "  Computed PPI (physical): %.1f\n", ppi_physical);
+        SPECTRE_LOG_DEBUG(LogCategory::Window, "Computed PPI (logical): %.1f", ppi_logical);
+        SPECTRE_LOG_DEBUG(LogCategory::Window, "Computed PPI (physical): %.1f", ppi_physical);
     }
     SDL_DisplayID sdlDisplay = SDL_GetDisplayForWindow(window);
     float contentScale = sdlDisplay ? SDL_GetDisplayContentScale(sdlDisplay) : 1.0f;
-    fprintf(stderr, "  SDL content scale      : %.3f\n", contentScale);
+    SPECTRE_LOG_DEBUG(LogCategory::Window, "SDL content scale: %.3f", contentScale);
 #endif
 
 #ifdef _WIN32
@@ -72,9 +72,9 @@ static void log_display_info(SDL_Window* window)
         GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &eff_x, &eff_y);
         GetDpiForMonitor(monitor, MDT_ANGULAR_DPI, &ang_x, &ang_y);
         GetDpiForMonitor(monitor, MDT_RAW_DPI, &raw_x, &raw_y);
-        fprintf(stderr, "  MDT_EFFECTIVE_DPI      : %u x %u\n", eff_x, eff_y);
-        fprintf(stderr, "  MDT_ANGULAR_DPI        : %u x %u\n", ang_x, ang_y);
-        fprintf(stderr, "  MDT_RAW_DPI            : %u x %u\n", raw_x, raw_y);
+        SPECTRE_LOG_DEBUG(LogCategory::Window, "MDT_EFFECTIVE_DPI: %u x %u", eff_x, eff_y);
+        SPECTRE_LOG_DEBUG(LogCategory::Window, "MDT_ANGULAR_DPI: %u x %u", ang_x, ang_y);
+        SPECTRE_LOG_DEBUG(LogCategory::Window, "MDT_RAW_DPI: %u x %u", raw_x, raw_y);
 
         // Monitor logical/physical rect
         MONITORINFOEX mi = {};
@@ -82,7 +82,7 @@ static void log_display_info(SDL_Window* window)
         GetMonitorInfo(monitor, &mi);
         int mon_lw = mi.rcMonitor.right - mi.rcMonitor.left;
         int mon_lh = mi.rcMonitor.bottom - mi.rcMonitor.top;
-        fprintf(stderr, "  Monitor logical rect   : %d x %d  (%s)\n",
+        SPECTRE_LOG_DEBUG(LogCategory::Window, "Monitor logical rect: %d x %d (%s)",
             mon_lw, mon_lh,
             (mi.dwFlags & MONITORINFOF_PRIMARY) ? "primary" : "non-primary");
 
@@ -91,7 +91,7 @@ static void log_display_info(SDL_Window* window)
         dm.dmSize = sizeof(dm);
         if (EnumDisplaySettings(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm))
         {
-            fprintf(stderr, "  Monitor device pixels  : %lu x %lu\n",
+            SPECTRE_LOG_DEBUG(LogCategory::Window, "Monitor device pixels: %lu x %lu",
                 dm.dmPelsWidth, dm.dmPelsHeight);
             // Compute PPI from physical pixels + physical mm (via GetDeviceCaps)
             HDC hdc = CreateDC(NULL, mi.szDevice, NULL, NULL);
@@ -105,20 +105,20 @@ static void log_display_info(SDL_Window* window)
                 int desk_px_h = GetDeviceCaps(hdc, DESKTOPVERTRES);
                 int logpx_dpi = GetDeviceCaps(hdc, LOGPIXELSX);
                 DeleteDC(hdc);
-                fprintf(stderr, "  GetDeviceCaps HORZSIZE / VERTSIZE   : %d x %d mm\n", mm_w, mm_h);
-                fprintf(stderr, "  GetDeviceCaps HORZRES / VERTRES     : %d x %d  (logical px)\n", log_px_w, log_px_h);
-                fprintf(stderr, "  GetDeviceCaps DESKTOPHORZRES/VERT   : %d x %d  (physical px)\n", desk_px_w, desk_px_h);
-                fprintf(stderr, "  GetDeviceCaps LOGPIXELSX            : %d\n", logpx_dpi);
+                SPECTRE_LOG_DEBUG(LogCategory::Window, "GetDeviceCaps HORZSIZE/VERTSIZE: %d x %d mm", mm_w, mm_h);
+                SPECTRE_LOG_DEBUG(LogCategory::Window, "GetDeviceCaps HORZRES/VERTRES: %d x %d", log_px_w, log_px_h);
+                SPECTRE_LOG_DEBUG(LogCategory::Window, "GetDeviceCaps DESKTOPHORZRES/VERTRES: %d x %d", desk_px_w, desk_px_h);
+                SPECTRE_LOG_DEBUG(LogCategory::Window, "GetDeviceCaps LOGPIXELSX: %d", logpx_dpi);
                 if (mm_w > 0)
                 {
                     float phys_ppi = dm.dmPelsWidth / (mm_w / 25.4f);
-                    fprintf(stderr, "  Computed physical PPI (DEVMODE/mm)  : %.1f\n", phys_ppi);
+                    SPECTRE_LOG_DEBUG(LogCategory::Window, "Computed physical PPI (DEVMODE/mm): %.1f", phys_ppi);
                 }
             }
         }
     }
 #endif
-    fprintf(stderr, "=================================\n\n");
+    SPECTRE_LOG_DEBUG(LogCategory::Window, "Display / DPI diagnostics end");
 }
 #endif // _WIN32 || __APPLE__
 
@@ -129,7 +129,7 @@ bool SdlWindow::initialize(const std::string& title, int width, int height)
 
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
     {
-        SDL_Log("SDL_Init failed: %s", SDL_GetError());
+        SPECTRE_LOG_ERROR(LogCategory::Window, "SDL_Init failed: %s", SDL_GetError());
         return false;
     }
 
@@ -159,7 +159,7 @@ bool SdlWindow::initialize(const std::string& title, int width, int height)
 
     if (!window_)
     {
-        SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
+        SPECTRE_LOG_ERROR(LogCategory::Window, "SDL_CreateWindow failed: %s", SDL_GetError());
         return false;
     }
 
@@ -167,7 +167,8 @@ bool SdlWindow::initialize(const std::string& title, int width, int height)
     SDL_StartTextInput(window_);
 
 #if defined(_WIN32) || defined(__APPLE__)
-    log_display_info(window_);
+    if (log_would_emit(LogLevel::Debug, LogCategory::Window))
+        log_display_info(window_);
 #endif
 
     return true;

@@ -1,6 +1,6 @@
 #include <cmath>
-#include <cstdio>
 #include <spectre/font.h>
+#include <spectre/log.h>
 #include <utility>
 
 namespace spectre
@@ -42,13 +42,13 @@ bool FontManager::initialize(const std::string& font_path, int point_size, float
 
     if (FT_Init_FreeType(&ft_lib_))
     {
-        fprintf(stderr, "Failed to init FreeType\n");
+        SPECTRE_LOG_ERROR(LogCategory::Font, "Failed to init FreeType");
         return false;
     }
 
     if (FT_New_Face(ft_lib_, font_path.c_str(), 0, &face_))
     {
-        fprintf(stderr, "Failed to load font: %s\n", font_path.c_str());
+        SPECTRE_LOG_ERROR(LogCategory::Font, "Failed to load font: %s", font_path.c_str());
         return false;
     }
 
@@ -59,13 +59,14 @@ bool FontManager::initialize(const std::string& font_path, int point_size, float
     hb_font_ = hb_ft_font_create(face_, nullptr);
     if (!hb_font_)
     {
-        fprintf(stderr, "Failed to create HarfBuzz font\n");
+        SPECTRE_LOG_ERROR(LogCategory::Font, "Failed to create HarfBuzz font");
         return false;
     }
 
     int device_px = (int)std::round(point_size * display_ppi / 72.0f);
-    printf("Font loaded: %s %dpt @ %.0f PPI (%d device px), cell=%dx%d, asc=%d, desc=%d\n",
-        face_->family_name, point_size, display_ppi, device_px,
+    const char* family_name = face_->family_name ? face_->family_name : font_path.c_str();
+    SPECTRE_LOG_INFO(LogCategory::Font, "Font loaded: %s %dpt @ %.0f PPI (%d device px), cell=%dx%d, asc=%d, desc=%d",
+        family_name, point_size, display_ppi, device_px,
         metrics_.cell_width, metrics_.cell_height,
         metrics_.ascender, metrics_.descender);
 

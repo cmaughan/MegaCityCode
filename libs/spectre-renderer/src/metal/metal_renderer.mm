@@ -2,8 +2,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_metal.h>
 #include <algorithm>
-#include <cstdio>
 #include <cstring>
+#include <spectre/log.h>
 #include <spectre/window.h>
 
 #import <Metal/Metal.h>
@@ -18,7 +18,7 @@ bool MetalRenderer::initialize(IWindow& window)
     id<MTLDevice> device = MTLCreateSystemDefaultDevice();
     if (!device)
     {
-        fprintf(stderr, "[metal] Failed to create Metal device\n");
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create Metal device");
         return false;
     }
     device_ = (__bridge_retained void*)device;
@@ -27,7 +27,7 @@ bool MetalRenderer::initialize(IWindow& window)
     SDL_MetalView metalView = SDL_Metal_CreateView(window.native_handle());
     if (!metalView)
     {
-        fprintf(stderr, "[metal] Failed to create Metal view: %s\n", SDL_GetError());
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create Metal view: %s", SDL_GetError());
         return false;
     }
     CAMetalLayer* layer = (__bridge CAMetalLayer*)SDL_Metal_GetLayer(metalView);
@@ -64,7 +64,7 @@ bool MetalRenderer::initialize(IWindow& window)
     }
     if (!library)
     {
-        fprintf(stderr, "[metal] Failed to load shader library: %s\n",
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to load shader library: %s",
             error ? [[error localizedDescription] UTF8String] : "unknown");
         return false;
     }
@@ -75,7 +75,7 @@ bool MetalRenderer::initialize(IWindow& window)
         id<MTLFunction> fragFunc = [library newFunctionWithName:@"bg_fragment"];
         if (!vertFunc || !fragFunc)
         {
-            fprintf(stderr, "[metal] Failed to find bg shader functions\n");
+            SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to find bg shader functions");
             return false;
         }
 
@@ -89,7 +89,7 @@ bool MetalRenderer::initialize(IWindow& window)
         id<MTLRenderPipelineState> pipeline = [device newRenderPipelineStateWithDescriptor:desc error:&error];
         if (!pipeline)
         {
-            fprintf(stderr, "[metal] Failed to create bg pipeline: %s\n",
+            SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create bg pipeline: %s",
                 [[error localizedDescription] UTF8String]);
             return false;
         }
@@ -102,7 +102,7 @@ bool MetalRenderer::initialize(IWindow& window)
         id<MTLFunction> fragFunc = [library newFunctionWithName:@"fg_fragment"];
         if (!vertFunc || !fragFunc)
         {
-            fprintf(stderr, "[metal] Failed to find fg shader functions\n");
+            SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to find fg shader functions");
             return false;
         }
 
@@ -122,7 +122,7 @@ bool MetalRenderer::initialize(IWindow& window)
         id<MTLRenderPipelineState> pipeline = [device newRenderPipelineStateWithDescriptor:desc error:&error];
         if (!pipeline)
         {
-            fprintf(stderr, "[metal] Failed to create fg pipeline: %s\n",
+            SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create fg pipeline: %s",
                 [[error localizedDescription] UTF8String]);
             return false;
         }
@@ -168,7 +168,7 @@ bool MetalRenderer::initialize(IWindow& window)
     // must wait for GPU to finish reading before CPU modifies it
     frame_semaphore_ = (__bridge_retained void*)dispatch_semaphore_create(1);
 
-    fprintf(stderr, "[metal] Renderer initialized (%s)\n", [[device name] UTF8String]);
+    SPECTRE_LOG_INFO(LogCategory::Renderer, "Metal renderer initialized (%s)", [[device name] UTF8String]);
     return true;
 }
 

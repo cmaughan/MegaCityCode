@@ -1,7 +1,7 @@
 #include "vk_context.h"
 #include <SDL3/SDL_vulkan.h>
 #include <VkBootstrap.h>
-#include <cstdio>
+#include <spectre/log.h>
 
 #define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>
@@ -27,7 +27,7 @@ bool VkContext::initialize(SDL_Window* window)
 
     if (!inst_ret)
     {
-        fprintf(stderr, "Failed to create Vulkan instance: %s\n", inst_ret.error().message().c_str());
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create Vulkan instance: %s", inst_ret.error().message().c_str());
         return false;
     }
 
@@ -38,7 +38,7 @@ bool VkContext::initialize(SDL_Window* window)
     // Surface
     if (!SDL_Vulkan_CreateSurface(window, instance_, nullptr, &surface_))
     {
-        fprintf(stderr, "Failed to create Vulkan surface: %s\n", SDL_GetError());
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create Vulkan surface: %s", SDL_GetError());
         return false;
     }
 
@@ -52,7 +52,7 @@ bool VkContext::initialize(SDL_Window* window)
 
     if (!phys_ret)
     {
-        fprintf(stderr, "Failed to select physical device: %s\n", phys_ret.error().message().c_str());
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to select physical device: %s", phys_ret.error().message().c_str());
         return false;
     }
 
@@ -64,7 +64,7 @@ bool VkContext::initialize(SDL_Window* window)
     auto dev_ret = device_builder.build();
     if (!dev_ret)
     {
-        fprintf(stderr, "Failed to create logical device: %s\n", dev_ret.error().message().c_str());
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create logical device: %s", dev_ret.error().message().c_str());
         return false;
     }
 
@@ -74,7 +74,7 @@ bool VkContext::initialize(SDL_Window* window)
     auto queue_ret = vkb_dev.get_queue(vkb::QueueType::graphics);
     if (!queue_ret)
     {
-        fprintf(stderr, "Failed to get graphics queue\n");
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to get graphics queue");
         return false;
     }
     graphics_queue_ = queue_ret.value();
@@ -88,7 +88,7 @@ bool VkContext::initialize(SDL_Window* window)
     alloc_info.vulkanApiVersion = VK_API_VERSION_1_2;
     if (vmaCreateAllocator(&alloc_info, &allocator_) != VK_SUCCESS)
     {
-        fprintf(stderr, "Failed to create VMA allocator\n");
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create VMA allocator");
         return false;
     }
 
@@ -144,7 +144,7 @@ bool VkContext::create_render_pass()
 
     if (vkCreateRenderPass(device_, &rp_info, nullptr, &render_pass_) != VK_SUCCESS)
     {
-        fprintf(stderr, "Failed to create render pass\n");
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create render pass");
         return false;
     }
 
@@ -177,7 +177,7 @@ bool VkContext::recreate_swapchain(int width, int height)
 
     if (!sc_ret)
     {
-        fprintf(stderr, "Failed to create swapchain: %s\n", sc_ret.error().message().c_str());
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create swapchain: %s", sc_ret.error().message().c_str());
         return false;
     }
 
@@ -234,7 +234,7 @@ bool VkContext::recreate_swapchain(int width, int height)
 
     if (vkCreateRenderPass(device_, &rp_info, nullptr, &render_pass_) != VK_SUCCESS)
     {
-        fprintf(stderr, "Failed to recreate render pass\n");
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to recreate render pass");
         return false;
     }
 

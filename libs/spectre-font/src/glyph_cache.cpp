@@ -3,8 +3,8 @@
 #include FT_FREETYPE_H
 #include <algorithm>
 #include <climits>
-#include <cstdio>
 #include <cstring>
+#include <spectre/log.h>
 
 namespace spectre
 {
@@ -74,7 +74,7 @@ bool bitmap_to_grayscale(const FT_Bitmap& bmp, std::vector<uint8_t>& out)
         return true;
     }
 
-    fprintf(stderr, "Unsupported FreeType pixel mode: %u\n", bmp.pixel_mode);
+    SPECTRE_LOG_WARN(LogCategory::Font, "Unsupported FreeType pixel mode: %u", bmp.pixel_mode);
     return false;
 }
 
@@ -175,7 +175,7 @@ bool GlyphCache::reserve_region(int w, int h, int& atlas_x, int& atlas_y, const 
 
     if (shelf_y_ + h > ATLAS_SIZE)
     {
-        fprintf(stderr, "Atlas full! Cannot fit %s (%dx%d)\n", label, w, h);
+        SPECTRE_LOG_WARN(LogCategory::Font, "Atlas full, cannot fit %s (%dx%d)", label, w, h);
         return false;
     }
 

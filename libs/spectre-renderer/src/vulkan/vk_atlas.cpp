@@ -1,7 +1,7 @@
 #include "vk_atlas.h"
 #include "vk_context.h"
-#include <cstdio>
 #include <cstring>
+#include <spectre/log.h>
 
 namespace spectre
 {
@@ -32,7 +32,7 @@ bool VkAtlas::initialize(VkContext& ctx)
 
     if (vmaCreateImage(ctx.allocator(), &img_ci, &alloc_ci, &image_, &allocation_, nullptr) != VK_SUCCESS)
     {
-        fprintf(stderr, "Failed to create atlas image\n");
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create atlas image");
         return false;
     }
 
