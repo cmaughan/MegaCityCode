@@ -1,6 +1,7 @@
 #include "app.h"
 #include <SDL3/SDL.h>
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <vector>
 
@@ -142,6 +143,8 @@ bool App::initialize()
     }
 
     fprintf(stderr, "[spectre] UI attached: %dx%d\n", grid_cols_, grid_rows_);
+    saw_flush_ = false;
+    saw_frame_ = false;
     running_ = true;
     return true;
 }
@@ -150,43 +153,71 @@ void App::run()
 {
     while (running_)
     {
-        if (pending_window_activation_)
-        {
-            window_.activate();
-            pending_window_activation_ = false;
-        }
+        pump_once();
+    }
+}
 
-        if (!window_.poll_events())
+bool App::run_smoke_test(std::chrono::milliseconds timeout)
+{
+    auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (running_ && std::chrono::steady_clock::now() < deadline)
+    {
+        pump_once();
+        if (saw_flush_ && saw_frame_)
         {
-            rpc_.notify("nvim_input", { NvimRpc::make_str("<C-\\><C-n>:qa!<CR>") });
-            running_ = false;
-            break;
+            fprintf(stderr, "[spectre] Smoke test passed\n");
+            return true;
         }
+        SDL_Delay(10);
+    }
 
-        if (!nvim_process_.is_running())
-        {
-            running_ = false;
-            break;
-        }
+    fprintf(stderr, "[spectre] Smoke test timed out (flush=%d frame=%d)\n",
+        saw_flush_ ? 1 : 0, saw_frame_ ? 1 : 0);
+    return false;
+}
 
-        auto notifications = rpc_.drain_notifications();
-        for (auto& notif : notifications)
-        {
-            if (notif.method == "redraw")
-            {
-                ui_events_.process_redraw(notif.params);
-            }
-        }
+bool App::pump_once()
+{
+    if (pending_window_activation_)
+    {
+        window_.activate();
+        pending_window_activation_ = false;
+    }
 
-        if (renderer_->begin_frame())
+    if (!window_.poll_events())
+    {
+        rpc_.notify("nvim_input", { NvimRpc::make_str("<C-\\><C-n>:qa!<CR>") });
+        running_ = false;
+        return false;
+    }
+
+    if (!nvim_process_.is_running())
+    {
+        running_ = false;
+        return false;
+    }
+
+    auto notifications = rpc_.drain_notifications();
+    for (auto& notif : notifications)
+    {
+        if (notif.method == "redraw")
         {
-            renderer_->end_frame();
+            ui_events_.process_redraw(notif.params);
         }
     }
+
+    if (renderer_->begin_frame())
+    {
+        saw_frame_ = true;
+        renderer_->end_frame();
+    }
+
+    return running_;
 }
 
 void App::on_flush()
 {
+    saw_flush_ = true;
     grid_pipeline_.flush();
 
     CursorStyle cursor_style;

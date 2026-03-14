@@ -35,6 +35,10 @@ jobs:
           echo "VULKAN_SDK=C:\VulkanSDK\${{ env.VULKAN_SDK_VERSION }}" >> $env:GITHUB_ENV
           echo "C:\VulkanSDK\${{ env.VULKAN_SDK_VERSION }}\Bin" >> $env:GITHUB_PATH
 
+      - name: Install Neovim
+        shell: pwsh
+        run: choco install neovim -y
+
       - name: Build and test
         run: cmd /c scripts\run_tests.bat release
 
@@ -51,6 +55,9 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Neovim
+        run: brew install neovim
 
       - name: Build and test
         run: bash scripts/run_tests.sh

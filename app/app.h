@@ -1,5 +1,6 @@
 #pragma once
 #include "grid_rendering_pipeline.h"
+#include <chrono>
 #include <spectre/sdl_window.h>
 #ifdef __APPLE__
 // Metal renderer header is internal to spectre-renderer, forward declare
@@ -20,9 +21,11 @@ class App
 public:
     bool initialize();
     void run();
+    bool run_smoke_test(std::chrono::milliseconds timeout);
     void shutdown();
 
 private:
+    bool pump_once();
     void on_flush();
     void on_resize(int pixel_w, int pixel_h);
     void change_font_size(int new_size);
@@ -41,6 +44,8 @@ private:
 
     bool running_ = false;
     bool pending_window_activation_ = true;
+    bool saw_flush_ = false;
+    bool saw_frame_ = false;
     int grid_cols_ = 0, grid_rows_ = 0;
 };
 
