@@ -4,11 +4,14 @@
 #include <fstream>
 #include <vector>
 
-namespace spectre {
+namespace spectre
+{
 
-VkShaderModule VkPipelineManager::load_shader(VkDevice device, const std::string& path) {
+VkShaderModule VkPipelineManager::load_shader(VkDevice device, const std::string& path)
+{
     std::ifstream file(path, std::ios::ate | std::ios::binary);
-    if (!file.is_open()) {
+    if (!file.is_open())
+    {
         fprintf(stderr, "Failed to open shader: %s\n", path.c_str());
         return VK_NULL_HANDLE;
     }
@@ -23,14 +26,16 @@ VkShaderModule VkPipelineManager::load_shader(VkDevice device, const std::string
     ci.pCode = reinterpret_cast<const uint32_t*>(code.data());
 
     VkShaderModule module;
-    if (vkCreateShaderModule(device, &ci, nullptr, &module) != VK_SUCCESS) {
+    if (vkCreateShaderModule(device, &ci, nullptr, &module) != VK_SUCCESS)
+    {
         fprintf(stderr, "Failed to create shader module: %s\n", path.c_str());
         return VK_NULL_HANDLE;
     }
     return module;
 }
 
-bool VkPipelineManager::initialize(VkContext& ctx, const std::string& shader_dir) {
+bool VkPipelineManager::initialize(VkContext& ctx, const std::string& shader_dir)
+{
     VkDevice device = ctx.device();
 
     // Load shaders
@@ -39,7 +44,8 @@ bool VkPipelineManager::initialize(VkContext& ctx, const std::string& shader_dir
     auto fg_vert = load_shader(device, shader_dir + "/grid_fg.vert.spv");
     auto fg_frag = load_shader(device, shader_dir + "/grid_fg.frag.spv");
 
-    if (!bg_vert || !bg_frag || !fg_vert || !fg_frag) return false;
+    if (!bg_vert || !bg_frag || !fg_vert || !fg_frag)
+        return false;
 
     // Push constant range: screen_size (vec2), cell_size (vec2)
     VkPushConstantRange push_range = {};
@@ -120,8 +126,7 @@ bool VkPipelineManager::initialize(VkContext& ctx, const std::string& shader_dir
     // BG pipeline: no blending (opaque)
     {
         VkPipelineColorBlendAttachmentState blend_attachment = {};
-        blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
         blend_attachment.blendEnable = VK_FALSE;
 
         VkPipelineColorBlendStateCreateInfo blend = { VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
@@ -158,8 +163,7 @@ bool VkPipelineManager::initialize(VkContext& ctx, const std::string& shader_dir
     // FG pipeline: alpha blending
     {
         VkPipelineColorBlendAttachmentState blend_attachment = {};
-        blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
         blend_attachment.blendEnable = VK_TRUE;
         blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
         blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -208,13 +212,20 @@ bool VkPipelineManager::initialize(VkContext& ctx, const std::string& shader_dir
     return true;
 }
 
-void VkPipelineManager::shutdown(VkDevice device) {
-    if (bg_pipeline_) vkDestroyPipeline(device, bg_pipeline_, nullptr);
-    if (fg_pipeline_) vkDestroyPipeline(device, fg_pipeline_, nullptr);
-    if (bg_layout_) vkDestroyPipelineLayout(device, bg_layout_, nullptr);
-    if (fg_layout_) vkDestroyPipelineLayout(device, fg_layout_, nullptr);
-    if (bg_desc_layout_) vkDestroyDescriptorSetLayout(device, bg_desc_layout_, nullptr);
-    if (fg_desc_layout_) vkDestroyDescriptorSetLayout(device, fg_desc_layout_, nullptr);
+void VkPipelineManager::shutdown(VkDevice device)
+{
+    if (bg_pipeline_)
+        vkDestroyPipeline(device, bg_pipeline_, nullptr);
+    if (fg_pipeline_)
+        vkDestroyPipeline(device, fg_pipeline_, nullptr);
+    if (bg_layout_)
+        vkDestroyPipelineLayout(device, bg_layout_, nullptr);
+    if (fg_layout_)
+        vkDestroyPipelineLayout(device, fg_layout_, nullptr);
+    if (bg_desc_layout_)
+        vkDestroyDescriptorSetLayout(device, bg_desc_layout_, nullptr);
+    if (fg_desc_layout_)
+        vkDestroyDescriptorSetLayout(device, fg_desc_layout_, nullptr);
 }
 
 } // namespace spectre

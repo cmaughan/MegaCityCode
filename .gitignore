@@ -2,6 +2,7 @@ build/
 .vs/
 .cache/
 .claude/
+Testing/
 *.user
 CMakeUserPresets.json
 out/

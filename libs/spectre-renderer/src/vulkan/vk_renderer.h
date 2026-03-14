@@ -1,14 +1,16 @@
 #pragma once
-#include <spectre/renderer.h>
+#include "vk_atlas.h"
+#include "vk_buffers.h"
 #include "vk_context.h"
 #include "vk_pipeline.h"
-#include "vk_buffers.h"
-#include "vk_atlas.h"
+#include <spectre/renderer.h>
 #include <vector>
 
-namespace spectre {
+namespace spectre
+{
 
-class VkRenderer : public IRenderer {
+class VkRenderer : public IRenderer
+{
 public:
     static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -22,10 +24,13 @@ public:
     void update_atlas_region(int x, int y, int w, int h, const uint8_t* data) override;
     void set_cursor(int col, int row, CursorShape shape, Color color) override;
     void resize(int pixel_w, int pixel_h) override;
-    std::pair<int,int> cell_size_pixels() const override;
+    std::pair<int, int> cell_size_pixels() const override;
     void set_cell_size(int w, int h) override;
     void set_ascender(int a) override;
-    int padding() const override { return padding_; }
+    int padding() const override
+    {
+        return padding_;
+    }
 
 private:
     bool create_sync_objects();

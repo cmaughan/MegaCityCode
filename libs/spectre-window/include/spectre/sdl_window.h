@@ -3,15 +3,20 @@
 
 struct SDL_Window;
 
-namespace spectre {
+namespace spectre
+{
 
-class SdlWindow : public IWindow {
+class SdlWindow : public IWindow
+{
 public:
     bool initialize(const std::string& title, int width, int height) override;
     void shutdown() override;
     bool poll_events() override;
-    SDL_Window* native_handle() override { return window_; }
-    std::pair<int,int> size_pixels() const override;
+    SDL_Window* native_handle() override
+    {
+        return window_;
+    }
+    std::pair<int, int> size_pixels() const override;
     float display_ppi() const override;
 
 private:

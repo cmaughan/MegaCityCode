@@ -1,21 +1,23 @@
 #pragma once
+#include <functional>
 #include <spectre/events.h>
 #include <string>
-#include <functional>
 #include <utility>
 
 struct SDL_Window;
 
-namespace spectre {
+namespace spectre
+{
 
-class IWindow {
+class IWindow
+{
 public:
     virtual ~IWindow() = default;
     virtual bool initialize(const std::string& title, int width, int height) = 0;
     virtual void shutdown() = 0;
     virtual bool poll_events() = 0; // returns false if quit requested
     virtual SDL_Window* native_handle() = 0;
-    virtual std::pair<int,int> size_pixels() const = 0;
+    virtual std::pair<int, int> size_pixels() const = 0;
     virtual float display_ppi() const = 0; // Physical pixels per inch of the display
 
     // Callbacks

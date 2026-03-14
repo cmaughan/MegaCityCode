@@ -1,22 +1,42 @@
 #pragma once
-#include <vulkan/vulkan.h>
 #include <string>
+#include <vulkan/vulkan.h>
 
-namespace spectre {
+namespace spectre
+{
 
 class VkContext;
 
-class VkPipelineManager {
+class VkPipelineManager
+{
 public:
     bool initialize(VkContext& ctx, const std::string& shader_dir);
     void shutdown(VkDevice device);
 
-    VkPipeline bg_pipeline() const { return bg_pipeline_; }
-    VkPipeline fg_pipeline() const { return fg_pipeline_; }
-    VkPipelineLayout bg_layout() const { return bg_layout_; }
-    VkPipelineLayout fg_layout() const { return fg_layout_; }
-    VkDescriptorSetLayout bg_desc_layout() const { return bg_desc_layout_; }
-    VkDescriptorSetLayout fg_desc_layout() const { return fg_desc_layout_; }
+    VkPipeline bg_pipeline() const
+    {
+        return bg_pipeline_;
+    }
+    VkPipeline fg_pipeline() const
+    {
+        return fg_pipeline_;
+    }
+    VkPipelineLayout bg_layout() const
+    {
+        return bg_layout_;
+    }
+    VkPipelineLayout fg_layout() const
+    {
+        return fg_layout_;
+    }
+    VkDescriptorSetLayout bg_desc_layout() const
+    {
+        return bg_desc_layout_;
+    }
+    VkDescriptorSetLayout fg_desc_layout() const
+    {
+        return fg_desc_layout_;
+    }
 
 private:
     VkShaderModule load_shader(VkDevice device, const std::string& path);

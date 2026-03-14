@@ -35,11 +35,8 @@ jobs:
           echo "VULKAN_SDK=C:\VulkanSDK\${{ env.VULKAN_SDK_VERSION }}" >> $env:GITHUB_ENV
           echo "C:\VulkanSDK\${{ env.VULKAN_SDK_VERSION }}\Bin" >> $env:GITHUB_PATH
 
-      - name: Configure
-        run: cmake --preset default
-
-      - name: Build
-        run: cmake --build build --config Release --target spectre
+      - name: Build and test
+        run: cmd /c scripts\run_tests.bat release
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -49,3 +46,11 @@ jobs:
             build/Release/spectre.exe
             build/Release/shaders/
             build/Release/fonts/
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and test
+        run: bash scripts/run_tests.sh

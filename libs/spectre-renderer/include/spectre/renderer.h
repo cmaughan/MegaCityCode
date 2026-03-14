@@ -1,13 +1,16 @@
 #pragma once
-#include <spectre/types.h>
+#include <memory>
 #include <span>
+#include <spectre/types.h>
 #include <utility>
 
-namespace spectre {
+namespace spectre
+{
 
 class IWindow;
 
-class IRenderer {
+class IRenderer
+{
 public:
     virtual ~IRenderer() = default;
     virtual bool initialize(IWindow& window) = 0;
@@ -20,10 +23,12 @@ public:
     virtual void update_atlas_region(int x, int y, int w, int h, const uint8_t* data) = 0;
     virtual void set_cursor(int col, int row, CursorShape shape, Color color) = 0;
     virtual void resize(int pixel_w, int pixel_h) = 0;
-    virtual std::pair<int,int> cell_size_pixels() const = 0;
+    virtual std::pair<int, int> cell_size_pixels() const = 0;
     virtual void set_cell_size(int w, int h) = 0;
     virtual void set_ascender(int a) = 0;
     virtual int padding() const = 0;
 };
+
+std::unique_ptr<IRenderer> create_renderer();
 
 } // namespace spectre

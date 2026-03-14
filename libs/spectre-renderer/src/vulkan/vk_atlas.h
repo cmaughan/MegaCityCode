@@ -1,13 +1,15 @@
 #pragma once
-#include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
+#include <vulkan/vulkan.h>
 
-namespace spectre {
+namespace spectre
+{
 
 class VkContext;
 class VkStagingBuffer;
 
-class VkAtlas {
+class VkAtlas
+{
 public:
     static constexpr int ATLAS_SIZE = 2048;
 
@@ -20,8 +22,14 @@ public:
     // Upload a sub-region
     void upload_region(VkContext& ctx, int x, int y, int w, int h, const uint8_t* data);
 
-    VkImageView image_view() const { return image_view_; }
-    VkSampler sampler() const { return sampler_; }
+    VkImageView image_view() const
+    {
+        return image_view_;
+    }
+    VkSampler sampler() const
+    {
+        return sampler_;
+    }
 
 private:
     void transition_image_layout(VkContext& ctx, VkImageLayout old_layout, VkImageLayout new_layout);

@@ -1,53 +1,172 @@
 # Spectre
 
-A cross-platform Neovim GUI frontend with Vulkan (Windows) and Metal (macOS) rendering.
+Spectre is a cross-platform Neovim GUI frontend with native GPU rendering:
+
+- Vulkan on Windows
+- Metal on macOS
+- SDL3 windowing and input
+- embedded `nvim --embed` over msgpack-RPC
 
 ![Spectre on Windows](screenshots/spectre.png)
 ![Spectre on macOS](screenshots/spectre-mac.png)
 
 ## Features
 
-- Vulkan renderer (Windows) and Metal renderer (macOS) with instanced drawing
-- FreeType + HarfBuzz font rendering with dynamic glyph atlas
-- Msgpack-RPC communication with embedded neovim (`nvim --embed`)
-- Full ext_linegrid protocol support
-- Runtime font size control (Ctrl+=/-, Ctrl+0 to reset)
-- Mouse support (click, drag, scroll)
-- Window resize with automatic grid recalculation
-- Retina/HiDPI display support on macOS
+- Ext_linegrid-based UI rendering
+- FreeType + HarfBuzz text pipeline with a dynamic glyph atlas
+- Runtime font size changes with `Ctrl+=`, `Ctrl+-`, and `Ctrl+0`
+- Mouse input support for click, drag, and wheel events
+- HiDPI / Retina-aware rendering
+- Thin app layer with separate window, renderer, font, grid, and Neovim modules
+
+## Requirements
+
+### Windows
+
+- CMake 3.25+
+- Visual Studio 2022
+- Vulkan SDK with `glslc`
+- `nvim` on `PATH`
+
+### macOS
+
+- CMake 3.25+
+- Xcode Command Line Tools
+- `nvim` on `PATH`
+
+All other dependencies are fetched automatically with CMake `FetchContent`.
 
 ## Building
 
 ### Windows
 
-**Requirements:** CMake 3.25+, Vulkan SDK, Visual Studio 2022
+Debug:
 
-```
+```powershell
 cmake --preset default
-cmake --build build --config Release --target spectre
+cmake --build build --config Debug --parallel
+```
+
+Release:
+
+```powershell
+cmake --preset release
+cmake --build build --config Release --parallel
 ```
 
 ### macOS
 
-**Requirements:** CMake 3.25+, Xcode Command Line Tools
+Debug:
 
-```
+```bash
 cmake --preset mac-debug
-cmake --build build --target spectre
+cmake --build build --parallel
 ```
 
-All other dependencies (SDL3, FreeType, HarfBuzz, MPack, and vk-bootstrap/VMA on Windows) are fetched automatically via CMake FetchContent.
+Release:
+
+```bash
+cmake --preset mac-release
+cmake --build build --parallel
+```
 
 ## Running
 
-**Windows:**
-```
-build\Release\spectre.exe
+### Windows
+
+Debug:
+
+```powershell
+.\build\Debug\spectre.exe
 ```
 
-**macOS:**
+Release:
+
+```powershell
+.\build\Release\spectre.exe
 ```
+
+To open a console window for logs:
+
+```powershell
+.\build\Release\spectre.exe --console
+```
+
+### macOS
+
+```bash
 ./build/spectre
 ```
 
-Requires `nvim` on PATH.
+Spectre starts an embedded Neovim child process automatically.
+
+## Testing
+
+The repository includes lightweight native tests for grid logic, redraw parsing, and input translation.
+
+### Windows
+
+Default is `Debug`:
+
+```powershell
+scripts\run_tests.bat
+```
+
+Other modes:
+
+```powershell
+scripts\run_tests.bat release
+scripts\run_tests.bat both
+scripts\run_tests.bat --reconfigure
+```
+
+### macOS
+
+Default is `Debug`:
+
+```bash
+./scripts/run_tests.sh
+```
+
+Other modes:
+
+```bash
+./scripts/run_tests.sh release
+./scripts/run_tests.sh both
+./scripts/run_tests.sh --reconfigure
+```
+
+The test scripts reuse the existing CMake cache when possible and only reconfigure when needed.
+
+## Project Layout
+
+```text
+spectre/
+├── app/                    # App startup and main orchestration
+├── libs/
+│   ├── spectre-types/      # Shared POD types and event structs
+│   ├── spectre-window/     # Window abstraction and SDL implementation
+│   ├── spectre-renderer/   # Public renderer API and platform backends
+│   ├── spectre-font/       # Font loading, shaping, glyph cache
+│   ├── spectre-grid/       # Cell grid and highlight state
+│   └── spectre-nvim/       # Neovim process, RPC, redraw handling, input
+├── shaders/                # Vulkan and Metal shader sources
+├── fonts/                  # Bundled font assets copied next to the app
+├── tests/                  # Native test executable and fixture helpers
+└── scripts/                # Build/test convenience scripts
+```
+
+## CI
+
+GitHub Actions builds and tests the project on:
+
+- Windows
+- macOS
+
+The workflow uses the same repo-local test scripts as local development.
+
+## Notes
+
+- Windows uses a multi-config Visual Studio generator through `CMakePresets.json`.
+- The renderer boundary is owned by `spectre-renderer`; app code should not include backend-private headers.
+- Unicode rendering is still primarily cell-oriented. Basic wide-character support exists, but complex grapheme-cluster rendering is still an area for future work.

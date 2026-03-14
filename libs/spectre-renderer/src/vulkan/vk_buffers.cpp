@@ -2,9 +2,11 @@
 #include "vk_context.h"
 #include <cstdio>
 
-namespace spectre {
+namespace spectre
+{
 
-bool VkGridBuffer::initialize(VkContext& ctx, size_t initial_size) {
+bool VkGridBuffer::initialize(VkContext& ctx, size_t initial_size)
+{
     allocator_ = ctx.allocator();
 
     VkBufferCreateInfo buf_ci = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
@@ -14,11 +16,11 @@ bool VkGridBuffer::initialize(VkContext& ctx, size_t initial_size) {
 
     VmaAllocationCreateInfo alloc_ci = {};
     alloc_ci.usage = VMA_MEMORY_USAGE_AUTO;
-    alloc_ci.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                     VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    alloc_ci.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
     VmaAllocationInfo alloc_info;
-    if (vmaCreateBuffer(allocator_, &buf_ci, &alloc_ci, &buffer_, &allocation_, &alloc_info) != VK_SUCCESS) {
+    if (vmaCreateBuffer(allocator_, &buf_ci, &alloc_ci, &buffer_, &allocation_, &alloc_info) != VK_SUCCESS)
+    {
         fprintf(stderr, "Failed to create grid SSBO\n");
         return false;
     }
@@ -28,8 +30,10 @@ bool VkGridBuffer::initialize(VkContext& ctx, size_t initial_size) {
     return true;
 }
 
-void VkGridBuffer::shutdown(VmaAllocator allocator) {
-    if (buffer_) {
+void VkGridBuffer::shutdown(VmaAllocator allocator)
+{
+    if (buffer_)
+    {
         vmaDestroyBuffer(allocator, buffer_, allocation_);
         buffer_ = VK_NULL_HANDLE;
         allocation_ = VK_NULL_HANDLE;
@@ -37,8 +41,10 @@ void VkGridBuffer::shutdown(VmaAllocator allocator) {
     }
 }
 
-bool VkGridBuffer::ensure_size(VmaAllocator allocator, VkDevice device, size_t required_size) {
-    if (required_size <= size_) return false;
+bool VkGridBuffer::ensure_size(VmaAllocator allocator, VkDevice device, size_t required_size)
+{
+    if (required_size <= size_)
+        return false;
 
     vmaDestroyBuffer(allocator, buffer_, allocation_);
 
@@ -49,8 +55,7 @@ bool VkGridBuffer::ensure_size(VmaAllocator allocator, VkDevice device, size_t r
 
     VmaAllocationCreateInfo alloc_ci = {};
     alloc_ci.usage = VMA_MEMORY_USAGE_AUTO;
-    alloc_ci.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                     VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    alloc_ci.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
     VmaAllocationInfo alloc_info;
     vmaCreateBuffer(allocator, &buf_ci, &alloc_ci, &buffer_, &allocation_, &alloc_info);
@@ -59,7 +64,8 @@ bool VkGridBuffer::ensure_size(VmaAllocator allocator, VkDevice device, size_t r
     return true;
 }
 
-bool VkStagingBuffer::initialize(VmaAllocator allocator, size_t size) {
+bool VkStagingBuffer::initialize(VmaAllocator allocator, size_t size)
+{
     VkBufferCreateInfo buf_ci = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
     buf_ci.size = size;
     buf_ci.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
@@ -67,11 +73,11 @@ bool VkStagingBuffer::initialize(VmaAllocator allocator, size_t size) {
 
     VmaAllocationCreateInfo alloc_ci = {};
     alloc_ci.usage = VMA_MEMORY_USAGE_AUTO;
-    alloc_ci.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                     VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    alloc_ci.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
     VmaAllocationInfo alloc_info;
-    if (vmaCreateBuffer(allocator, &buf_ci, &alloc_ci, &buffer_, &allocation_, &alloc_info) != VK_SUCCESS) {
+    if (vmaCreateBuffer(allocator, &buf_ci, &alloc_ci, &buffer_, &allocation_, &alloc_info) != VK_SUCCESS)
+    {
         fprintf(stderr, "Failed to create staging buffer\n");
         return false;
     }
@@ -80,8 +86,10 @@ bool VkStagingBuffer::initialize(VmaAllocator allocator, size_t size) {
     return true;
 }
 
-void VkStagingBuffer::shutdown(VmaAllocator allocator) {
-    if (buffer_) {
+void VkStagingBuffer::shutdown(VmaAllocator allocator)
+{
+    if (buffer_)
+    {
         vmaDestroyBuffer(allocator, buffer_, allocation_);
         buffer_ = VK_NULL_HANDLE;
         allocation_ = VK_NULL_HANDLE;

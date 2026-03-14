@@ -1,28 +1,42 @@
 #pragma once
+#include <cstdint>
 #include <spectre/font_metrics.h>
 #include <spectre/types.h>
 #include <string>
-#include <vector>
 #include <unordered_map>
-#include <cstdint>
+#include <vector>
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
-#include <hb.h>
 #include <hb-ft.h>
+#include <hb.h>
 
-namespace spectre {
+namespace spectre
+{
 
-class FontManager {
+class FontManager
+{
 public:
     bool initialize(const std::string& font_path, int point_size, float display_ppi);
     bool set_point_size(int point_size);
     void shutdown();
 
-    FT_Face face() const { return face_; }
-    hb_font_t* hb_font() const { return hb_font_; }
-    const FontMetrics& metrics() const { return metrics_; }
-    int point_size() const { return point_size_; }
+    FT_Face face() const
+    {
+        return face_;
+    }
+    hb_font_t* hb_font() const
+    {
+        return hb_font_;
+    }
+    const FontMetrics& metrics() const
+    {
+        return metrics_;
+    }
+    int point_size() const
+    {
+        return point_size_;
+    }
 
 private:
     FT_Library ft_lib_ = nullptr;
@@ -35,7 +49,8 @@ private:
     float display_ppi_ = 96.0f;
 };
 
-class GlyphCache {
+class GlyphCache
+{
 public:
     static constexpr int ATLAS_SIZE = 2048;
 
@@ -44,15 +59,36 @@ public:
 
     const AtlasRegion& get_glyph(uint32_t glyph_id);
 
-    bool atlas_dirty() const { return dirty_; }
-    void clear_dirty() { dirty_ = false; }
+    bool atlas_dirty() const
+    {
+        return dirty_;
+    }
+    void clear_dirty()
+    {
+        dirty_ = false;
+    }
 
-    const uint8_t* atlas_data() const { return atlas_.data(); }
-    int atlas_width() const { return ATLAS_SIZE; }
-    int atlas_height() const { return ATLAS_SIZE; }
+    const uint8_t* atlas_data() const
+    {
+        return atlas_.data();
+    }
+    int atlas_width() const
+    {
+        return ATLAS_SIZE;
+    }
+    int atlas_height() const
+    {
+        return ATLAS_SIZE;
+    }
 
-    struct DirtyRect { int x, y, w, h; };
-    const DirtyRect& dirty_rect() const { return dirty_rect_; }
+    struct DirtyRect
+    {
+        int x, y, w, h;
+    };
+    const DirtyRect& dirty_rect() const
+    {
+        return dirty_rect_;
+    }
 
 private:
     bool rasterize_glyph(uint32_t glyph_id, AtlasRegion& region);
@@ -73,7 +109,8 @@ private:
     AtlasRegion empty_region_ = {};
 };
 
-struct ShapedGlyph {
+struct ShapedGlyph
+{
     uint32_t glyph_id;
     int x_advance;
     int x_offset;
@@ -81,9 +118,13 @@ struct ShapedGlyph {
     int cluster;
 };
 
-class TextShaper {
+class TextShaper
+{
 public:
+    ~TextShaper();
+
     void initialize(hb_font_t* font);
+    void shutdown();
 
     std::vector<ShapedGlyph> shape(const std::string& text);
     uint32_t shape_codepoint(uint32_t codepoint);

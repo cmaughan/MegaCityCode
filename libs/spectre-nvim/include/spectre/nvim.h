@@ -1,33 +1,35 @@
 #pragma once
-#include <spectre/types.h>
+#include <atomic>
+#include <condition_variable>
+#include <cstdint>
+#include <functional>
+#include <mpack.h>
+#include <mutex>
+#include <queue>
 #include <spectre/events.h>
 #include <spectre/grid.h>
-#include <mpack.h>
+#include <spectre/types.h>
 #include <string>
-#include <vector>
-#include <functional>
-#include <mutex>
 #include <thread>
-#include <queue>
-#include <condition_variable>
-#include <atomic>
 #include <unordered_map>
-#include <cstdint>
+#include <vector>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
 #else
-#include <sys/types.h>
 #include <signal.h>
+#include <sys/types.h>
 #endif
 
-namespace spectre {
+namespace spectre
+{
 
 // --- NvimProcess ---
 
-class NvimProcess {
+class NvimProcess
+{
 public:
     bool spawn(const std::string& nvim_path = "nvim");
     void shutdown();
@@ -53,8 +55,20 @@ private:
 
 // --- RPC types ---
 
-struct MpackValue {
-    enum Type { Nil, Bool, Int, UInt, Float, String, Array, Map, Ext };
+struct MpackValue
+{
+    enum Type
+    {
+        Nil,
+        Bool,
+        Int,
+        UInt,
+        Float,
+        String,
+        Array,
+        Map,
+        Ext
+    };
     Type type = Nil;
 
     bool bool_val = false;
@@ -65,32 +79,55 @@ struct MpackValue {
     std::vector<MpackValue> array_val;
     std::vector<std::pair<MpackValue, MpackValue>> map_val;
 
-    int64_t as_int() const { return type == UInt ? (int64_t)uint_val : int_val; }
-    const std::string& as_str() const { return str_val; }
-    bool as_bool() const { return bool_val; }
-    const std::vector<MpackValue>& as_array() const { return array_val; }
+    int64_t as_int() const
+    {
+        return type == UInt ? (int64_t)uint_val : int_val;
+    }
+    const std::string& as_str() const
+    {
+        return str_val;
+    }
+    bool as_bool() const
+    {
+        return bool_val;
+    }
+    const std::vector<MpackValue>& as_array() const
+    {
+        return array_val;
+    }
 };
 
-struct RpcNotification {
+struct RpcNotification
+{
     std::string method;
     std::vector<MpackValue> params;
 };
 
-struct RpcResponse {
+struct RpcResponse
+{
     uint32_t msgid;
     MpackValue error;
     MpackValue result;
 };
 
+class IRpcChannel
+{
+public:
+    virtual ~IRpcChannel() = default;
+    virtual MpackValue request(const std::string& method, const std::vector<MpackValue>& params) = 0;
+    virtual void notify(const std::string& method, const std::vector<MpackValue>& params) = 0;
+};
+
 // --- NvimRpc ---
 
-class NvimRpc {
+class NvimRpc : public IRpcChannel
+{
 public:
     bool initialize(NvimProcess& process);
     void shutdown();
 
-    MpackValue request(const std::string& method, const std::vector<MpackValue>& params);
-    void notify(const std::string& method, const std::vector<MpackValue>& params);
+    MpackValue request(const std::string& method, const std::vector<MpackValue>& params) override;
+    void notify(const std::string& method, const std::vector<MpackValue>& params) override;
 
     std::vector<RpcNotification> drain_notifications();
 
@@ -109,7 +146,7 @@ private:
 
     NvimProcess* process_ = nullptr;
     std::thread reader_thread_;
-    std::atomic<bool> running_{false};
+    std::atomic<bool> running_{ false };
 
     std::mutex notif_mutex_;
     std::queue<RpcNotification> notifications_;
@@ -118,7 +155,8 @@ private:
     std::condition_variable response_cv_;
     std::unordered_map<uint32_t, RpcResponse> responses_;
 
-    std::atomic<uint32_t> next_msgid_{1};
+    std::atomic<uint32_t> next_msgid_{ 1 };
+    std::atomic<bool> read_failed_{ false };
 
     std::vector<uint8_t> read_buf_;
     size_t read_pos_ = 0;
@@ -127,17 +165,25 @@ private:
 
 // --- UiEventHandler ---
 
-struct ModeInfo {
+struct ModeInfo
+{
     std::string name;
     CursorShape cursor_shape = CursorShape::Block;
     int cell_percentage = 0;
     int attr_id = 0;
 };
 
-class UiEventHandler {
+class UiEventHandler
+{
 public:
-    void set_grid(Grid* grid) { grid_ = grid; }
-    void set_highlights(HighlightTable* hl) { highlights_ = hl; }
+    void set_grid(Grid* grid)
+    {
+        grid_ = grid;
+    }
+    void set_highlights(HighlightTable* hl)
+    {
+        highlights_ = hl;
+    }
 
     void process_redraw(const std::vector<MpackValue>& params);
 
@@ -146,10 +192,22 @@ public:
     std::function<void(int, int)> on_cursor_goto;
     std::function<void(const std::string&, const MpackValue&)> on_option_set;
 
-    const std::vector<ModeInfo>& modes() const { return modes_; }
-    int current_mode() const { return current_mode_; }
-    int cursor_col() const { return cursor_col_; }
-    int cursor_row() const { return cursor_row_; }
+    const std::vector<ModeInfo>& modes() const
+    {
+        return modes_;
+    }
+    int current_mode() const
+    {
+        return current_mode_;
+    }
+    int cursor_col() const
+    {
+        return cursor_col_;
+    }
+    int cursor_row() const
+    {
+        return cursor_row_;
+    }
 
 private:
     void handle_grid_line(const MpackValue& args);
@@ -173,10 +231,15 @@ private:
 
 // --- NvimInput ---
 
-class NvimInput {
+class NvimInput
+{
 public:
-    void initialize(NvimRpc* rpc, int cell_w, int cell_h);
-    void set_cell_size(int w, int h) { cell_w_ = w; cell_h_ = h; }
+    void initialize(IRpcChannel* rpc, int cell_w, int cell_h);
+    void set_cell_size(int w, int h)
+    {
+        cell_w_ = w;
+        cell_h_ = h;
+    }
 
     void on_key(const KeyEvent& event);
     void on_text_input(const TextInputEvent& event);
@@ -188,7 +251,7 @@ private:
     void send_input(const std::string& keys);
     std::string translate_key(int keycode, uint16_t mod);
 
-    NvimRpc* rpc_ = nullptr;
+    IRpcChannel* rpc_ = nullptr;
     int cell_w_ = 10, cell_h_ = 20;
     bool suppress_next_text_ = false;
     bool mouse_pressed_ = false;

@@ -34,24 +34,25 @@ add_subdirectory(libs/spectre-font)
 add_subdirectory(libs/spectre-grid)
 add_subdirectory(libs/spectre-nvim)
 
+include(CTest)
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
+
 # --- App executable ---
 if(APPLE)
     add_executable(spectre
         app/main.cpp
         app/app.cpp
-        app/renderer_factory.cpp
     )
 else()
     add_executable(spectre
         app/main.cpp
         app/app.cpp
-        app/renderer_factory.cpp
     )
 endif()
 
 target_include_directories(spectre PRIVATE app)
-# The factory needs access to internal renderer headers
-target_include_directories(spectre PRIVATE libs/spectre-renderer/src)
 
 target_link_libraries(spectre PRIVATE
     spectre-types

@@ -1,19 +1,23 @@
-#include <spectre/font.h>
-#include <cstdio>
 #include <cmath>
+#include <cstdio>
+#include <spectre/font.h>
 
-namespace spectre {
+namespace spectre
+{
 
-bool FontManager::initialize(const std::string& font_path, int point_size, float display_ppi) {
+bool FontManager::initialize(const std::string& font_path, int point_size, float display_ppi)
+{
     point_size_ = point_size;
     display_ppi_ = display_ppi;
 
-    if (FT_Init_FreeType(&ft_lib_)) {
+    if (FT_Init_FreeType(&ft_lib_))
+    {
         fprintf(stderr, "Failed to init FreeType\n");
         return false;
     }
 
-    if (FT_New_Face(ft_lib_, font_path.c_str(), 0, &face_)) {
+    if (FT_New_Face(ft_lib_, font_path.c_str(), 0, &face_))
+    {
         fprintf(stderr, "Failed to load font: %s\n", font_path.c_str());
         return false;
     }
@@ -23,7 +27,8 @@ bool FontManager::initialize(const std::string& font_path, int point_size, float
     update_metrics();
 
     hb_font_ = hb_ft_font_create(face_, nullptr);
-    if (!hb_font_) {
+    if (!hb_font_)
+    {
         fprintf(stderr, "Failed to create HarfBuzz font\n");
         return false;
     }
@@ -37,34 +42,51 @@ bool FontManager::initialize(const std::string& font_path, int point_size, float
     return true;
 }
 
-bool FontManager::set_point_size(int point_size) {
+bool FontManager::set_point_size(int point_size)
+{
     point_size_ = point_size;
     FT_Set_Char_Size(face_, 0, point_size * 64, (FT_UInt)display_ppi_, (FT_UInt)display_ppi_);
 
     update_metrics();
 
-    if (hb_font_) hb_font_destroy(hb_font_);
+    if (hb_font_)
+        hb_font_destroy(hb_font_);
     hb_font_ = hb_ft_font_create(face_, nullptr);
 
     return hb_font_ != nullptr;
 }
 
-void FontManager::update_metrics() {
+void FontManager::update_metrics()
+{
     metrics_.cell_width = (int)(face_->size->metrics.max_advance >> 6);
     metrics_.cell_height = (int)(face_->size->metrics.height >> 6);
     metrics_.ascender = (int)(face_->size->metrics.ascender >> 6);
     metrics_.descender = (int)(-face_->size->metrics.descender >> 6);
 
-    if (metrics_.cell_width == 0) {
+    if (metrics_.cell_width == 0)
+    {
         FT_Load_Char(face_, 'M', FT_LOAD_DEFAULT);
         metrics_.cell_width = (int)(face_->glyph->advance.x >> 6);
     }
 }
 
-void FontManager::shutdown() {
-    if (hb_font_) { hb_font_destroy(hb_font_); hb_font_ = nullptr; }
-    if (face_) { FT_Done_Face(face_); face_ = nullptr; }
-    if (ft_lib_) { FT_Done_FreeType(ft_lib_); ft_lib_ = nullptr; }
+void FontManager::shutdown()
+{
+    if (hb_font_)
+    {
+        hb_font_destroy(hb_font_);
+        hb_font_ = nullptr;
+    }
+    if (face_)
+    {
+        FT_Done_Face(face_);
+        face_ = nullptr;
+    }
+    if (ft_lib_)
+    {
+        FT_Done_FreeType(ft_lib_);
+        ft_lib_ = nullptr;
+    }
 }
 
 } // namespace spectre

@@ -1,20 +1,23 @@
-#include <spectre/font.h>
 #include <ft2build.h>
+#include <spectre/font.h>
 #include FT_FREETYPE_H
-#include <cstring>
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 
-namespace spectre {
+namespace spectre
+{
 
-bool GlyphCache::initialize(FT_Face face, int pixel_size) {
+bool GlyphCache::initialize(FT_Face face, int pixel_size)
+{
     face_ = face;
     pixel_size_ = pixel_size;
     atlas_.resize(ATLAS_SIZE * ATLAS_SIZE, 0);
     return true;
 }
 
-void GlyphCache::reset(FT_Face face, int pixel_size) {
+void GlyphCache::reset(FT_Face face, int pixel_size)
+{
     face_ = face;
     pixel_size_ = pixel_size;
     cache_.clear();
@@ -25,24 +28,30 @@ void GlyphCache::reset(FT_Face face, int pixel_size) {
     dirty_ = true;
 }
 
-const AtlasRegion& GlyphCache::get_glyph(uint32_t glyph_id) {
+const AtlasRegion& GlyphCache::get_glyph(uint32_t glyph_id)
+{
     auto it = cache_.find(glyph_id);
-    if (it != cache_.end()) return it->second;
+    if (it != cache_.end())
+        return it->second;
 
     AtlasRegion region = {};
-    if (rasterize_glyph(glyph_id, region)) {
+    if (rasterize_glyph(glyph_id, region))
+    {
         auto [ins, _] = cache_.emplace(glyph_id, region);
         return ins->second;
     }
     return empty_region_;
 }
 
-bool GlyphCache::rasterize_glyph(uint32_t glyph_id, AtlasRegion& region) {
-    if (FT_Load_Glyph(face_, glyph_id, FT_LOAD_DEFAULT)) {
+bool GlyphCache::rasterize_glyph(uint32_t glyph_id, AtlasRegion& region)
+{
+    if (FT_Load_Glyph(face_, glyph_id, FT_LOAD_DEFAULT))
+    {
         return false;
     }
 
-    if (FT_Render_Glyph(face_->glyph, FT_RENDER_MODE_NORMAL)) {
+    if (FT_Render_Glyph(face_->glyph, FT_RENDER_MODE_NORMAL))
+    {
         return false;
     }
 
@@ -50,28 +59,31 @@ bool GlyphCache::rasterize_glyph(uint32_t glyph_id, AtlasRegion& region) {
     int w = (int)bmp.width;
     int h = (int)bmp.rows;
 
-    if (w == 0 || h == 0) {
+    if (w == 0 || h == 0)
+    {
         region = {};
         return true;
     }
 
-    if (shelf_x_ + w + 1 > ATLAS_SIZE) {
+    if (shelf_x_ + w + 1 > ATLAS_SIZE)
+    {
         shelf_y_ += shelf_height_ + 1;
         shelf_x_ = 0;
         shelf_height_ = 0;
     }
 
-    if (shelf_y_ + h > ATLAS_SIZE) {
+    if (shelf_y_ + h > ATLAS_SIZE)
+    {
         fprintf(stderr, "Atlas full! Cannot fit glyph %u (%dx%d)\n", glyph_id, w, h);
         return false;
     }
 
-    for (int row = 0; row < h; row++) {
+    for (int row = 0; row < h; row++)
+    {
         memcpy(
             atlas_.data() + (shelf_y_ + row) * ATLAS_SIZE + shelf_x_,
             bmp.buffer + row * bmp.pitch,
-            w
-        );
+            w);
     }
 
     float inv_size = 1.0f / ATLAS_SIZE;

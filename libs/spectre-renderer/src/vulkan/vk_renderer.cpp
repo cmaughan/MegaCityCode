@@ -1,41 +1,56 @@
 #include "vk_renderer.h"
-#include <spectre/window.h>
-#include <cstring>
-#include <cstdio>
 #include <algorithm>
+#include <cstdio>
+#include <cstring>
+#include <spectre/window.h>
 
-namespace spectre {
+namespace spectre
+{
 
-bool VkRenderer::initialize(IWindow& window) {
-    if (!ctx_.initialize(window.native_handle())) return false;
+bool VkRenderer::initialize(IWindow& window)
+{
+    if (!ctx_.initialize(window.native_handle()))
+        return false;
 
     auto [w, h] = window.size_pixels();
     pixel_w_ = w;
     pixel_h_ = h;
 
-    if (!atlas_.initialize(ctx_)) return false;
+    if (!atlas_.initialize(ctx_))
+        return false;
 
     size_t initial_buf = 80 * 24 * sizeof(GpuCell);
-    if (!grid_buffer_.initialize(ctx_, initial_buf)) return false;
+    if (!grid_buffer_.initialize(ctx_, initial_buf))
+        return false;
 
-    if (!pipeline_.initialize(ctx_, "shaders")) return false;
+    if (!pipeline_.initialize(ctx_, "shaders"))
+        return false;
 
-    if (!create_command_buffers()) return false;
-    if (!create_sync_objects()) return false;
+    if (!create_command_buffers())
+        return false;
+    if (!create_sync_objects())
+        return false;
     create_descriptor_pool();
     update_all_descriptor_sets();
 
     return true;
 }
 
-void VkRenderer::shutdown() {
-    if (ctx_.device()) vkDeviceWaitIdle(ctx_.device());
+void VkRenderer::shutdown()
+{
+    if (ctx_.device())
+        vkDeviceWaitIdle(ctx_.device());
 
-    for (auto& sem : image_available_sem_) vkDestroySemaphore(ctx_.device(), sem, nullptr);
-    for (auto& sem : render_finished_sem_) vkDestroySemaphore(ctx_.device(), sem, nullptr);
-    for (auto& fence : in_flight_fences_) vkDestroyFence(ctx_.device(), fence, nullptr);
-    if (cmd_pool_) vkDestroyCommandPool(ctx_.device(), cmd_pool_, nullptr);
-    if (desc_pool_) vkDestroyDescriptorPool(ctx_.device(), desc_pool_, nullptr);
+    for (auto& sem : image_available_sem_)
+        vkDestroySemaphore(ctx_.device(), sem, nullptr);
+    for (auto& sem : render_finished_sem_)
+        vkDestroySemaphore(ctx_.device(), sem, nullptr);
+    for (auto& fence : in_flight_fences_)
+        vkDestroyFence(ctx_.device(), fence, nullptr);
+    if (cmd_pool_)
+        vkDestroyCommandPool(ctx_.device(), cmd_pool_, nullptr);
+    if (desc_pool_)
+        vkDestroyDescriptorPool(ctx_.device(), desc_pool_, nullptr);
 
     grid_buffer_.shutdown(ctx_.allocator());
     pipeline_.shutdown(ctx_.device());
@@ -43,7 +58,8 @@ void VkRenderer::shutdown() {
     ctx_.shutdown();
 }
 
-bool VkRenderer::create_sync_objects() {
+bool VkRenderer::create_sync_objects()
+{
     image_available_sem_.resize(MAX_FRAMES_IN_FLIGHT);
     render_finished_sem_.resize(MAX_FRAMES_IN_FLIGHT);
     in_flight_fences_.resize(MAX_FRAMES_IN_FLIGHT);
@@ -52,7 +68,8 @@ bool VkRenderer::create_sync_objects() {
     VkFenceCreateInfo fence_ci = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
     fence_ci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
         vkCreateSemaphore(ctx_.device(), &sem_ci, nullptr, &image_available_sem_[i]);
         vkCreateSemaphore(ctx_.device(), &sem_ci, nullptr, &render_finished_sem_[i]);
         vkCreateFence(ctx_.device(), &fence_ci, nullptr, &in_flight_fences_[i]);
@@ -60,7 +77,8 @@ bool VkRenderer::create_sync_objects() {
     return true;
 }
 
-bool VkRenderer::create_command_buffers() {
+bool VkRenderer::create_command_buffers()
+{
     VkCommandPoolCreateInfo pool_ci = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
     pool_ci.queueFamilyIndex = ctx_.graphics_queue_family();
     pool_ci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
@@ -76,7 +94,8 @@ bool VkRenderer::create_command_buffers() {
     return true;
 }
 
-void VkRenderer::create_descriptor_pool() {
+void VkRenderer::create_descriptor_pool()
+{
     VkDescriptorPoolSize pool_sizes[] = {
         { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, (uint32_t)(MAX_FRAMES_IN_FLIGHT * 2) },
         { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, (uint32_t)MAX_FRAMES_IN_FLIGHT },
@@ -92,7 +111,8 @@ void VkRenderer::create_descriptor_pool() {
     bg_desc_sets_.resize(MAX_FRAMES_IN_FLIGHT);
     fg_desc_sets_.resize(MAX_FRAMES_IN_FLIGHT);
 
-    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
         VkDescriptorSetLayout bg_layout = pipeline_.bg_desc_layout();
         VkDescriptorSetAllocateInfo alloc_info = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
         alloc_info.descriptorPool = desc_pool_;
@@ -106,7 +126,8 @@ void VkRenderer::create_descriptor_pool() {
     }
 }
 
-void VkRenderer::update_descriptor_sets_for_frame(int frame) {
+void VkRenderer::update_descriptor_sets_for_frame(int frame)
+{
     VkDescriptorBufferInfo buf_info = {};
     buf_info.buffer = grid_buffer_.buffer();
     buf_info.offset = 0;
@@ -142,48 +163,71 @@ void VkRenderer::update_descriptor_sets_for_frame(int frame) {
     vkUpdateDescriptorSets(ctx_.device(), 3, writes, 0, nullptr);
 }
 
-void VkRenderer::update_all_descriptor_sets() {
-    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+void VkRenderer::update_all_descriptor_sets()
+{
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
         update_descriptor_sets_for_frame(i);
     }
     needs_descriptor_update_ = false;
 }
 
-void VkRenderer::set_grid_size(int cols, int rows) {
+void VkRenderer::set_grid_size(int cols, int rows)
+{
     grid_cols_ = cols;
     grid_rows_ = rows;
 
     size_t required = ((size_t)cols * rows + 1) * sizeof(GpuCell);
-    if (grid_buffer_.ensure_size(ctx_.allocator(), ctx_.device(), required)) {
+    if (grid_buffer_.ensure_size(ctx_.allocator(), ctx_.device(), required))
+    {
         needs_descriptor_update_ = true;
     }
 
     gpu_cells_.resize(cols * rows);
     memset(gpu_cells_.data(), 0, gpu_cells_.size() * sizeof(GpuCell));
 
-    for (int r = 0; r < rows; r++) {
-        for (int c = 0; c < cols; c++) {
+    for (int r = 0; r < rows; r++)
+    {
+        for (int c = 0; c < cols; c++)
+        {
             auto& cell = gpu_cells_[r * cols + c];
             cell.pos_x = (float)(c * cell_w_ + padding_);
             cell.pos_y = (float)(r * cell_h_ + padding_);
             cell.size_x = (float)cell_w_;
             cell.size_y = (float)cell_h_;
-            cell.bg_r = 0.1f; cell.bg_g = 0.1f; cell.bg_b = 0.1f; cell.bg_a = 1.0f;
-            cell.fg_r = 1.0f; cell.fg_g = 1.0f; cell.fg_b = 1.0f; cell.fg_a = 1.0f;
+            cell.bg_r = 0.1f;
+            cell.bg_g = 0.1f;
+            cell.bg_b = 0.1f;
+            cell.bg_a = 1.0f;
+            cell.fg_r = 1.0f;
+            cell.fg_g = 1.0f;
+            cell.fg_b = 1.0f;
+            cell.fg_a = 1.0f;
         }
     }
 
     memcpy(grid_buffer_.mapped(), gpu_cells_.data(), gpu_cells_.size() * sizeof(GpuCell));
 }
 
-void VkRenderer::update_cells(std::span<const CellUpdate> updates) {
-    for (const auto& u : updates) {
-        if (u.col < 0 || u.col >= grid_cols_ || u.row < 0 || u.row >= grid_rows_) continue;
+void VkRenderer::update_cells(std::span<const CellUpdate> updates)
+{
+    for (const auto& u : updates)
+    {
+        if (u.col < 0 || u.col >= grid_cols_ || u.row < 0 || u.row >= grid_rows_)
+            continue;
         auto& cell = gpu_cells_[u.row * grid_cols_ + u.col];
-        cell.bg_r = u.bg.r; cell.bg_g = u.bg.g; cell.bg_b = u.bg.b; cell.bg_a = u.bg.a;
-        cell.fg_r = u.fg.r; cell.fg_g = u.fg.g; cell.fg_b = u.fg.b; cell.fg_a = u.fg.a;
-        cell.uv_x0 = u.glyph.u0; cell.uv_y0 = u.glyph.v0;
-        cell.uv_x1 = u.glyph.u1; cell.uv_y1 = u.glyph.v1;
+        cell.bg_r = u.bg.r;
+        cell.bg_g = u.bg.g;
+        cell.bg_b = u.bg.b;
+        cell.bg_a = u.bg.a;
+        cell.fg_r = u.fg.r;
+        cell.fg_g = u.fg.g;
+        cell.fg_b = u.fg.b;
+        cell.fg_a = u.fg.a;
+        cell.uv_x0 = u.glyph.u0;
+        cell.uv_y0 = u.glyph.v0;
+        cell.uv_x1 = u.glyph.u1;
+        cell.uv_y1 = u.glyph.v1;
         cell.glyph_offset_x = (float)u.glyph.bearing_x;
         cell.glyph_offset_y = (float)(cell_h_ - ascender_ + u.glyph.bearing_y);
         cell.glyph_size_x = (float)u.glyph.width;
@@ -194,42 +238,50 @@ void VkRenderer::update_cells(std::span<const CellUpdate> updates) {
     memcpy(grid_buffer_.mapped(), gpu_cells_.data(), gpu_cells_.size() * sizeof(GpuCell));
 }
 
-void VkRenderer::set_atlas_texture(const uint8_t* data, int w, int h) {
+void VkRenderer::set_atlas_texture(const uint8_t* data, int w, int h)
+{
     atlas_.upload(ctx_, data, w, h);
     needs_descriptor_update_ = true;
 }
 
-void VkRenderer::update_atlas_region(int x, int y, int w, int h, const uint8_t* data) {
+void VkRenderer::update_atlas_region(int x, int y, int w, int h, const uint8_t* data)
+{
     atlas_.upload_region(ctx_, x, y, w, h, data);
 }
 
-void VkRenderer::set_cursor(int col, int row, CursorShape shape, Color color) {
+void VkRenderer::set_cursor(int col, int row, CursorShape shape, Color color)
+{
     cursor_col_ = col;
     cursor_row_ = row;
     cursor_shape_ = shape;
     cursor_color_ = color;
 }
 
-void VkRenderer::resize(int pixel_w, int pixel_h) {
+void VkRenderer::resize(int pixel_w, int pixel_h)
+{
     pixel_w_ = pixel_w;
     pixel_h_ = pixel_h;
     framebuffer_resized_ = true;
 }
 
-std::pair<int,int> VkRenderer::cell_size_pixels() const {
+std::pair<int, int> VkRenderer::cell_size_pixels() const
+{
     return { cell_w_, cell_h_ };
 }
 
-void VkRenderer::set_cell_size(int w, int h) {
+void VkRenderer::set_cell_size(int w, int h)
+{
     cell_w_ = w;
     cell_h_ = h;
 }
 
-void VkRenderer::set_ascender(int a) {
+void VkRenderer::set_ascender(int a)
+{
     ascender_ = a;
 }
 
-bool VkRenderer::begin_frame() {
+bool VkRenderer::begin_frame()
+{
     vkWaitForFences(ctx_.device(), 1, &in_flight_fences_[current_frame_], VK_TRUE, UINT64_MAX);
 
     restore_cursor();
@@ -238,11 +290,13 @@ bool VkRenderer::begin_frame() {
         ctx_.device(), ctx_.swapchain().swapchain, UINT64_MAX,
         image_available_sem_[current_frame_], VK_NULL_HANDLE, &current_image_);
 
-    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+    if (result == VK_ERROR_OUT_OF_DATE_KHR)
+    {
         ctx_.recreate_swapchain(pixel_w_, pixel_h_);
         pipeline_.shutdown(ctx_.device());
         pipeline_.initialize(ctx_, "shaders");
-        if (desc_pool_) {
+        if (desc_pool_)
+        {
             vkDestroyDescriptorPool(ctx_.device(), desc_pool_, nullptr);
             desc_pool_ = VK_NULL_HANDLE;
         }
@@ -251,12 +305,16 @@ bool VkRenderer::begin_frame() {
         return false;
     }
 
-    if (needs_descriptor_update_) {
+    if (needs_descriptor_update_)
+    {
         update_descriptor_sets_for_frame(current_frame_);
         desc_update_pending_frames_ |= ((1 << MAX_FRAMES_IN_FLIGHT) - 1);
         desc_update_pending_frames_ &= ~(1 << current_frame_);
-        if (desc_update_pending_frames_ == 0) needs_descriptor_update_ = false;
-    } else if (desc_update_pending_frames_ & (1 << current_frame_)) {
+        if (desc_update_pending_frames_ == 0)
+            needs_descriptor_update_ = false;
+    }
+    else if (desc_update_pending_frames_ & (1 << current_frame_))
+    {
         update_descriptor_sets_for_frame(current_frame_);
         desc_update_pending_frames_ &= ~(1 << current_frame_);
     }
@@ -267,12 +325,13 @@ bool VkRenderer::begin_frame() {
     return true;
 }
 
-void VkRenderer::record_command_buffer(VkCommandBuffer cmd, uint32_t image_index) {
+void VkRenderer::record_command_buffer(VkCommandBuffer cmd, uint32_t image_index)
+{
     VkCommandBufferBeginInfo begin_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
     vkBeginCommandBuffer(cmd, &begin_info);
 
     VkClearValue clear_value = {};
-    clear_value.color = {{ 0.1f, 0.1f, 0.1f, 1.0f }};
+    clear_value.color = { { 0.1f, 0.1f, 0.1f, 1.0f } };
 
     VkRenderPassBeginInfo rp_begin = { VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
     rp_begin.renderPass = ctx_.render_pass();
@@ -296,7 +355,8 @@ void VkRenderer::record_command_buffer(VkCommandBuffer cmd, uint32_t image_index
     int total_cells = grid_cols_ * grid_rows_;
     int bg_instances = total_cells + (cursor_overlay_active_ ? 1 : 0);
 
-    if (total_cells > 0) {
+    if (total_cells > 0)
+    {
         float push_data[4] = {
             (float)ctx_.swapchain().extent.width,
             (float)ctx_.swapchain().extent.height,
@@ -321,9 +381,10 @@ void VkRenderer::record_command_buffer(VkCommandBuffer cmd, uint32_t image_index
     vkEndCommandBuffer(cmd);
 }
 
-void VkRenderer::apply_cursor() {
-    if (cursor_col_ < 0 || cursor_col_ >= grid_cols_ ||
-        cursor_row_ < 0 || cursor_row_ >= grid_rows_) return;
+void VkRenderer::apply_cursor()
+{
+    if (cursor_col_ < 0 || cursor_col_ >= grid_cols_ || cursor_row_ < 0 || cursor_row_ >= grid_rows_)
+        return;
 
     int idx = cursor_row_ * grid_cols_ + cursor_col_;
     auto& cell = gpu_cells_[idx];
@@ -332,15 +393,18 @@ void VkRenderer::apply_cursor() {
     cursor_applied_ = true;
     cursor_overlay_active_ = false;
 
-    if (cursor_shape_ == CursorShape::Block) {
+    if (cursor_shape_ == CursorShape::Block)
+    {
         std::swap(cell.fg_r, cell.bg_r);
         std::swap(cell.fg_g, cell.bg_g);
         std::swap(cell.fg_b, cell.bg_b);
         std::swap(cell.fg_a, cell.bg_a);
 
         memcpy((char*)grid_buffer_.mapped() + idx * sizeof(GpuCell),
-               &cell, sizeof(GpuCell));
-    } else {
+            &cell, sizeof(GpuCell));
+    }
+    else
+    {
         int overlay_idx = grid_cols_ * grid_rows_;
         GpuCell overlay = {};
         overlay.bg_r = cursor_color_.r;
@@ -348,12 +412,15 @@ void VkRenderer::apply_cursor() {
         overlay.bg_b = cursor_color_.b;
         overlay.bg_a = cursor_color_.a;
 
-        if (cursor_shape_ == CursorShape::Vertical) {
+        if (cursor_shape_ == CursorShape::Vertical)
+        {
             overlay.pos_x = cell.pos_x;
             overlay.pos_y = cell.pos_y;
             overlay.size_x = 2.0f;
             overlay.size_y = cell.size_y;
-        } else {
+        }
+        else
+        {
             overlay.pos_x = cell.pos_x;
             overlay.pos_y = cell.pos_y + cell.size_y - 2.0f;
             overlay.size_x = cell.size_x;
@@ -361,23 +428,26 @@ void VkRenderer::apply_cursor() {
         }
 
         memcpy((char*)grid_buffer_.mapped() + overlay_idx * sizeof(GpuCell),
-               &overlay, sizeof(GpuCell));
+            &overlay, sizeof(GpuCell));
         cursor_overlay_active_ = true;
     }
 }
 
-void VkRenderer::restore_cursor() {
-    if (!cursor_applied_) return;
+void VkRenderer::restore_cursor()
+{
+    if (!cursor_applied_)
+        return;
     cursor_applied_ = false;
     cursor_overlay_active_ = false;
 
     int idx = cursor_row_ * grid_cols_ + cursor_col_;
     gpu_cells_[idx] = cursor_saved_cell_;
     memcpy((char*)grid_buffer_.mapped() + idx * sizeof(GpuCell),
-           &cursor_saved_cell_, sizeof(GpuCell));
+        &cursor_saved_cell_, sizeof(GpuCell));
 }
 
-void VkRenderer::end_frame() {
+void VkRenderer::end_frame()
+{
     apply_cursor();
     record_command_buffer(cmd_buffers_[current_frame_], current_image_);
 
@@ -401,12 +471,14 @@ void VkRenderer::end_frame() {
     present.pImageIndices = &current_image_;
 
     VkResult result = vkQueuePresentKHR(ctx_.graphics_queue(), &present);
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebuffer_resized_) {
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebuffer_resized_)
+    {
         framebuffer_resized_ = false;
         ctx_.recreate_swapchain(pixel_w_, pixel_h_);
         pipeline_.shutdown(ctx_.device());
         pipeline_.initialize(ctx_, "shaders");
-        if (desc_pool_) {
+        if (desc_pool_)
+        {
             vkDestroyDescriptorPool(ctx_.device(), desc_pool_, nullptr);
             desc_pool_ = VK_NULL_HANDLE;
         }
