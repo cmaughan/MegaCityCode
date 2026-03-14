@@ -125,7 +125,7 @@ The root wrappers delegate to the larger scripts under `scripts/`.
 
 ## Testing
 
-The repository includes lightweight native tests for grid logic, redraw parsing, and input translation.
+The repository includes lightweight native tests for grid logic, redraw parsing, input translation, RPC behavior, renderer state, and Unicode width conformance against headless Neovim.
 
 ### Windows
 

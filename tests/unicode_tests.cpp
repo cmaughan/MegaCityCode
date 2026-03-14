@@ -1,9 +1,90 @@
 #include "support/test_support.h"
 
+#include <spectre/nvim.h>
 #include <spectre/unicode.h>
+
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 using namespace spectre;
 using namespace spectre::tests;
+
+namespace
+{
+
+struct WidthCase
+{
+    std::string_view label;
+    std::string_view text;
+    AmbiWidth ambiwidth = AmbiWidth::Single;
+};
+
+class NvimWidthOracle
+{
+public:
+    ~NvimWidthOracle()
+    {
+        shutdown();
+    }
+
+    bool initialize()
+    {
+        if (!process_.spawn())
+            return false;
+        if (!rpc_.initialize(process_))
+        {
+            process_.shutdown();
+            return false;
+        }
+        initialized_ = true;
+        return true;
+    }
+
+    int strdisplaywidth(std::string_view text, AmbiWidth ambiwidth)
+    {
+        expect(initialized_, "nvim oracle should be initialized");
+
+        auto set_option = rpc_.request("nvim_command", {
+                                                           NvimRpc::make_str(std::string("set ambiwidth=") + (ambiwidth == AmbiWidth::Double ? "double" : "single")),
+                                                       });
+        expect(set_option.ok(), "nvim should accept the ambiwidth setting");
+
+        auto result = rpc_.request("nvim_call_function", {
+                                                             NvimRpc::make_str("strdisplaywidth"),
+                                                             NvimRpc::make_array({
+                                                                 NvimRpc::make_str(std::string(text)),
+                                                             }),
+                                                         });
+
+        expect(result.ok(), "nvim strdisplaywidth should return a display width");
+        return (int)result.result.as_int();
+    }
+
+private:
+    void shutdown()
+    {
+        if (!initialized_)
+            return;
+        process_.shutdown();
+        rpc_.shutdown();
+        initialized_ = false;
+    }
+
+    NvimProcess process_;
+    NvimRpc rpc_;
+    bool initialized_ = false;
+};
+
+int local_width(std::string_view text, AmbiWidth ambiwidth)
+{
+    UiOptions options;
+    options.ambiwidth = ambiwidth;
+    return cluster_cell_width(text, options);
+}
+
+} // namespace
 
 void run_unicode_tests()
 {
@@ -25,5 +106,42 @@ void run_unicode_tests()
         ambi_double.ambiwidth = AmbiWidth::Double;
         expect_eq(cluster_cell_width("\xCE\xA9", ambi_double), 2, "ambiwidth=double widens ambiguous characters");
         expect_eq(cluster_cell_width("\xCE\xA9"), 1, "ambiwidth defaults to single width");
+    });
+
+    run_test("unicode helper matches headless nvim strdisplaywidth corpus", []() {
+        NvimWidthOracle oracle;
+        if (!oracle.initialize())
+            skip("nvim not available for width conformance test");
+
+        const std::vector<WidthCase> cases = {
+            { "combining acute", "e\xCC\x81" },
+            { "emoji skin tone", "\xF0\x9F\x91\x8D\xF0\x9F\x8F\xBD" },
+            { "regional indicator flag", "\xF0\x9F\x87\xBA\xF0\x9F\x87\xB8" },
+            { "family zwj sequence", "\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA7\xE2\x80\x8D\xF0\x9F\x91\xA6" },
+            { "rainbow flag zwj sequence", "\xF0\x9F\x8F\xB3\xEF\xB8\x8F\xE2\x80\x8D\xF0\x9F\x8C\x88" },
+            { "keycap sequence", "1\xEF\xB8\x8F\xE2\x83\xA3" },
+            { "text heart", "\xE2\x9D\xA4" },
+            { "emoji heart", "\xE2\x9D\xA4\xEF\xB8\x8F" },
+            { "text tm", "\xE2\x84\xA2" },
+            { "emoji tm", "\xE2\x84\xA2\xEF\xB8\x8F" },
+            { "text sun", "\xE2\x98\x80" },
+            { "emoji sun", "\xE2\x98\x80\xEF\xB8\x8F" },
+            { "cjk ideograph", "\xE7\x95\x8C" },
+            { "indic conjunct", "\xE0\xA4\x95\xE0\xA5\x8D\xE0\xA4\xB7" },
+            { "lazy nerd font icon", "\xF3\xB0\x92\xB2" },
+            { "devicon pua icon", "\xEE\x98\xA0" },
+            { "ambiguous omega single", "\xCE\xA9", AmbiWidth::Single },
+            { "ambiguous omega double", "\xCE\xA9", AmbiWidth::Double },
+            { "ambiguous section sign double", "\xC2\xA7", AmbiWidth::Double },
+            { "box drawing single", "\xE2\x94\x80", AmbiWidth::Single },
+            { "box drawing double", "\xE2\x94\x80", AmbiWidth::Double },
+        };
+
+        for (const auto& test_case : cases)
+        {
+            int local = local_width(test_case.text, test_case.ambiwidth);
+            int nvim = oracle.strdisplaywidth(test_case.text, test_case.ambiwidth);
+            expect_eq(local, nvim, std::string("width mismatch for ") + std::string(test_case.label));
+        }
     });
 }

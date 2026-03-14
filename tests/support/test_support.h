@@ -9,12 +9,26 @@
 namespace spectre::tests
 {
 
+class TestSkipped : public std::runtime_error
+{
+public:
+    explicit TestSkipped(std::string message)
+        : std::runtime_error(std::move(message))
+    {
+    }
+};
+
 inline void expect(bool condition, std::string_view message)
 {
     if (!condition)
     {
         throw std::runtime_error(std::string(message));
     }
+}
+
+[[noreturn]] inline void skip(std::string_view message)
+{
+    throw TestSkipped(std::string(message));
 }
 
 template <typename T, typename U>
@@ -33,6 +47,10 @@ inline void run_test(std::string_view name, Fn&& fn)
     {
         fn();
         std::cout << "[ok] " << name << '\n';
+    }
+    catch (const TestSkipped& ex)
+    {
+        std::cout << "[skip] " << name << ": " << ex.what() << '\n';
     }
     catch (const std::exception& ex)
     {
