@@ -80,6 +80,7 @@ Preferred dependency direction:
 - If you touch RPC, redraw handling, or input translation, run `ctest`.
 - If you touch renderer code, build the platform-specific app target and verify startup at least once.
 - If you change build wiring, keep both Windows and macOS paths valid in CI.
+- After every completed work item, run one final `clang-format` pass across all touched source files in a single shot instead of formatting piecemeal during the work.
 
 ## Replay Fixtures
 
