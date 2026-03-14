@@ -1,129 +1,292 @@
 # Code Review — Spectre
+**Reviewer:** gpt-5  
+**Scope:** Current tree review across app, libs, tests, scripts, and CI
+
+---
+
+## Overall Read
+
+The repo is in much better shape than a typical small GUI frontend. The module split is real, the recent seam extractions are meaningful, and the test surface is no longer token. The architecture is now good enough that most future work can be done in isolated slices instead of always colliding in `app.cpp`.
+
+That said, a few hot-path and long-session issues are still visible in the current code. The biggest remaining problems are not “the design is wrong,” but “the hot paths still have avoidable whole-buffer / whole-grid / whole-vector work.”
+
+---
 
 ## Findings
 
-1. High: The RPC contract still discards Neovim errors, so callers cannot distinguish success from failure.
-Refs:
-`libs/spectre-nvim/include/spectre/nvim.h:106`
-`libs/spectre-nvim/include/spectre/nvim.h:117`
-`libs/spectre-nvim/src/rpc.cpp:35`
-`app/app.cpp:217`
-`app/app.cpp:360`
-`app/app.cpp:404`
+### 1. High: The main loop still busy-spins and submits frames while idle
 
-`RpcResponse` stores both `error` and `result`, but `IRpcChannel::request()` returns only `MpackValue`, and `NvimRpc::request()` returns only `resp.result`. That means `nvim_ui_attach`, `nvim_ui_try_resize`, and any future request path cannot surface Neovim-side errors to the caller. This is both a runtime problem and an architectural problem: agents cannot safely extend RPC usage without auditing every call site for silent failure.
+Relevant code:
 
-2. High: The CPU-side renderer front-end is duplicated across Vulkan and Metal, which guarantees drift and double-fixes.
-Refs:
-`libs/spectre-renderer/src/vulkan/vk_renderer.cpp:175`
-`libs/spectre-renderer/src/vulkan/vk_renderer.cpp:214`
-`libs/spectre-renderer/src/vulkan/vk_renderer.cpp:389`
-`libs/spectre-renderer/src/vulkan/vk_renderer.cpp:459`
-`libs/spectre-renderer/src/metal/metal_renderer.mm:203`
-`libs/spectre-renderer/src/metal/metal_renderer.mm:257`
-`libs/spectre-renderer/src/metal/metal_renderer.mm:337`
-`libs/spectre-renderer/src/metal/metal_renderer.mm:408`
+- `app/app.cpp:152`
+- `app/app.cpp:179`
+- `app/app.cpp:209`
+- `app/app.cpp:212`
 
-`set_grid_size()`, `update_cells()`, `set_cursor()`, `apply_cursor()`, and `restore_cursor()` are effectively duplicated between the backends. This is exactly the kind of duplication that slows parallel work, because every cursor, layout, or cell-state bug has to be fixed twice and kept behaviorally identical. The recent cursor regression is a good example of this risk.
+`App::run()` is still an unconditional `while (running_) { pump_once(); }` loop. `pump_once()` still calls `renderer_->begin_frame()` / `renderer_->end_frame()` every iteration, even when:
 
-3. Medium: `App` is still carrying too much policy and concrete subsystem ownership for a "thin orchestration" layer.
-Refs:
-`app/app.h:41`
-`app/app.h:44`
-`app/app.h:49`
-`app/app.cpp:294`
-`app/app.cpp:431`
-`app/app.cpp:459`
+- no SDL events arrived
+- no RPC notifications arrived
+- no grid cells are dirty
 
-`App` directly owns `SdlWindow`, `GlyphCache`, `NvimRpc`, font fallback discovery, cluster-to-font resolution, highlight resolution, grid-to-renderer projection, cursor-style resolution, and startup activation behavior. The module split looks clean at the directory level, but the app layer is still the place where multiple concerns meet. That makes it a conflict hotspot for multiple agents and keeps the highest-value logic out of isolated, testable services.
+That means the app can keep burning CPU and GPU while the editor is visually idle.
 
-4. Medium: The mouse input model cannot represent full Neovim mouse semantics.
-Refs:
-`libs/spectre-types/include/spectre/events.h:23`
-`libs/spectre-types/include/spectre/events.h:29`
-`libs/spectre-types/include/spectre/events.h:33`
-`libs/spectre-nvim/src/input.cpp:194`
-`libs/spectre-nvim/src/input.cpp:222`
-`libs/spectre-nvim/src/input.cpp:233`
-`tests/input_tests.cpp:58`
+**Why it matters for maintainability and agent work**
 
-The mouse event structs do not carry modifier state, and `NvimInput` always sends an empty modifier string plus a hardcoded `"left"` drag. That blocks exact forwarding for Shift/Ctrl/Alt mouse chords and makes future input work harder because the event model itself is missing data. The tests currently cover only the reduced model, so this limitation is easy to overlook.
+- Performance bugs stay noisy and cross-cutting because “idle” is not a first-class state.
+- Renderer changes are harder to reason about because the app is always driving frames.
+- This increases the chance that future agents misdiagnose renderer cost when the real problem is loop policy.
 
-5. Medium: The atlas partial-update path is dead code, which increases backend surface area without any payoff.
-Refs:
-`libs/spectre-renderer/include/spectre/renderer.h:22`
-`libs/spectre-renderer/include/spectre/renderer.h:23`
-`libs/spectre-font/include/spectre/font.h:71`
-`libs/spectre-font/include/spectre/font.h:97`
-`app/app.cpp:324`
-`app/app.cpp:332`
-`app/app.cpp:334`
+**Recommendation**
 
-`GlyphCache` tracks atlas dirtiness and a dirty rectangle, and the renderer interface exposes `update_atlas_region()`, but the app always calls `set_atlas_texture()` for a full upload when any glyph changed. That leaves a dead abstraction path in the renderer API and forces contributors to reason about an incremental upload protocol that is not actually exercised.
+Add a frame-dirty gate in `App`:
 
-6. Medium: `option_set` is parsed but not consumed by any app state, so Neovim UI option drift is still likely.
-Refs:
-`libs/spectre-nvim/include/spectre/nvim.h:193`
-`libs/spectre-nvim/src/ui_events.cpp:253`
-`app/app.cpp:178`
-`libs/spectre-types/include/spectre/unicode.h:274`
+- set it on redraw flush, cursor blink, resize, and atlas upload
+- skip `begin_frame` / `end_frame` when clean
+- optionally sleep or wait on events when both window and RPC sides are idle
 
-`UiEventHandler` exposes `on_option_set`, but `App` wires only `on_flush` and `on_grid_resize`. The current width logic in `cluster_cell_width()` therefore cannot react to option changes like `ambiwidth`, and future Neovim UI-affecting options will have the same problem. The architecture already has the hook, but not the state object or ownership model to make it useful.
+---
 
-## Testing Holes
+### 2. High: The RPC accumulator still does O(n) front-erases
 
-- `spectre-tests` links only `spectre-font`, `spectre-grid`, and `spectre-nvim`, so there is still no direct automated coverage for `spectre-renderer`, `spectre-window`, or `app/`.
-Refs:
-`tests/CMakeLists.txt:11`
+Relevant code:
 
-- There are no tests for RPC failure behavior, response error propagation, or malformed/partial msgpack handling. That leaves the least debuggable subsystem with no direct regression coverage.
-Refs:
-`libs/spectre-nvim/src/rpc.cpp:35`
-`tests/test_main.cpp:10`
+- `libs/spectre-nvim/src/rpc.cpp:115`
+- `libs/spectre-nvim/src/rpc.cpp:147`
 
-- There is no renderer-level golden or smoke harness that verifies cursor behavior, atlas upload behavior, or backend parity. Current tests stop at `CellUpdate` production.
-Refs:
-`tests/ui_events_tests.cpp:71`
-`libs/spectre-renderer/src/vulkan/vk_renderer.cpp:214`
-`libs/spectre-renderer/src/metal/metal_renderer.mm:257`
+The reader thread accumulates bytes in a `std::vector<uint8_t> accum`, then does:
 
-- Grid tests do not exercise scroll or overwrite behavior around double-width continuations, which is a fragile part of terminal rendering.
-Refs:
-`tests/grid_tests.cpp:10`
-`tests/grid_tests.cpp:25`
+- `accum.erase(accum.begin(), accum.begin() + consumed);`
+
+for each parsed message.
+
+That is still a classic front-erase hot path. Large initial redraws or redraw bursts can repeatedly shift the remaining bytes.
+
+**Why it matters**
+
+- It adds avoidable work exactly where startup and redraw throughput matter.
+- It makes future profiling noisy because the decode loop cost scales with message burst shape, not just payload size.
+
+**Recommendation**
+
+Track a read index into the buffer and compact only when needed, or swap to a deque/ring-buffer style reader. This is a contained change with very good payoff.
+
+---
+
+### 3. Medium: Dirty-grid flush still scans and clears the whole grid every flush
+
+Relevant code:
+
+- `app/grid_rendering_pipeline.cpp:17`
+- `app/grid_rendering_pipeline.cpp:22`
+- `app/grid_rendering_pipeline.cpp:60`
+- `libs/spectre-grid/src/grid.cpp:160`
+- `libs/spectre-grid/src/grid.cpp:166`
+
+The renderer-side cell-buffer upload path is now incremental, which is good. But the grid dirty path still works like this:
+
+1. `GridRenderingPipeline::flush()` asks `grid_->get_dirty_cells()`
+2. `Grid::get_dirty_cells()` scans the entire grid
+3. after upload, `grid_->clear_dirty()` clears the entire grid
+
+So the main flush path is still fundamentally `O(grid size)` per flush even when only a handful of cells changed.
+
+**Why it matters**
+
+- The recent renderer dirty-range optimization does not get full value.
+- The app/pipeline hot path still depends on whole-grid iteration.
+- This is a scaling pain point for large windows or plugin-heavy UIs.
+
+**Recommendation**
+
+Move `Grid` to a real dirty-set or dirty-span model instead of whole-grid scans. Even a row-based dirty structure would materially reduce flush overhead and make the pipeline more modular.
+
+---
+
+### 4. Medium: Font fallback choice caching is unbounded and string-keyed
+
+Relevant code:
+
+- `libs/spectre-font/include/spectre/text_service.h:52`
+- `libs/spectre-font/src/text_service.cpp:230`
+- `libs/spectre-font/src/text_service.cpp:243`
+- `libs/spectre-font/src/text_service.cpp:251`
+- `libs/spectre-font/src/text_service.cpp:256`
+
+`TextService` caches font choice per raw cluster string in:
+
+- `std::unordered_map<std::string, int> font_choice_cache_`
+
+and never evicts entries until font-size or fallback reinit clears it.
+
+In normal editing, especially with diagnostics, LSP text, plugin UIs, long logs, or very mixed Unicode, this cache can grow for the entire session.
+
+**Why it matters**
+
+- It creates a long-session memory growth vector.
+- It couples font policy to arbitrary text diversity rather than to glyph/script classes.
+- It is hard for future agents to reason about because the cache policy is “store every observed string forever.”
+
+**Recommendation**
+
+Replace it with a bounded cache or a cheaper key:
+
+- codepoint/script-level fallback hints
+- small LRU for cluster strings
+- explicit metrics/logging so cache growth is visible
+
+---
+
+### 5. Medium: Glyph atlas exhaustion still degrades by silently dropping glyphs
+
+Relevant code:
+
+- `libs/spectre-types/include/spectre/types.h:8`
+- `libs/spectre-font/src/glyph_cache.cpp:164`
+- `libs/spectre-font/src/glyph_cache.cpp:178`
+- `libs/spectre-font/src/glyph_cache.cpp:214`
+- `libs/spectre-font/src/glyph_cache.cpp:305`
+
+The atlas is still fixed-size (`GLYPH_ATLAS_SIZE = 2048`). When `reserve_region()` cannot fit a glyph or cluster, it logs:
+
+- `Atlas full, cannot fit ...`
+
+and the caller falls back to an empty region.
+
+That means the current runtime behavior for atlas exhaustion is “text/icons start disappearing.”
+
+**Why it matters**
+
+- It is a hard-to-debug long-session failure mode.
+- It creates user-visible degradation without recovery.
+- It blocks future feature work that increases glyph diversity.
+
+**Recommendation**
+
+Introduce one of:
+
+- atlas reset and relayout
+- atlas growth
+- simple eviction policy
+- explicit “recoverable atlas overflow” path instead of empty-glyph fallback
+
+---
+
+### 6. Medium: Input translation is still a monolithic hardcoded switch
+
+Relevant code:
+
+- `libs/spectre-nvim/src/input.cpp:22`
+- `libs/spectre-nvim/src/input.cpp:34`
+- `libs/spectre-nvim/src/input.cpp:38`
+- `libs/spectre-nvim/src/input.cpp:174`
+
+`NvimInput::translate_key()` is still a long hand-maintained switch with modifier handling split between:
+
+- `translate_key()`
+- `mouse_modifiers()`
+
+It works for the current supported set, but it is still awkward to extend and easy for future changes to become inconsistent.
+
+**Why it matters**
+
+- Agents touching input will still conflict in one file.
+- It is not obvious which missing keys are intentional vs unimplemented.
+- It does not scale well to IME, keypad, richer mouse, or config-driven mappings.
+
+**Recommendation**
+
+Move toward a data-driven key table:
+
+- core named-key map
+- modifier formatter shared across keyboard and mouse
+- explicit unsupported-key test cases
+
+---
+
+## Testing Gaps
+
+The test surface is solid now, but the main gaps are still around seam behavior that matters in real sessions:
+
+1. `GridRenderingPipeline` has no direct tests.
+   It is now an important seam and should have unit coverage for:
+   - dirty cell projection
+   - highlight resolution
+   - atlas upload triggering
+   - empty/space/double-width behavior
+
+2. There is no real scripted editing flow beyond startup smoke.
+   `spectre-app-smoke` proves startup, flush, and first frame. It does not prove:
+   - insert mode round-trip
+   - redraw after typing
+   - cursor movement correctness
+   - quit path correctness under normal UI use
+
+3. Atlas exhaustion and recovery are untested.
+   The current behavior is user-visible and should have an explicit regression test once recovery policy exists.
+
+4. Font fallback/cache behavior is lightly covered, not deeply covered.
+   There is no direct test for:
+   - cache growth policy
+   - fallback ordering
+   - font choice reuse
+   - failure behavior when both primary and fallback miss
+
+5. Backend upload behavior is only indirectly tested.
+   `RendererState` is covered, but there is no backend-level test that proves the right dirty slice is uploaded to the mapped buffer in Vulkan/Metal integration terms.
+
+---
 
 ## Modularity Opportunities
 
-1. Extract a shared CPU renderer front-end from the Vulkan and Metal backends.
-This layer should own `gpu_cells_`, cursor overlay state, cell-size/grid-size projection, and cursor application/restoration. The backend-specific classes should be responsible only for GPU resource creation and frame submission.
+1. Split `App` into bootstrap vs runtime loop responsibilities.
 
-2. Introduce a real RPC result type.
-Replace `MpackValue request(...)` with something like `RpcResult { MpackValue error; MpackValue result; bool transport_ok; }` or a small `expected`-style type. That would make app startup, resize, and future feature work much safer.
+- `App` is much thinner than before, but it still owns window, RPC, text, grid, pipeline, and loop policy together.
+- A small `RuntimeController` or `SessionController` would reduce future merge pressure.
 
-3. Pull text and fallback-font policy out of `App`.
-`FontManager`, `TextShaper`, fallback font discovery, and cluster-to-font resolution want to live in a dedicated text service. That would reduce `App` to lifecycle and wiring, and make font work easier to test without booting the whole program.
+2. Make grid dirtiness a first-class abstraction.
 
-4. Add an explicit UI options state object.
-`option_set` should feed a small shared state object consumed by width/layout code and input code. That gives one place to evolve editor-driven rendering behavior instead of scattering special cases.
+- Right now `Grid` is still the owner of “what changed,” but the interface is a whole-grid scan.
+- A dirty tracker abstraction would let the pipeline stay small and keep performance policy out of app code.
 
-## Suggested Plan
+3. Separate font discovery policy from text service mechanics.
 
-1. Fix the RPC API first.
-Expose Neovim errors to callers, then add tests for attach, resize, and failure paths.
+- `TextService` still mixes:
+  - font discovery heuristics
+  - fallback policy
+  - caching
+  - atlas ownership
+- That makes it a future conflict zone for both feature and perf work.
 
-2. Extract the shared renderer front-end.
-Move duplicated cell/cursor logic out of the Vulkan and Metal implementations before more rendering behavior lands.
+4. Move key translation data out of imperative code.
 
-3. Extract a text subsystem from `App`.
-Give it ownership of fallback font selection, shaping, cache policy, and atlas update decisions.
+- A declarative map would make extension safer and reduce coordination cost across agents.
 
-4. Expand test coverage around the highest-risk seams.
-Priority order:
-RPC failure cases
-double-width scroll/overwrite behavior
-input modifiers and drag semantics
-renderer smoke or replay-based parity checks
+---
 
-## Overall
+## Recommended Plan
 
-The repo shape is good: the top-level module split is understandable, the build is straightforward, and the replay-style redraw tests are a solid base. The main remaining risk is not "messy code everywhere"; it is that a few key seams still collapse multiple concerns together. Those seams are exactly where parallel agent work will create the most friction until they are narrowed.
+1. Add idle-frame gating in `App`.
+2. Replace RPC front-erases with indexed consumption.
+3. Replace whole-grid dirty scans with dirty spans/sets in `Grid`.
+4. Add bounded/observable font-choice caching.
+5. Introduce recoverable atlas overflow behavior.
+6. Add direct `GridRenderingPipeline` tests before more rendering features land.
+
+---
+
+## Top 5 Good Things
+
+1. The library split is now real, not decorative. `spectre-types`, `spectre-grid`, `spectre-font`, `spectre-nvim`, `spectre-renderer`, and `spectre-window` each own recognizable concerns.
+2. `RendererState` was the right extraction. It removed duplicated CPU-side renderer logic and made backend parity more plausible.
+3. The test infrastructure is strong for a project of this size: replay fixtures, fake RPC server, real RPC integration tests, Unicode conformance corpus, renderer-state tests, and app smoke coverage.
+4. Local tooling and CI are aligned. The root wrappers, repo-local scripts, README, and GitHub Actions all point at the same build/test flow.
+5. The app is now a thin orchestrator rather than a bag of backend details. That is a meaningful architecture improvement.
+
+## Top 5 Bad Things
+
+1. The main loop still burns frames while idle.
+2. The RPC reader still does front-erases on a vector in the hot path.
+3. Dirty-grid collection still scans and clears the whole grid every flush.
+4. Font-choice caching can grow without bound across a session.
+5. Atlas overflow still degrades by dropping glyphs instead of recovering.

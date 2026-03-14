@@ -1,9 +1,9 @@
 #pragma once
+#include "renderer_state.h"
 #include "vk_atlas.h"
 #include "vk_buffers.h"
 #include "vk_context.h"
 #include "vk_pipeline.h"
-#include "renderer_state.h"
 #include <spectre/renderer.h>
 
 namespace spectre
@@ -39,6 +39,7 @@ private:
     void update_descriptor_sets_for_frame(int frame);
     void update_all_descriptor_sets();
     void record_command_buffer(VkCommandBuffer cmd, uint32_t image_index);
+    void upload_dirty_state();
     VkContext ctx_;
     VkPipelineManager pipeline_;
     VkAtlas atlas_;

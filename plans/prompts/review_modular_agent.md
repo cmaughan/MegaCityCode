@@ -1,1 +1,5 @@
-Inspect all the code, look at the seperation of the modules and the general layout.  Look for bad code smells, or things that will make it harder for multiple agents to work on the code base.  Do a thorough review.  Look for testing holes, and for code that is not clean or easy to maintain.  Look for opportunities to separate concerns and make things modular. Store the updated plan; under the reviews/<your agent model>/code-review-latest.md
+Inspect all the code, look at the seperation of the modules and the general layout. Look for bad code smells, or things that will make it harder for multiple agents to work on the code base. Do a thorough review. Look for testing holes, and for code that is not clean or easy to maintain. Look for opportunities to separate concerns and make things modular. Be sure to check the latest code, it changes fast.
+
+At the end of the report give the top 5 good, top 5 bad things about the application.
+
+Store the updated plan; under the reviews/<your agent model>/code-review-latest.md

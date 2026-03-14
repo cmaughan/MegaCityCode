@@ -44,9 +44,19 @@ public:
     }
 
     void copy_to(void* dst) const;
+    bool has_dirty_cells() const;
+    size_t dirty_cell_offset_bytes() const;
+    size_t dirty_cell_size_bytes() const;
+    void copy_dirty_cells_to(void* dst) const;
+    bool overlay_slot_dirty() const;
+    size_t overlay_offset_bytes() const;
+    void copy_overlay_cell_to(void* dst) const;
+    void clear_dirty();
 
 private:
     void relayout();
+    void mark_all_cells_dirty();
+    void mark_cell_dirty(size_t index);
 
     int grid_cols_ = 0;
     int grid_rows_ = 0;
@@ -64,6 +74,9 @@ private:
     GpuCell cursor_saved_cell_ = {};
     bool cursor_applied_ = false;
     bool cursor_overlay_active_ = false;
+    size_t dirty_cell_begin_ = 0;
+    size_t dirty_cell_end_ = 0;
+    bool overlay_dirty_ = false;
 };
 
 } // namespace spectre

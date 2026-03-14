@@ -112,3 +112,6 @@ The result should read like a conversation and planning review for fixes, with a
 - Keep shutdown paths non-blocking; a stuck Neovim child must not hang the UI on exit.
 - Font-size changes must relayout existing grid geometry even before Neovim acknowledges a resize.
 - Unicode rendering is still cell-oriented. Be careful when changing shaping or grid-line parsing because combining clusters and wide glyphs are easy to regress.
+## Consensus Shortcut
+
+When the user says `come to consensus`, treat that as a direct instruction to execute the saved consensus prompt in `plans/prompts/consensus_review.md`.

@@ -95,4 +95,38 @@ void run_renderer_state_tests()
         expect_eq(gpu[1].size_x, 3.0f, "overlay width uses cell percentage");
         expect_eq(gpu[1].size_y, 20.0f, "overlay height spans the cell");
     });
+
+    run_test("renderer state tracks dirty ranges for incremental uploads", []() {
+        RendererState state;
+        state.set_grid_size(3, 1, 1);
+        expect(state.has_dirty_cells(), "initial layout dirties the cell buffer");
+        expect_eq(static_cast<int>(state.dirty_cell_offset_bytes()), 0, "initial dirty range starts at zero");
+        expect_eq(static_cast<int>(state.dirty_cell_size_bytes()), static_cast<int>(3 * sizeof(GpuCell)), "initial dirty range spans the grid");
+        expect(state.overlay_slot_dirty(), "initial layout dirties the overlay slot too");
+
+        state.clear_dirty();
+
+        CellUpdate update_a;
+        update_a.col = 0;
+        update_a.row = 0;
+        CellUpdate update_b;
+        update_b.col = 2;
+        update_b.row = 0;
+        CellUpdate updates[] = { update_a, update_b };
+        state.update_cells(updates);
+
+        expect(state.has_dirty_cells(), "cell updates produce a dirty range");
+        expect_eq(static_cast<int>(state.dirty_cell_offset_bytes()), 0, "dirty range starts at the first updated cell");
+        expect_eq(static_cast<int>(state.dirty_cell_size_bytes()), static_cast<int>(3 * sizeof(GpuCell)), "dirty range expands to cover the touched span");
+        expect(!state.overlay_slot_dirty(), "plain cell updates do not dirty the overlay slot");
+
+        CursorStyle cursor;
+        cursor.shape = CursorShape::Vertical;
+        cursor.bg = { 1.0f, 0.0f, 0.0f, 1.0f };
+        cursor.cell_percentage = 25;
+        state.set_cursor(1, 0, cursor);
+        state.apply_cursor();
+
+        expect(state.overlay_slot_dirty(), "overlay cursor dirties the overlay slot");
+    });
 }

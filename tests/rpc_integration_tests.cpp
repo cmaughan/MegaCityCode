@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
+#include <spectre/log.h>
 #include <spectre/nvim.h>
 #include <string>
 
@@ -62,6 +63,36 @@ private:
 std::string helper_path()
 {
     return SPECTRE_RPC_FAKE_PATH;
+}
+
+struct ScopedLogCapture
+{
+    std::vector<LogRecord> records;
+
+    ScopedLogCapture()
+    {
+        LogOptions options;
+        options.enable_stderr = false;
+        options.enable_file = false;
+        configure_logging(options);
+        set_log_sink([this](const LogRecord& record) { records.push_back(record); });
+    }
+
+    ~ScopedLogCapture()
+    {
+        clear_log_sink();
+        shutdown_logging();
+    }
+};
+
+bool has_log_message(const std::vector<LogRecord>& records, LogLevel level, LogCategory category, std::string_view needle)
+{
+    for (const auto& record : records)
+    {
+        if (record.level == level && record.category == category && record.message.find(needle) != std::string::npos)
+            return true;
+    }
+    return false;
 }
 
 RpcResult run_request_with_mode(const char* mode, std::vector<RpcNotification>* notifications = nullptr)
@@ -133,5 +164,15 @@ void run_rpc_integration_tests()
         expect(!result.transport_ok, "malformed response reports transport failure");
         expect(!result.ok(), "malformed response is not successful");
         expect(elapsed < std::chrono::seconds(2), "malformed response returns promptly without timing out");
+    });
+
+    run_test("nvim rpc logs a warning when the transport aborts before a response arrives", []() {
+        ScopedLogCapture capture;
+
+        RpcResult result = run_request_with_mode("abort_after_read");
+
+        expect(!result.transport_ok, "aborted transport reports failure");
+        expect(has_log_message(capture.records, LogLevel::Warn, LogCategory::Rpc, "Request timed out or aborted: fake_method"),
+            "aborted request should emit an rpc warning");
     });
 }

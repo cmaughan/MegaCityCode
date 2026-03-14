@@ -4,230 +4,230 @@
 
 ---
 
-## Overall Assessment
+## Summary of Changes Since Last Review
 
-The architecture is well-shaped. Module boundaries (`spectre-types`, `spectre-window`, `spectre-renderer`, `spectre-font`, `spectre-grid`, `spectre-nvim`) follow a sensible dependency hierarchy and the public interfaces are appropriately thin. The Vulkan rendering design (procedural quads, host-visible SSBO, shelf-packed atlas) is correct and efficient for a terminal emulator.
+The codebase has been significantly refactored. All five major seams identified in the previous review have been addressed:
 
-The main problems are concentrated in two places: **App** doing too much, and **leaking implementation types** (FreeType, HarfBuzz, MpackValue) across module boundaries. Fixing those two things would unlock independent parallel work on each module.
+| Previous finding | Status |
+|-----------------|--------|
+| `spectre-nvim → spectre-grid` dep | ✅ Fixed — `IGridSink` in `spectre-types`, `UiEventHandler` uses `IGridSink*` |
+| `MpackValue` unsafe union | ✅ Fixed — `std::variant` storage, typed accessors throw on bad access |
+| No `RpcResult` | ✅ Fixed — `RpcResult` with `ok()`, `is_error()`, `transport_ok` |
+| `GridRenderingPipeline` in App | ✅ Fixed — extracted to `app/grid_rendering_pipeline.h/cpp` |
+| `TextService` / `FontService` in App | ✅ Fixed — `TextService` in `spectre-font`, owns fallback chain, atlas, shaping |
+| Renderer CPU-side duplication | ✅ Fixed — `RendererState` in `spectre-renderer/src/renderer_state.h` |
+| No unified logging | ✅ Fixed — `spectre-types/include/spectre/log.h` with levels and categories |
+| `option_set` not wired | ✅ Fixed — `UiOptions` in `spectre-types`, wired in `App::initialize()` |
+| Mouse modifiers missing | ✅ Fixed — all mouse events carry `uint16_t mod`, `NvimInput` sends modifier strings |
+| Atlas size duplicated | ✅ Fixed — `GLYPH_ATLAS_SIZE` in `spectre-types/include/spectre/types.h` |
+| Fixed 65536-byte RPC buffer | ✅ Fixed — `read_buf_.resize(256 * 1024)` dynamic vector |
+| `flush_count_` dead code | ✅ Removed |
+| `Grid::scroll()` no bounds check | ✅ Fixed — assert + early return |
+| Renderer/RPC/logging tests missing | ✅ Added — `renderer_state_tests.cpp`, `rpc_codec_tests.cpp`, `rpc_integration_tests.cpp`, `log_tests.cpp`, `unicode_tests.cpp` |
+
+App is now genuinely a thin orchestrator: 50-line header, ~320-line implementation covering only init, event loop, resize, and font-size change. The architecture is in good shape.
 
 ---
 
-## Critical — Blocks parallel development
+## Remaining Issues
 
-### 1. Monolithic `App` class (`app/app.cpp`, 448 lines)
+### Major
 
-App directly owns and orchestrates: window, renderer, font, fallback font chain, glyph cache, text shaper, grid, highlight table, nvim process, RPC, UI event handler, input handler. It performs highlight resolution, glyph lookup, atlas upload logic, and font fallback resolution inline in `update_grid_to_renderer()`.
+#### 1. Main loop busy-spins — no dirty-frame gating
 
-Any change to font metrics, the renderer interface, glyph cache strategy, or highlight table format forces edits to `app.cpp`. There is no boundary a second developer can work behind without touching this file.
-
-**Concrete splits that would help:**
-- `FontService` — owns `FontManager`, `GlyphCache`, `TextShaper`, fallback chain, `resolve_font_for_text()`. Exposes a single `get_cluster(text) → AtlasRegion` call.
-- `GridRenderingPipeline` — owns highlight resolution, cell→`CellUpdate` conversion, dirty drain, atlas upload triggering. Sits between `Grid`/`HighlightTable` and `IRenderer`.
-- App becomes: init sequence + event loop + resize handler.
-
-### 2. `spectre-nvim` depends on `spectre-grid` (`nvim/CMakeLists.txt`)
-
-`UiEventHandler` holds a `Grid*` and mutates it directly (`grid_->set_cell(...)`, `grid_->scroll(...)`, `grid_->clear()`). This pulls the entire grid domain model into the I/O adapter layer, making it impossible to test either in isolation.
-
-**Fix:** Replace the `Grid*` with callbacks or a narrow `IGridSink` interface:
+`app.cpp:152–158`:
 ```cpp
-struct IGridSink {
-    virtual void set_cell(int col, int row, const std::string& text, uint16_t hl_id, bool dw) = 0;
-    virtual void scroll(int top, int bot, int left, int right, int rows) = 0;
-    virtual void clear() = 0;
-    virtual void resize(int cols, int rows) = 0;
+void App::run() {
+    while (running_) {
+        pump_once();
+    }
+}
+```
+
+`pump_once()` always calls `renderer_->begin_frame()` / `renderer_->end_frame()` even when no Neovim events arrived and no grid cells are dirty. On a 200×50 grid this is a ~1 MB buffer write and a full GPU submit on every iteration, burning CPU and GPU continuously even while the editor is idle.
+
+**Fix:** Gate frame submission behind a dirty flag. Set it on `on_flush()`, cursor blink timer, window resize. Skip `begin_frame`/`end_frame` when clean.
+
+#### 2. RPC accumulator uses O(n) erase from front
+
+`rpc.cpp:147`:
+```cpp
+accum.erase(accum.begin(), accum.begin() + consumed);
+```
+
+Called after every parsed message. For large initial screen paints (many `grid_line` events), this is `O(messages × total_bytes)`. On a 200×50 grid initial redraw this can involve tens of thousands of bytes being shifted repeatedly.
+
+**Fix:** Track a read-position index into the vector; only compact (or swap with tail) once the inner while loop finishes. Or replace with a deque.
+
+#### 3. `read_failed_` is never reset
+
+`nvim.h:215`, `rpc.cpp:98,128`:
+```cpp
+std::atomic<bool> read_failed_{ false };
+```
+
+Set on any pipe read or write error; never cleared. After the first transient I/O error the RPC layer is permanently broken for the session lifetime. Either document this as intentionally latching (and add a comment explaining why), or add a reset path.
+
+#### 4. `MpackValue::Ext` in Type enum is dead code
+
+`nvim.h:72`:
+```cpp
+enum Type { Nil, Bool, Int, UInt, Float, String, Array, Map, Ext };
+```
+
+`type()` maps `storage.index()` 0–7 to the first 8 variants. `Ext` is never returned — the variant has no Ext alternative. Neovim uses msgpack ext types for Buffer/Window/Tabpage handles. Either remove `Ext` from the enum (and document that ext types are silently ignored) or add an Ext storage type and decode it.
+
+---
+
+### Significant
+
+#### 5. `GridRenderingPipeline::flush()` early-exits before atlas upload
+
+`grid_rendering_pipeline.cpp:23–24`:
+```cpp
+auto dirty = grid_->get_dirty_cells();
+if (dirty.empty())
+    return;
+```
+
+This returns before checking `force_full_atlas_upload_`. Scenario: `force_full_atlas_upload()` is called from `on_grid_resize`, but no cells are marked dirty at that point. When `flush()` is eventually called, the atlas upload is silently skipped.
+
+In practice Neovim always follows `grid_resize` with `grid_line` events before `flush`, so dirty cells arrive in time. But the correctness of atlas upload depends on that ordering guarantee — which is not enforced in the code.
+
+**Fix:** Check `force_full_atlas_upload_` before the early-exit, or decouple atlas upload from the cell dirty check.
+
+#### 6. `Cell::codepoint` is redundant
+
+`grid.h:14`:
+```cpp
+struct Cell {
+    std::string text = " ";
+    uint32_t codepoint = ' ';  // always derivable from text
+    ...
 };
 ```
-`UiEventHandler` knows nothing about `Grid`; grid tests need no RPC stack.
 
-### 3. `MpackValue` is an unsafe manual tagged union (`nvim.h`)
+`codepoint` is stored on every `set_cell()` via `utf8_first_codepoint(text)`. `GridRenderingPipeline` uses only `cell.text` for cluster resolution. `codepoint` is never read downstream for any rendering or layout decision. It's 4 bytes per cell (~200 KB for a large grid) and one more field to keep in sync.
 
-Every value stores fields for every possible type simultaneously. Access is unchecked — calling `.as_int()` on a string value is undefined behaviour with no diagnostic. Every new message type requires additions to `read_value()` and `write_value()` switch statements that are 100+ lines long.
+If it exists as a performance cache to avoid repeated UTF-8 decode, document that. Otherwise remove it.
 
-**Fix:** `std::variant<std::nullptr_t, bool, int64_t, uint64_t, double, std::string, MpackArray, MpackMap>` with `std::get` / `std::visit`. Illegal access becomes a thrown `std::bad_variant_access` rather than silent corruption.
+#### 7. `Grid::scroll()` double-marks dirty
 
-### 4. Font implementation types exposed in public API (`font.h`)
-
-`FontManager::face()` returns `FT_Face`. `FontManager::hb_font()` returns `hb_font_t*`. App calls `FT_Load_Glyph` directly. Fallback font selection (`resolve_font_for_text`) runs in App and touches FreeType face objects.
-
-Any font backend change (DirectWrite, CoreText, alternate shaping) requires rewriting `app.cpp` alongside `spectre-font`. The font module cannot be mocked or substituted in tests.
-
-**Fix:** Provide a higher-level method on `FontManager` or `GlyphCache`:
+`grid.cpp:131–137`:
 ```cpp
-ClusterInfo get_cluster(const std::string& utf8_text);
-bool can_render(const std::string& utf8_text) const;
+// After the copy loops (which already set dirty = true on each copied cell):
+for (int r = top; r < bot; r++)
+    for (int c = left; c < right; c++)
+        cells_[r * cols_ + c].dirty = true;
 ```
-No FreeType or HarfBuzz types appear outside `spectre-font`.
 
----
+Every cell touched by the copy loops already has `dirty = true` set inline. The trailing loop re-marks the same region unconditionally and is harmless but redundant. Remove it.
 
-## Major — Architectural debt
+#### 8. `on_cursor_goto` exposed but never wired
 
-### 5. `IRenderer` leaks glyph cache internals
-
-`set_atlas_texture(const uint8_t*, int w, int h)` and `update_atlas_region(...)` expose raw pixel pointers and atlas dimensions. These are implementation details of `GlyphCache`. The atlas size (2048) is duplicated in `font.h` and `vk_atlas.h` — if one changes without the other the atlas format breaks silently.
-
-The renderer should not know about atlas packing. Options: push uploads into a renderer-owned `IGlyphAtlas`, or treat atlas as an opaque resource handle and let the font module populate it.
-
-### 6. Grid size is stored in three places
-
-`Grid::cols_/rows_`, `App::grid_cols_/rows_`, `VkRenderer::grid_cols_/rows_` are all independently maintained. A resize touches all three via different code paths. There is no single source of truth; they can diverge if any path is missed.
-
-### 7. Dirty tracking reinvented four times
-
-The pattern "track what needs uploading" appears as:
-- `Grid` per-cell dirty flag
-- `GlyphCache::dirty_` boolean + `dirty_rect_`
-- `VkRenderer::needs_descriptor_update_`
-- Implicit in `atlas_needs_full_upload_` in App
-
-Each is a bespoke solution. A shared `DirtyRegion` or `DirtyFlag<T>` would make the pattern explicit and consistent.
-
-### 8. Callback ownership is fragile
-
-`IWindow` has 6 `std::function` callbacks; `UiEventHandler` has 3. All are assigned in `App::initialize()` as lambdas capturing `this`. There is no disconnection mechanism — if the window outlives App (possible in abnormal shutdown), the callbacks fire into a dangling pointer. No tests can exercise a callback without constructing the entire App.
-
-### 9. Vulkan: full buffer upload on every dirty cell
-
-`update_grid_to_renderer()` calls `renderer_->update_cells(updates)` which currently copies the changed `CellUpdate` structs but `VkRenderer` uploads the entire `GpuCell` buffer to the GPU regardless of how many cells changed. For a 200×50 grid (10,000 cells × 96 bytes = ~960 KB), a single cursor blink causes a ~1 MB write. The grid has dirty tracking; it should be used here.
-
-### 10. Cursor rendering implies GPU readback
-
-`apply_cursor()` and `restore_cursor()` read back the current cell from the GPU buffer to save/restore state around cursor rendering. This forces a CPU stall on the GPU timeline every frame the cursor is visible.
-
----
-
-## Significant — Code quality and correctness
-
-### 11. Duplicate UTF-8 decoding with divergent implementations
-
-`grid.cpp` has `decode_first_codepoint()` and `ui_events.cpp` has `utf8_decode_next()`. They implement the same algorithm but the `grid.cpp` version has a bounds checking gap in the 2-byte case. A single authoritative implementation should live in `spectre-types/include/spectre/unicode.h` (which already has other Unicode utilities).
-
-### 12. No bounds checking in `Grid::scroll()`
-
-The scroll implementation (`grid.cpp`) assumes `top < bot ≤ rows_` and `left < right ≤ cols_`. If a malformed Neovim event violates these preconditions:
+`nvim.h:252`:
 ```cpp
-for (int r = top; r < bot - rows; r++) {
-    cells_[r * cols_ + c] = cells_[(r + rows) * cols_ + c];
-```
-The loop can iterate backwards, or the second index can walk past the end of the allocation. Should have asserts or explicit range validation at the entry point.
-
-### 13. RPC read buffer is fixed at 65536 bytes
-
-`char buf[65536]` in `rpc.cpp`. Neovim can produce events larger than this (large buffer contents, long file paths, many highlights). Buffer overflow means silently truncated messages or protocol desync. Should be dynamic or at minimum checked against the actual read size.
-
-### 14. `flush_count_` is dead code
-
-Incremented in `on_flush()`, never read anywhere. Either instrument it for debugging or remove it.
-
-### 15. Inconsistent error handling across modules
-
-- `FontManager::initialize` → returns `bool`
-- `Grid::set_cell` out-of-bounds → silent return, no feedback
-- `VkPipeline` shader file missing → `fprintf` + continue (may render with null pipeline)
-- `GlyphCache` atlas full → `fprintf` + returns `false`, caller ignores
-- RPC `read_failed_` → atomic flag, never reset, permanent failure after transient I/O error
-
-No module uses a consistent strategy. Makes it impossible to write reliable recovery logic.
-
-### 16. Fallback font vector can hold partially-initialized entries
-
-In `initialize_fallback_fonts()`, a `FallbackFont` is `push_back`'d then conditionally `pop_back`'d if initialization fails. If the move or copy in `push_back` partially succeeds before the shaper init fails, the destructor path is non-trivial. Use `emplace_back` with a validated factory or construct outside the vector before committing.
-
-### 17. Notification queue has no backpressure
-
-The reader thread pushes `RpcNotification` objects onto an `std::queue` protected by a mutex with no size limit. If the main thread stalls (e.g., resizing, heavy atlas upload), Neovim continues sending events and memory grows unbounded. A bounded ring buffer or drop-oldest policy would bound memory use.
-
-### 18. Logging is four different mechanisms
-
-`fprintf(stderr, "[spectre]...")`, `fprintf(stderr, "[rpc]...")`, plain `fprintf(stderr, ...)`, and `SDL_Log(...)` are all in use. There is no log level, no way to suppress or redirect output, no timestamps. A minimal `log_debug/log_info/log_error(subsystem, fmt, ...)` shim would unify these with zero overhead in release builds.
-
----
-
-## Testing gaps
-
-### 19. No rendering tests
-
-The Vulkan pipeline has zero test coverage. Shader correctness, cell positioning math, cursor rendering, atlas upload — all tested only by running the application. At minimum the cell-to-pixel coordinate math and glyph offset calculation (`cell_h - ascender + bearing_y`) should have unit tests since these are subtle and break invisibly.
-
-### 20. No RPC protocol tests
-
-`MpackValue` serialisation/deserialisation, message framing, and notification dispatch have no tests. The `replay_fixture.h` support infrastructure exists and works — it should cover more of the RPC decode/encode paths.
-
-### 21. No input translation tests
-
-`input.cpp` key translation is a large switch with modifier logic. A key that maps incorrectly causes silent misbehaviour inside Neovim. The translation table should be table-driven and trivially testable.
-
-### 22. No process spawn / pipe test
-
-`NvimProcess::spawn()` is untested. A test that launches a minimal process, sends msgpack down the pipe, and reads back a response would give confidence that the IPC layer works across build configurations.
-
-### 23. Test framework has no verbose mode
-
-The custom `expect()`/`expect_eq()` macros only print on failure and don't identify which test was running at failure without reconstructing from context. Standard test framework (Catch2, doctest — header-only, easily FetchContent'd) would give better diagnostics for free.
-
----
-
-## Minor / quick wins
-
-| Item | Location | Fix |
-|------|----------|-----|
-| Atlas size `2048` defined twice | `font.h:63`, `vk_atlas.h:14` | Single constant in `spectre-types` |
-| `flush_count_` written, never read | `app.h:65`, `app.cpp:224` | Remove |
-| `TextInputEvent.text` is `const char*` | `events.h` | Document lifetime or use `std::string_view` |
-| `vk_pipeline.cpp` opens shader file with no size check | pipeline init | Validate file size > 0 before creating `VkShaderModule` |
-| `NvimProcess` shutdown timeout hardcoded to 2s | `nvim_process.cpp:102` | Make configurable or at least a named constant |
-| RPC request timeout hardcoded to 5s | `rpc.cpp:11` | Named constant |
-| Physical device prefers discrete, no fallback | `vk_context.cpp:43` | Log a warning if integrated is selected |
-| Vulkan API version hardcoded to 1.2 | `vk_context.cpp:21` | Comment why; consider trying 1.1 as fallback |
-| `change_font_size` sends resize before awaiting confirmation | `app.cpp:395` | Document the race or gate the resize |
-
----
-
-## Module dependency violations
-
-```
-Current (problematic):
-  spectre-nvim → spectre-grid   ← I/O layer owns model layer
-
-Should be:
-  spectre-nvim → (IGridSink callback) ← injected at app layer
-  app → spectre-grid
-  app → spectre-nvim
+std::function<void(int, int)> on_cursor_goto;
 ```
 
-All other dependencies flow correctly downward.
+App wires `on_flush`, `on_grid_resize`, and `on_option_set` but not `on_cursor_goto`. Cursor position is read from `ui_events_.cursor_col()/cursor_row()` directly in `on_flush()`. Either remove the callback from the public interface or wire it.
+
+#### 9. Notification queue is unbounded
+
+`nvim.h:208`:
+```cpp
+std::queue<RpcNotification> notifications_;
+```
+
+The reader thread pushes to this queue with no size limit. If the main thread stalls (heavy atlas upload, resize, system sleep) while Neovim is active, the queue grows without bound. A bounded queue with drop-oldest or backpressure would cap memory use.
+
+#### 10. `App` has redundant `grid_cols_`/`grid_rows_`
+
+`app.h:49`:
+```cpp
+int grid_cols_ = 0, grid_rows_ = 0;
+```
+
+`grid_.cols()` and `grid_.rows()` are the canonical size. `App::grid_cols_/rows_` are updated separately in `on_grid_resize`. They're always supposed to match but there's no enforcement. `on_flush()` doesn't actually use them for sizing — they're passed to `nvim_ui_try_resize` calls. Could use `grid_.cols()/rows()` directly.
+
+#### 11. `FontManager` still exposes FreeType/HarfBuzz types in public header
+
+`font.h:32–38`:
+```cpp
+FT_Face face() const { return face_; }
+hb_font_t* hb_font() const { return hb_font_; }
+```
+
+`TextService` uses these internally for `GlyphCache::get_cluster(text, face, shaper)`. Any code including `<spectre/font.h>` pulls in `<ft2build.h>` and `<hb.h>`. Not a problem today since `font.h` stays within `spectre-font`, but swapping the font backend would still require touching these types in the shared header.
 
 ---
 
-## Recommended priority order
+### Minor / Quick wins
 
-**Do first (unlock parallel work):**
-1. `IGridSink` interface — decouple `UiEventHandler` from `Grid`
-2. `FontService` extraction — move fallback logic + glyph resolution out of App
-3. Replace `MpackValue` enum with `std::variant`
-
-**Do next (correctness):**
-4. Bounds check `Grid::scroll()`
-5. Dynamic RPC read buffer
-6. Single atlas size constant
-7. Remove `flush_count_`
-
-**Do later (quality):**
-8. Dirty region GPU uploads (skip full buffer write when few cells change)
-9. Unified logging shim
-10. Table-driven input translation with tests
-11. Bounded notification queue
+| # | Location | Issue | Fix |
+|---|----------|-------|-----|
+| 1 | `events.h:22` | `TextInputEvent::text` is `const char*` — lifetime depends on SDL event buffer, unclear to callers | Document lifetime or change to `std::string` |
+| 2 | `grid.cpp:17–23` | `clear_continuation()` results in `text = ""` while normal blank cells have `text = " "` | Set `cell.text = " "` in `clear_continuation` for consistency |
+| 3 | `input.cpp:34–129` | Key translation missing: numeric keypad (KP_0–KP_9, KP_ENTER, KP_Plus, etc.), F13–F24 | Add missing keycodes |
+| 4 | `ui_events.cpp:86` | `UiOptions{}` default-constructed on every `handle_grid_line` call when `options_` is null — `options_` should always be set by App | Assert `options_` non-null or remove the null path |
+| 5 | `nvim.h:317` | `NvimInput::mouse_button_` stores the active button for drag, but rapid click sequences could leave stale button state | Tie stored button to per-button tracking |
 
 ---
 
-## What is already good
+## Testing Gaps
 
-- Module header structure and CMakeLists layout — clean, easy to navigate
-- `spectre-types` as a pure header-only shared type layer — correct design
-- Two-pass rendering (BG then FG) with instanced draws — efficient
-- Shelf-packing glyph atlas with incremental upload — correct approach
-- `unicode.h` — comprehensive and correct cluster width handling
-- Reader thread / main thread separation with mutex-protected queue — correct model
-- CLAUDE.md and AGENTS.md — well-maintained onboarding docs
-- Existing tests in `tests/` — good coverage of grid and UI event logic
+The test suite has grown substantially. Current coverage:
+
+| Module | Coverage |
+|--------|----------|
+| `spectre-types` (unicode, log, highlight) | ✅ Good |
+| `spectre-grid` | ✅ Good |
+| `spectre-nvim` (ui_events, input, rpc codec, rpc integration) | ✅ Good |
+| `spectre-renderer` (RendererState) | ✅ Basic coverage |
+| `spectre-font` | ✅ Basic coverage |
+| `spectre-window` | ❌ Zero coverage |
+| `app/` | ⚠️ Smoke test only (`run_smoke_test`) |
+
+Remaining gaps worth filling:
+
+1. **`GridRenderingPipeline`** — no unit tests. Test: dirty cell → correct `CellUpdate` values; atlas upload triggered on force/dirty; early-exit behavior on empty dirty with `force_full_atlas_upload_` set.
+2. **`Grid::scroll()` edge cases** — partial-column scrolls, double-width cell across a scroll boundary, scroll by region exactly equal to height.
+3. **Font fallback path** — `TextService::resolve_font_for_text()` and fallback selection have no test exercising the fallback chain.
+4. **`MpackValue::Ext` type** — unhandled in code, untested, not documented.
+5. **Renderer backend parity** — `RendererState` is tested but there is still no test verifying that the Vulkan and Metal backends produce identical `GpuCell` layouts for the same input sequence.
+
+---
+
+## What Is Good
+
+- **App** is now a genuine thin orchestrator — ~320 lines of init, loop, resize, and font-size change. No policy logic.
+- **`IGridSink`** cleanly decouples `spectre-nvim` from `spectre-grid`. Both sides independently testable.
+- **`MpackValue`** with `std::variant` — safe, idiomatic, throws on bad access.
+- **`RpcResult`** propagates Neovim errors to callers. `attach` and `resize` both check `ok()`.
+- **`TextService`** owns the full font pipeline. App has no FreeType or HarfBuzz types.
+- **`RendererState`** eliminates CPU-side duplication between Vulkan and Metal backends.
+- **Unified logging** — consistent categories and levels across all modules.
+- **Mouse modifiers** now threaded end-to-end.
+- **`rpc_integration_tests.cpp`** with real fake-server round-trip — high confidence for the RPC layer.
+- **`run_smoke_test()`** — CI-friendly startup verification that a flush and a frame both complete.
+- **`replay_fixture.h`** — still the best piece of test infrastructure in the repo.
+
+---
+
+## Recommended Priority Order
+
+**Do first (correctness/performance):**
+1. Main loop dirty-frame gate — stops CPU/GPU burn while idle
+2. RPC accumulator O(n) erase — replace with index-based consumption
+
+**Do next (robustness):**
+3. Fix `GridRenderingPipeline::flush()` early-exit before atlas upload
+4. Remove or document `Cell::codepoint`
+5. Remove `Grid::scroll()` redundant dirty loop
+
+**Do later (cleanup):**
+6. Remove or implement `MpackValue::Ext`
+7. Remove `on_cursor_goto` from `UiEventHandler` if it won't be wired
+8. Consolidate `App::grid_cols_/rows_` with `grid_.cols()/rows()`
+9. Add `GridRenderingPipeline` unit tests
+10. Add `Grid::scroll()` double-width edge case tests

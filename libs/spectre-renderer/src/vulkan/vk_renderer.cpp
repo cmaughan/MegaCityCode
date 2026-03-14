@@ -7,6 +7,25 @@
 namespace spectre
 {
 
+void VkRenderer::upload_dirty_state()
+{
+    auto* mapped = static_cast<std::byte*>(grid_buffer_.mapped());
+    if (!mapped)
+        return;
+
+    if (state_.has_dirty_cells())
+    {
+        state_.copy_dirty_cells_to(mapped + state_.dirty_cell_offset_bytes());
+    }
+
+    if (state_.overlay_slot_dirty())
+    {
+        state_.copy_overlay_cell_to(mapped + state_.overlay_offset_bytes());
+    }
+
+    state_.clear_dirty();
+}
+
 bool VkRenderer::initialize(IWindow& window)
 {
     if (!ctx_.initialize(window.native_handle()))
@@ -181,13 +200,13 @@ void VkRenderer::set_grid_size(int cols, int rows)
     {
         needs_descriptor_update_ = true;
     }
-    state_.copy_to(grid_buffer_.mapped());
+    upload_dirty_state();
 }
 
 void VkRenderer::update_cells(std::span<const CellUpdate> updates)
 {
     state_.update_cells(updates);
-    state_.copy_to(grid_buffer_.mapped());
+    upload_dirty_state();
 }
 
 void VkRenderer::set_atlas_texture(const uint8_t* data, int w, int h)
@@ -236,6 +255,7 @@ bool VkRenderer::begin_frame()
     vkWaitForFences(ctx_.device(), 1, &in_flight_fences_[current_frame_], VK_TRUE, UINT64_MAX);
 
     state_.restore_cursor();
+    upload_dirty_state();
 
     VkResult result = vkAcquireNextImageKHR(
         ctx_.device(), ctx_.swapchain().swapchain, UINT64_MAX,
@@ -335,7 +355,7 @@ void VkRenderer::record_command_buffer(VkCommandBuffer cmd, uint32_t image_index
 void VkRenderer::end_frame()
 {
     state_.apply_cursor();
-    state_.copy_to(grid_buffer_.mapped());
+    upload_dirty_state();
     record_command_buffer(cmd_buffers_[current_frame_], current_image_);
 
     VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;

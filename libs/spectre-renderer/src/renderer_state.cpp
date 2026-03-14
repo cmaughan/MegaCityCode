@@ -6,6 +6,55 @@
 namespace spectre
 {
 
+bool RendererState::has_dirty_cells() const
+{
+    return dirty_cell_begin_ < dirty_cell_end_;
+}
+
+size_t RendererState::dirty_cell_offset_bytes() const
+{
+    return dirty_cell_begin_ * sizeof(GpuCell);
+}
+
+size_t RendererState::dirty_cell_size_bytes() const
+{
+    if (!has_dirty_cells())
+        return 0;
+    return (dirty_cell_end_ - dirty_cell_begin_) * sizeof(GpuCell);
+}
+
+void RendererState::copy_dirty_cells_to(void* dst) const
+{
+    if (!has_dirty_cells())
+        return;
+
+    auto* bytes = static_cast<std::byte*>(dst);
+    std::memcpy(bytes, gpu_cells_.data() + dirty_cell_begin_, dirty_cell_size_bytes());
+}
+
+bool RendererState::overlay_slot_dirty() const
+{
+    return overlay_dirty_;
+}
+
+size_t RendererState::overlay_offset_bytes() const
+{
+    return gpu_cells_.size() * sizeof(GpuCell);
+}
+
+void RendererState::copy_overlay_cell_to(void* dst) const
+{
+    GpuCell overlay = cursor_overlay_active_ ? overlay_cell_ : GpuCell{};
+    std::memcpy(dst, &overlay, sizeof(GpuCell));
+}
+
+void RendererState::clear_dirty()
+{
+    dirty_cell_begin_ = 0;
+    dirty_cell_end_ = 0;
+    overlay_dirty_ = false;
+}
+
 void RendererState::set_grid_size(int cols, int rows, int padding)
 {
     grid_cols_ = cols;
@@ -53,6 +102,9 @@ void RendererState::relayout()
             cell.fg_a = 1.0f;
         }
     }
+
+    mark_all_cells_dirty();
+    overlay_dirty_ = true;
 }
 
 void RendererState::update_cells(std::span<const CellUpdate> updates)
@@ -82,6 +134,7 @@ void RendererState::update_cells(std::span<const CellUpdate> updates)
         cell.glyph_size_x = (float)u.glyph.width;
         cell.glyph_size_y = (float)u.glyph.height;
         cell.style_flags = u.style_flags;
+        mark_cell_dirty((size_t)u.row * grid_cols_ + u.col);
     }
 }
 
@@ -105,7 +158,12 @@ void RendererState::restore_cursor()
         return;
 
     int idx = cursor_row_ * grid_cols_ + cursor_col_;
-    gpu_cells_[(size_t)idx] = cursor_saved_cell_;
+    auto& cell = gpu_cells_[(size_t)idx];
+    if (std::memcmp(&cell, &cursor_saved_cell_, sizeof(GpuCell)) != 0)
+    {
+        cell = cursor_saved_cell_;
+        mark_cell_dirty((size_t)idx);
+    }
 }
 
 void RendererState::apply_cursor()
@@ -140,6 +198,7 @@ void RendererState::apply_cursor()
             std::swap(cell.fg_b, cell.bg_b);
             std::swap(cell.fg_a, cell.bg_a);
         }
+        mark_cell_dirty((size_t)idx);
         return;
     }
 
@@ -169,6 +228,7 @@ void RendererState::apply_cursor()
     }
 
     cursor_overlay_active_ = true;
+    overlay_dirty_ = true;
 }
 
 void RendererState::copy_to(void* dst) const
@@ -181,6 +241,28 @@ void RendererState::copy_to(void* dst) const
 
     GpuCell overlay = cursor_overlay_active_ ? overlay_cell_ : GpuCell{};
     std::memcpy(bytes + gpu_cells_.size() * sizeof(GpuCell), &overlay, sizeof(GpuCell));
+}
+
+void RendererState::mark_all_cells_dirty()
+{
+    dirty_cell_begin_ = 0;
+    dirty_cell_end_ = gpu_cells_.size();
+}
+
+void RendererState::mark_cell_dirty(size_t index)
+{
+    if (index >= gpu_cells_.size())
+        return;
+
+    if (!has_dirty_cells())
+    {
+        dirty_cell_begin_ = index;
+        dirty_cell_end_ = index + 1;
+        return;
+    }
+
+    dirty_cell_begin_ = std::min(dirty_cell_begin_, index);
+    dirty_cell_end_ = std::max(dirty_cell_end_, index + 1);
 }
 
 } // namespace spectre

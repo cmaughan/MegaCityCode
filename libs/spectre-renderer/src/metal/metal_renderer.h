@@ -43,6 +43,7 @@ public:
     }
 
 private:
+    void upload_dirty_state();
     // Opaque pointers to Metal objects (avoid ObjC in header)
     void* device_ = nullptr; // id<MTLDevice>
     void* command_queue_ = nullptr; // id<MTLCommandQueue>

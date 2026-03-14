@@ -12,6 +12,26 @@
 namespace spectre
 {
 
+void MetalRenderer::upload_dirty_state()
+{
+    id<MTLBuffer> buf = (__bridge id<MTLBuffer>)grid_buffer_;
+    if (!buf)
+        return;
+
+    auto* bytes = static_cast<std::byte*>([buf contents]);
+    if (state_.has_dirty_cells())
+    {
+        state_.copy_dirty_cells_to(bytes + state_.dirty_cell_offset_bytes());
+    }
+
+    if (state_.overlay_slot_dirty())
+    {
+        state_.copy_overlay_cell_to(bytes + state_.overlay_offset_bytes());
+    }
+
+    state_.clear_dirty();
+}
+
 bool MetalRenderer::initialize(IWindow& window)
 {
     // Get Metal device
@@ -221,15 +241,13 @@ void MetalRenderer::set_grid_size(int cols, int rows)
         grid_buffer_ = (__bridge_retained void*)newBuf;
     }
 
-    id<MTLBuffer> buf = (__bridge id<MTLBuffer>)grid_buffer_;
-    state_.copy_to([buf contents]);
+    upload_dirty_state();
 }
 
 void MetalRenderer::update_cells(std::span<const CellUpdate> updates)
 {
     state_.update_cells(updates);
-    id<MTLBuffer> buf = (__bridge id<MTLBuffer>)grid_buffer_;
-    state_.copy_to([buf contents]);
+    upload_dirty_state();
 }
 
 void MetalRenderer::set_atlas_texture(const uint8_t* data, int w, int h)
@@ -283,7 +301,7 @@ bool MetalRenderer::begin_frame()
     dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
 
     state_.restore_cursor();
-    state_.copy_to([(__bridge id<MTLBuffer>)grid_buffer_ contents]);
+    upload_dirty_state();
 
     CAMetalLayer* layer = (__bridge CAMetalLayer*)layer_;
     id<CAMetalDrawable> drawable = [layer nextDrawable];
@@ -300,7 +318,7 @@ bool MetalRenderer::begin_frame()
 void MetalRenderer::end_frame()
 {
     state_.apply_cursor();
-    state_.copy_to([(__bridge id<MTLBuffer>)grid_buffer_ contents]);
+    upload_dirty_state();
 
     id<CAMetalDrawable> drawable = (__bridge_transfer id<CAMetalDrawable>)current_drawable_;
     current_drawable_ = nullptr;
