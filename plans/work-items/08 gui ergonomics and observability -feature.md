@@ -18,15 +18,15 @@ Collect the next tier of GUI improvements without letting them displace the hard
 
 ## Implementation Plan
 
-1. Start with observability.
-   - debug overlay for DPI, atlas usage, dirty counts, and frame timing
-2. Add low-risk ergonomics next.
-   - configurable padding
-   - improved font discovery/picking workflow
-3. Only then take on larger UI affordances.
-   - tab/file chrome
-   - clickable paths
-   - drag/drop or dialogs
+- [x] Start with observability.
+  - [x] debug overlay for DPI, atlas usage, dirty counts, and frame timing
+- [ ] Add low-risk ergonomics next.
+  - [ ] configurable padding
+  - [ ] improved font discovery/picking workflow
+- [ ] Only then take on larger UI affordances.
+  - [ ] tab/file chrome
+  - [ ] clickable paths
+  - [ ] drag/drop or dialogs
 
 ## Tests
 
@@ -35,9 +35,9 @@ Collect the next tier of GUI improvements without letting them displace the hard
 
 ## Suggested Slice Order
 
-1. debug/perf overlay
-2. padding/font UX
-3. larger GUI affordances
+- [x] debug/perf overlay
+- [ ] padding/font UX
+- [ ] larger GUI affordances
 
 ## Sub-Agent Split
 

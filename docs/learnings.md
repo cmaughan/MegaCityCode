@@ -6,6 +6,21 @@ Things discovered while working on this project that are worth remembering for f
 
 ## Tooling
 
+### A running learnings commentary is worth keeping
+
+One thing that has helped in this repo is updating `docs/learnings.md` as the work happens, not treating it as a post-hoc writeup.
+
+Why it helps:
+- useful discoveries get captured while the context is still fresh
+- small but important fixes and workflow lessons do not get forgotten once the bigger feature is done
+- the repo gradually builds a practical memory of "what bit us before" and "what worked well"
+- future sessions can pick up the reasoning behind tools, tests, and validation paths without having to rediscover it
+
+Lesson:
+- treat the learnings file as a running engineering commentary, not just a final retrospective
+
+---
+
 ### Claude can generate and manipulate code dependency graphs
 
 Claude successfully:

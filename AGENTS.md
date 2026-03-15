@@ -82,6 +82,7 @@ Preferred dependency direction:
 - After implementing a user-facing feature or rendering-affecting change, run the render smoke/snapshot suite with `t.bat` or `ctest` and confirm the relevant `spectre-render-*` scenario still passes.
 - If you change build wiring, keep both Windows and macOS paths valid in CI.
 - After every completed work item, run one final `clang-format` pass across all touched source files in a single shot instead of formatting piecemeal during the work.
+- When updating work-item markdown files, mark completed items with Markdown task ticks (`- [x]`) instead of leaving them as plain text, so progress is visible in the file itself.
 
 ## Replay Fixtures
 
