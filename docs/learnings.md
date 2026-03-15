@@ -155,6 +155,46 @@ Still useful to remember:
 
 ---
 
+### A root shortcut script helps once the scripted workflows start to sprawl
+
+As smoke tests, render snapshots, blessing flows, and screenshot generation accumulated, the command surface became hard to remember.
+
+What helped:
+- add a root-level `do.py`
+- give it a `--help` screen with short, single-word commands
+- bake in the common scenarios (`smoke`, `basic`, `cmdline`, `unicode`, `blessall`, `shot`, `test`, etc.)
+
+Why this is worth keeping:
+- it lowers the friction for using the safety nets we already built
+- it reduces "what was the exact command again?" overhead
+- it makes the higher-value scripted paths more likely to be used consistently
+
+Lesson:
+- once a project grows a few scripted validation flows, invest in one friendly entry point instead of expecting people to remember every raw command
+
+---
+
+### Human-facing structure tools are worth the effort
+
+Tools that help a person see the shape of the codebase are not just documentation polish; they are a practical way to control complexity.
+
+Examples from this repo:
+- CMake dependency graphs
+- class diagrams from `clang-uml`
+- a single friendly command entry point like `do.py`
+- deterministic render snapshots that make UI state visible instead of abstract
+
+Why this matters:
+- they reduce the cost of orienting in a growing codebase
+- they make module boundaries and cross-cutting dependencies easier to spot
+- they help both humans and agents reason about where a change belongs
+- they lower the chance of accidental architectural drift because the current structure is visible
+
+Lesson:
+- if a tool helps a human understand the structure of the system being built, it is usually worth having once the codebase reaches moderate complexity
+
+---
+
 ## Fonts, Emoji, and Fallbacks
 
 ### Windows color emoji needs an end-to-end color glyph path

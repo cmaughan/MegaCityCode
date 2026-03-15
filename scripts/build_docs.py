@@ -4,12 +4,14 @@
 Runs:
   1. scripts/gen_deps.py  →  docs/deps/deps.svg   (CMake target dependency graph)
   2. scripts/gen_uml.py   →  docs/uml/*.svg        (C++ class UML diagrams)
+  3. scripts/gen_api_docs.py → docs/api/index.html (local Doxygen API/reference docs)
 
-Requirements: cmake, dot (graphviz), clang-uml, plantuml
+Requirements: cmake, dot (graphviz), clang-uml, plantuml, doxygen
 Usage:
     python scripts/build_docs.py                  # build everything
     python scripts/build_docs.py --deps-only
     python scripts/build_docs.py --uml-only
+    python scripts/build_docs.py --api-only
     python scripts/build_docs.py --dry-run        # print commands without running
     python scripts/build_docs.py --format svg     # UML render format (default: svg)
 """
@@ -37,6 +39,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--deps-only", action="store_true", help="Only run gen_deps.py")
     parser.add_argument("--uml-only",  action="store_true", help="Only run gen_uml.py")
+    parser.add_argument("--api-only",  action="store_true", help="Only run gen_api_docs.py")
     parser.add_argument(
         "--format", default="svg", choices=["png", "svg", "pdf"],
         help="UML render format (default: svg)",
@@ -47,8 +50,10 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
     scripts   = repo_root / "scripts"
 
-    run_deps = not args.uml_only
-    run_uml  = not args.deps_only
+    selected_only = args.deps_only or args.uml_only or args.api_only
+    run_deps = args.deps_only or not selected_only
+    run_uml  = args.uml_only or not selected_only
+    run_api  = args.api_only or not selected_only
 
     errors: list[str] = []
 
@@ -78,6 +83,17 @@ def main() -> int:
         if rc != 0:
             errors.append("gen_uml.py failed")
 
+    if run_api:
+        rc = run_script(
+            scripts / "gen_api_docs.py",
+            [
+                "--output", "docs/api",
+            ] + (["--dry-run"] if args.dry_run else []),
+            dry_run=args.dry_run,
+        )
+        if rc != 0:
+            errors.append("gen_api_docs.py failed")
+
     print()
     if errors:
         for e in errors:
@@ -89,6 +105,9 @@ def main() -> int:
         for f in sorted((repo_root / "docs").rglob("*")):
             if f.is_file() and f.suffix in {".svg", ".png", ".pdf", ".puml"}:
                 print(f"  {f.relative_to(repo_root)}")
+        api_index = repo_root / "docs" / "api" / "index.html"
+        if api_index.exists():
+            print(f"  {api_index.relative_to(repo_root)}")
 
     return 0
 

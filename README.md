@@ -251,6 +251,8 @@ spectre/
 └── scripts/                # Build/test convenience scripts
 ```
 
+For a guided human-facing overview of the repo structure, generated diagrams, and validation entry points, see [docs/module-map.md](docs/module-map.md).
+
 ## CI
 
 GitHub Actions builds and tests the project on:
@@ -278,6 +280,16 @@ Regenerate with `python scripts/build_docs.py`.
 ### Class Diagram
 
 ![C++ class diagram](docs/uml/spectre_classes.svg)
+
+### Local API Docs
+
+Generate local API/reference docs with:
+
+```powershell
+python .\scripts\build_docs.py --api-only
+```
+
+This writes a local Doxygen site to `docs/api/index.html`. It is generated locally and ignored in Git.
 
 ## Unicode Snapshot Example
 

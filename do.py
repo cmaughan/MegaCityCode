@@ -48,6 +48,8 @@ Single-word shortcuts:
   smoke        Run the app smoke test
   test         Run the full local test suite (t.bat / run_tests.sh)
   shot         Regenerate the README hero screenshot
+  api          Build local Doxygen API docs
+  docs         Build all docs artifacts
 
 Deterministic render snapshots:
   basic        Run basic-view compare
@@ -66,6 +68,7 @@ Examples:
   python do.py basic
   python do.py blessall
   python do.py shot
+  python do.py api
   python do.py test
 """
 
@@ -91,6 +94,12 @@ def main() -> int:
         if skip_build:
             cmd.append("--skip-build")
         return run(cmd, root)
+
+    if command == "api":
+        return run([sys.executable, str(root / "scripts" / "build_docs.py"), "--api-only"], root)
+
+    if command == "docs":
+        return run([sys.executable, str(root / "scripts" / "build_docs.py")], root)
 
     if command == "run":
         if ensure_built(root) != 0:
