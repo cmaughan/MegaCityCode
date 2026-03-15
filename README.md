@@ -7,6 +7,8 @@ Spectre is a cross-platform Neovim GUI frontend with native GPU rendering:
 - SDL3 windowing and input
 - embedded `nvim --embed` over msgpack-RPC
 
+API docs: [Published API reference](https://cmaughan.github.io/spectre/)
+
 ### Windows
 
 ![Spectre on Windows](screenshots/spectre-pc.png)
@@ -290,6 +292,10 @@ python .\scripts\build_docs.py --api-only
 ```
 
 This writes a local Doxygen site to `docs/api/index.html`. It is generated locally and ignored in Git.
+
+The latest `main` branch API docs are also published from GitHub Actions at:
+
+- [https://cmaughan.github.io/spectre/](https://cmaughan.github.io/spectre/)
 
 ## Unicode Snapshot Example
 
