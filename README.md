@@ -1,5 +1,9 @@
 # Spectre
 
+Published API docs:
+- Standard GitHub Pages URL: `https://cmaughan.github.io/spectre/`
+- Custom-domain Pages URL: `https://<your-pages-domain>/spectre/`
+
 Spectre is a cross-platform Neovim GUI frontend with native GPU rendering:
 
 - Vulkan on Windows
@@ -7,7 +11,9 @@ Spectre is a cross-platform Neovim GUI frontend with native GPU rendering:
 - SDL3 windowing and input
 - embedded `nvim --embed` over msgpack-RPC
 
-API docs: [Published API reference](https://cmaughan.github.io/spectre/)
+API docs:
+- GitHub Pages project site: `https://cmaughan.github.io/spectre/`
+- If your account uses a custom Pages domain, use that same domain with `/spectre/` appended
 
 ### Windows
 
@@ -293,9 +299,10 @@ python .\scripts\build_docs.py --api-only
 
 This writes a local Doxygen site to `docs/api/index.html`. It is generated locally and ignored in Git.
 
-The latest `main` branch API docs are also published from GitHub Actions at:
+The latest `main` branch API docs are also published from GitHub Actions at the repo's Pages URL:
 
-- [https://cmaughan.github.io/spectre/](https://cmaughan.github.io/spectre/)
+- `https://cmaughan.github.io/spectre/`
+- or the equivalent `/<repo>` path under your custom Pages domain, if one is configured for the account
 
 ## Unicode Snapshot Example
 
