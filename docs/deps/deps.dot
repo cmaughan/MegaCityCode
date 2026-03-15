@@ -55,7 +55,6 @@ subgraph clusterLegend {
     "node13" [ label = "vk-bootstrap\n(vk-bootstrap::vk-bootstrap)", shape = octagon ];
     "node11" -> "node13" [ style = dotted ] // spectre-renderer -> vk-bootstrap
     "node6" -> "node11" [ style = dotted ] // spectre -> spectre-renderer
-    "node6" -> "node8" [ style = dotted ] // spectre -> spectre-types
     "node14" [ label = "spectre-rpc-fake", shape = egg ];
     "node14" -> "node10" [ style = dotted ] // spectre-rpc-fake -> spectre-nvim
     "node15" [ label = "spectre-tests", shape = egg ];

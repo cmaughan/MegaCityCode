@@ -1,0 +1,23 @@
+var searchData=
+[
+  ['cell_5fsize_5fpixels_0',['cell_size_pixels',['../classspectre_1_1_metal_renderer.html#a789cdc88e89027586e6223115c318c7c',1,'spectre::MetalRenderer::cell_size_pixels()'],['../classspectre_1_1_vk_renderer.html#a38835324f18432950410d8be779008e7',1,'spectre::VkRenderer::cell_size_pixels()'],['../classspectre_1_1_i_renderer.html#a99a60095f3b37099d2604278aa65c041',1,'spectre::IRenderer::cell_size_pixels()']]],
+  ['clear_1',['clear',['../classspectre_1_1_grid.html#a7ef0668d728a59b464e8349f3aa0a125',1,'spectre::Grid::clear()'],['../classspectre_1_1_i_grid_sink.html#acf6f0a25cb44a1381504f8feca5a6a3d',1,'spectre::IGridSink::clear()']]],
+  ['clear_5fatlas_5fdirty_2',['clear_atlas_dirty',['../classspectre_1_1_text_service.html#a8a964a05f7158a8e11c883c101127667',1,'spectre::TextService']]],
+  ['clear_5fdirty_3',['clear_dirty',['../classspectre_1_1_glyph_cache.html#adcc86f83d2b5e30c2a4f2502b096edea',1,'spectre::GlyphCache::clear_dirty()'],['../classspectre_1_1_grid.html#ac26c25ea691bae2a35bc051231329efa',1,'spectre::Grid::clear_dirty()'],['../classspectre_1_1_renderer_state.html#acd78a1a0d6777e1e25bb7965455e4ee8',1,'spectre::RendererState::clear_dirty()']]],
+  ['clear_5flog_5fsink_4',['clear_log_sink',['../namespacespectre.html#a2401d4b688ca4f020fcf231af448dc86',1,'spectre']]],
+  ['clipboard_5ftext_5',['clipboard_text',['../classspectre_1_1_i_window.html#af6e017872f7b876fda37ea1b1bc55c49',1,'spectre::IWindow::clipboard_text()'],['../classspectre_1_1_sdl_window.html#a22a421e610bf47927186d3b6491c1738',1,'spectre::SdlWindow::clipboard_text()']]],
+  ['cluster_5fcell_5fwidth_6',['cluster_cell_width',['../namespacespectre.html#aabe1e182cff5c9c5ac48d100014a2db7',1,'spectre']]],
+  ['cols_7',['cols',['../classspectre_1_1_grid.html#a1dcee34d758ed6e927086fabd78b491b',1,'spectre::Grid']]],
+  ['configure_5fdefault_5flogging_8',['configure_default_logging',['../namespacespectre.html#a8b5449c93bcd9de036fdafa922c138c3',1,'spectre']]],
+  ['configure_5flogging_9',['configure_logging',['../namespacespectre.html#a9c819001f79932d402420da843827fa2',1,'spectre']]],
+  ['consume_5fatlas_5freset_10',['consume_atlas_reset',['../classspectre_1_1_text_service.html#abe915a9fd3141b4cdebda928fb16e1e9',1,'spectre::TextService']]],
+  ['consume_5foverflowed_11',['consume_overflowed',['../classspectre_1_1_glyph_cache.html#a530b9c52ecd493ad42f3556e2fdc7e48',1,'spectre::GlyphCache']]],
+  ['copy_5fdirty_5fcells_5fto_12',['copy_dirty_cells_to',['../classspectre_1_1_renderer_state.html#a135d3524a377a571eaa33715c9c7185d',1,'spectre::RendererState']]],
+  ['copy_5foverlay_5fcell_5fto_13',['copy_overlay_cell_to',['../classspectre_1_1_renderer_state.html#ab3676ab97a925e2e6ddd61b7a23c7a37',1,'spectre::RendererState']]],
+  ['copy_5fto_14',['copy_to',['../classspectre_1_1_renderer_state.html#abcf2414ede2109a08d84bf06eae1b625',1,'spectre::RendererState']]],
+  ['create_5fframebuffers_15',['create_framebuffers',['../classspectre_1_1_vk_context.html#a8d45befb21789cb1d8cdc190c7fe82a5',1,'spectre::VkContext']]],
+  ['create_5frenderer_16',['create_renderer',['../namespacespectre.html#af4bbe2e262fb7c45ee83e41623ae9fc2',1,'spectre']]],
+  ['current_5fmode_17',['current_mode',['../classspectre_1_1_ui_event_handler.html#a76674bfd4153d4288e90037a36e4a359',1,'spectre::UiEventHandler']]],
+  ['cursor_5fcol_18',['cursor_col',['../classspectre_1_1_ui_event_handler.html#a2ce5a2a81c6ba0f99464bcda80e66f86',1,'spectre::UiEventHandler']]],
+  ['cursor_5frow_19',['cursor_row',['../classspectre_1_1_ui_event_handler.html#a7cda00748e75a8b31ef4bb98088a0525',1,'spectre::UiEventHandler']]]
+];

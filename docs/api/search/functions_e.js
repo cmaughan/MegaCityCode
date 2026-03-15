@@ -1,0 +1,20 @@
+var searchData=
+[
+  ['read_0',['read',['../classspectre_1_1_nvim_process.html#aed24f9ab10796ee7e7e7da7ee0a76f86',1,'spectre::NvimProcess']]],
+  ['recreate_5fswapchain_1',['recreate_swapchain',['../classspectre_1_1_vk_context.html#aa61c7d3b18217fa024b2781ce87bf4f7',1,'spectre::VkContext']]],
+  ['reference_5fimage_5fpath_2',['reference_image_path',['../structspectre_1_1_render_test_scenario.html#ab1f676113869e055845b0fe260577dc6',1,'spectre::RenderTestScenario']]],
+  ['render_5fpass_3',['render_pass',['../classspectre_1_1_vk_context.html#a0ec19946845e9566b2adfa783ccb5d7e',1,'spectre::VkContext']]],
+  ['report_5fpath_4',['report_path',['../structspectre_1_1_render_test_scenario.html#a3b8d04354aefa4774897a5c8f7d6f0d9',1,'spectre::RenderTestScenario']]],
+  ['request_5',['request',['../classspectre_1_1_i_rpc_channel.html#aa339c570caeee7a036ad55ea79baee56',1,'spectre::IRpcChannel::request()'],['../classspectre_1_1_nvim_rpc.html#ade793546af6dcfa0fdfba40607794fb0',1,'spectre::NvimRpc::request()']]],
+  ['request_5fframe_5fcapture_6',['request_frame_capture',['../classspectre_1_1_i_renderer.html#a7093acb364b62d15f0e5a3972d34a769',1,'spectre::IRenderer::request_frame_capture()'],['../classspectre_1_1_metal_renderer.html#a21a2c85cdae70dfe619beca2f9eacc37',1,'spectre::MetalRenderer::request_frame_capture()'],['../classspectre_1_1_vk_renderer.html#a1e73622ea66f53fbdd32cbc72e6bee08',1,'spectre::VkRenderer::request_frame_capture()']]],
+  ['request_5fresize_7',['request_resize',['../classspectre_1_1_ui_request_worker.html#a8030d082da7266876640e7917467c7ea',1,'spectre::UiRequestWorker']]],
+  ['reset_8',['reset',['../classspectre_1_1_glyph_cache.html#aab116140f2f35a377c97db363a5c8509',1,'spectre::GlyphCache']]],
+  ['resize_9',['resize',['../classspectre_1_1_grid.html#ad51d892fdbefa09968c9021d8668aa65',1,'spectre::Grid::resize()'],['../classspectre_1_1_i_grid_sink.html#abb270e0393c07071f6542b9be57f4fe5',1,'spectre::IGridSink::resize()'],['../classspectre_1_1_vk_renderer.html#acc435213c5d135aab6dd5ee4f9ff73ca',1,'spectre::VkRenderer::resize()'],['../classspectre_1_1_metal_renderer.html#ac7eeb58e3c4ca2dea285488db4fef742',1,'spectre::MetalRenderer::resize()'],['../classspectre_1_1_i_renderer.html#aeef22f594ad1d757f7d7867c520b6d54',1,'spectre::IRenderer::resize()']]],
+  ['resolve_10',['resolve',['../classspectre_1_1_highlight_table.html#afc1fdf2302af00523fbcf59a6b69aa65',1,'spectre::HighlightTable']]],
+  ['resolve_5fcluster_11',['resolve_cluster',['../classspectre_1_1_text_service.html#a778ba083024079198e093d059a61b73a',1,'spectre::TextService']]],
+  ['restore_5fcursor_12',['restore_cursor',['../classspectre_1_1_renderer_state.html#a42290df97dc71e9f2f5fdaca2e9a203c',1,'spectre::RendererState']]],
+  ['rows_13',['rows',['../classspectre_1_1_grid.html#aff40d878daea17ab752fe1a8b111fdf2',1,'spectre::Grid']]],
+  ['run_14',['run',['../classspectre_1_1_app.html#a9ee01f02e32147a22b255b85671de64b',1,'spectre::App']]],
+  ['run_5frender_5ftest_15',['run_render_test',['../classspectre_1_1_app.html#a59bf4e994b6976c0030fe15eec306645',1,'spectre::App']]],
+  ['run_5fsmoke_5ftest_16',['run_smoke_test',['../classspectre_1_1_app.html#a9334125bf45b6c2dfa9728d50585f90d',1,'spectre::App']]]
+];

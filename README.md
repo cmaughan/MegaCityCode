@@ -1,8 +1,8 @@
 # Spectre
 
-Published API docs:
-- Standard GitHub Pages URL: `https://cmaughan.github.io/spectre/`
-- Custom-domain Pages URL: `https://<your-pages-domain>/spectre/`
+API docs: [Local generated reference](docs/api/index.html)
+
+Build them locally with `python .\do.py api` or `python .\scripts\build_docs.py --api-only`.
 
 Spectre is a cross-platform Neovim GUI frontend with native GPU rendering:
 

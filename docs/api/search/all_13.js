@@ -1,0 +1,25 @@
+var searchData=
+[
+  ['u0_0',['u0',['../structspectre_1_1_atlas_region.html#a715208cd6e09b89e201546dfbcce035c',1,'spectre::AtlasRegion']]],
+  ['u1_1',['u1',['../structspectre_1_1_atlas_region.html#ae33f8c877da2fd97b8f68ea962cdba13',1,'spectre::AtlasRegion']]],
+  ['ui_5frequest_5fworker_2eh_2',['ui_request_worker.h',['../ui__request__worker_8h.html',1,'']]],
+  ['uieventhandler_3',['UiEventHandler',['../classspectre_1_1_ui_event_handler.html',1,'spectre']]],
+  ['uint_4',['UInt',['../structspectre_1_1_mpack_value.html#a8ea93cd4b50d05ec26b0854c45a58336af1a82ed36182c6cb0aa568f3df88cc3f',1,'spectre::MpackValue']]],
+  ['uioptions_5',['UiOptions',['../structspectre_1_1_ui_options.html',1,'spectre']]],
+  ['uirequestworker_6',['UiRequestWorker',['../classspectre_1_1_ui_request_worker.html',1,'spectre']]],
+  ['undercurl_7',['undercurl',['../structspectre_1_1_hl_attr.html#a732e850bc7d8426ed88b2f150d10dc86',1,'spectre::HlAttr']]],
+  ['underline_8',['underline',['../structspectre_1_1_hl_attr.html#a08585afb87577a9788879cab8369cf64',1,'spectre::HlAttr']]],
+  ['unicode_2eh_9',['unicode.h',['../unicode_8h.html',1,'']]],
+  ['unicoderange_10',['UnicodeRange',['../structspectre_1_1_unicode_range.html',1,'spectre']]],
+  ['update_5fatlas_5fregion_11',['update_atlas_region',['../classspectre_1_1_vk_renderer.html#a72c30734267fdc29625ee08ca3a10c09',1,'spectre::VkRenderer::update_atlas_region()'],['../classspectre_1_1_metal_renderer.html#a68bbc44e407edb85bd37b293e1e09432',1,'spectre::MetalRenderer::update_atlas_region()'],['../classspectre_1_1_i_renderer.html#a6ea44ea790ca0f7321ec062127548cfd',1,'spectre::IRenderer::update_atlas_region(int x, int y, int w, int h, const uint8_t *data)=0']]],
+  ['update_5fcells_12',['update_cells',['../classspectre_1_1_i_renderer.html#a32ed646ae27e3d993d3451892a068cc4',1,'spectre::IRenderer::update_cells()'],['../classspectre_1_1_metal_renderer.html#a3ac84fc3a78edcef11e2a7484a9cad9a',1,'spectre::MetalRenderer::update_cells()'],['../classspectre_1_1_renderer_state.html#acd1df9a0021cd01aee1f7816b85a3935',1,'spectre::RendererState::update_cells()'],['../classspectre_1_1_vk_renderer.html#aa5097791e31553b4dd039e6672b2b2cd',1,'spectre::VkRenderer::update_cells()']]],
+  ['upload_13',['upload',['../classspectre_1_1_vk_atlas.html#a11f65e46c898186315c64f5c919a8fa1',1,'spectre::VkAtlas']]],
+  ['upload_5fregion_14',['upload_region',['../classspectre_1_1_vk_atlas.html#aea0eb490fcc33f611ef55f9e4605a88b',1,'spectre::VkAtlas']]],
+  ['use_5fexplicit_5fcolors_15',['use_explicit_colors',['../structspectre_1_1_cursor_style.html#a6b0fe502f6ef37e17f877e9ed59538b4',1,'spectre::CursorStyle']]],
+  ['utf8_5fdecode_5fnext_16',['utf8_decode_next',['../namespacespectre.html#a3b9705bbd89e1b151038c4b3f7a2b561',1,'spectre']]],
+  ['utf8_5ffirst_5fcodepoint_17',['utf8_first_codepoint',['../namespacespectre.html#aa67ec411075bf876c5aed7c2fc418c26',1,'spectre']]],
+  ['uv_5fx0_18',['uv_x0',['../structspectre_1_1_gpu_cell.html#a0dd271325314422256e526b1c5a6be33',1,'spectre::GpuCell']]],
+  ['uv_5fx1_19',['uv_x1',['../structspectre_1_1_gpu_cell.html#a342d54e1ed4795372a0b3cfe1f9d4f46',1,'spectre::GpuCell']]],
+  ['uv_5fy0_20',['uv_y0',['../structspectre_1_1_gpu_cell.html#a09ce553204e435e44ee65760fb72d5c1',1,'spectre::GpuCell']]],
+  ['uv_5fy1_21',['uv_y1',['../structspectre_1_1_gpu_cell.html#a5a590e090db3e268b7c94c101affff54',1,'spectre::GpuCell']]]
+];
