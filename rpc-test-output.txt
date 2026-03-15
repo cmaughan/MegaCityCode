@@ -1,2 +1,0 @@
-[spectre] nvim spawned (PID 56152)
-[rpc] request timed out or aborted: fake_method

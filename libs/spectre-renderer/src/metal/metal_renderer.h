@@ -1,5 +1,6 @@
 #pragma once
 #include "renderer_state.h"
+#include <optional>
 #include <spectre/renderer.h>
 
 // Forward declarations for Objective-C types
@@ -37,6 +38,8 @@ public:
     std::pair<int, int> cell_size_pixels() const override;
     void set_cell_size(int w, int h) override;
     void set_ascender(int a) override;
+    void request_frame_capture() override;
+    std::optional<CapturedFrame> take_captured_frame() override;
     int padding() const override
     {
         return padding_;
@@ -44,6 +47,7 @@ public:
 
 private:
     void upload_dirty_state();
+    bool ensure_capture_buffer(size_t width, size_t height);
     // Opaque pointers to Metal objects (avoid ObjC in header)
     void* device_ = nullptr; // id<MTLDevice>
     void* command_queue_ = nullptr; // id<MTLCommandQueue>
@@ -63,6 +67,11 @@ private:
     int pixel_h_ = 0;
 
     RendererState state_;
+    bool capture_requested_ = false;
+    std::optional<CapturedFrame> captured_frame_;
+    void* capture_buffer_ = nullptr; // id<MTLBuffer>
+    size_t capture_buffer_size_ = 0;
+    size_t capture_bytes_per_row_ = 0;
 
     // Current drawable for the frame
     void* current_drawable_ = nullptr; // id<CAMetalDrawable>

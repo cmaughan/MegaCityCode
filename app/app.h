@@ -5,6 +5,8 @@
 #include <chrono>
 #include <optional>
 #include <spectre/sdl_window.h>
+#include <string>
+#include <vector>
 #ifdef __APPLE__
 // Metal renderer header is internal to spectre-renderer, forward declare
 #else
@@ -19,14 +21,29 @@
 namespace spectre
 {
 
+struct AppOptions
+{
+    bool load_user_config = true;
+    bool save_user_config = true;
+    bool activate_window_on_startup = true;
+    AppConfig initial_config = {};
+    std::vector<std::string> nvim_args;
+    std::vector<std::string> startup_commands;
+};
+
 class App
 {
 public:
-    App();
+    explicit App(AppOptions options = {});
     bool initialize();
     void run();
     bool run_smoke_test(std::chrono::milliseconds timeout);
+    std::optional<CapturedFrame> run_render_test(std::chrono::milliseconds timeout, std::chrono::milliseconds settle);
     void shutdown();
+    const std::string& last_render_test_error() const
+    {
+        return last_render_test_error_;
+    }
 
 private:
     bool initialize_window_and_renderer();
@@ -52,6 +69,7 @@ private:
     void request_frame();
     void request_quit();
     void refresh_cursor_style(bool restart_blink);
+    bool execute_startup_commands();
     void restart_cursor_blink(std::chrono::steady_clock::time_point now);
     void advance_cursor_blink(std::chrono::steady_clock::time_point now);
     void apply_cursor_visibility();
@@ -59,6 +77,7 @@ private:
     void queue_resize_request(int cols, int rows, const char* reason);
     int wait_timeout_ms(std::optional<std::chrono::steady_clock::time_point> wait_deadline) const;
 
+    AppOptions options_;
     AppConfig config_;
     SdlWindow window_;
     std::unique_ptr<IRenderer> renderer_;
@@ -87,6 +106,8 @@ private:
     int pending_startup_resize_cols_ = 0;
     int pending_startup_resize_rows_ = 0;
     int grid_cols_ = 0, grid_rows_ = 0;
+    std::chrono::steady_clock::time_point last_activity_time_ = std::chrono::steady_clock::now();
+    std::string last_render_test_error_;
 };
 
 } // namespace spectre

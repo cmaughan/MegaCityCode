@@ -161,7 +161,42 @@ Other modes:
 
 The test scripts reuse the existing CMake cache when possible and only reconfigure when needed.
 
-The CTest suite also includes an app startup smoke test when `nvim` is available on `PATH`.
+The CTest suite also includes:
+
+- an app startup smoke test when `nvim` is available on `PATH`
+- a render snapshot regression test when the platform reference image exists under `tests/render/reference/`
+
+## Render Snapshots
+
+Spectre can now run deterministic render-snapshot tests by capturing pixels directly from the renderer output instead of taking a desktop screenshot.
+
+Example compare run:
+
+```powershell
+.\build\Debug\spectre.exe --console --render-test D:\dev\spectre\tests\render\basic-view.toml
+```
+
+Bless a new reference image:
+
+```powershell
+.\build\Debug\spectre.exe --console --render-test D:\dev\spectre\tests\render\basic-view.toml --bless-render-test
+```
+
+Behavior:
+
+- the scenario fixes window size, font, and Neovim startup commands
+- Spectre waits for redraw activity to settle
+- the renderer reads back the presented frame
+- output is compared against a platform-specific reference image
+- `actual`, `diff`, and `report` artifacts are written under `tests/render/out/`
+
+Reference images live under `tests/render/reference/` with platform suffixes like `basic-view.windows.bmp` and `basic-view.macos.bmp`.
+
+Current scenarios:
+
+- `basic-view`: line numbers, signcolumn, cursorline, and baseline text layout
+- `cmdline-view`: bottom-row command-line rendering
+- `unicode-view`: graphemes, emoji, wide glyphs, and Nerd Font/plugin icons
 
 ## Logging
 
@@ -214,3 +249,16 @@ The workflow uses the same repo-local test scripts as local development, includi
 - Windows uses a multi-config Visual Studio generator through `CMakePresets.json`.
 - The renderer boundary is owned by `spectre-renderer`; app code should not include backend-private headers.
 - Grapheme handling is much better than the original single-codepoint path, but broad Unicode width conformance against Neovim is still future hardening work.
+- Visual regression testing now prefers direct swapchain/drawable readback over desktop screenshots so comparisons stay deterministic across window-manager state.
+
+## Architecture Diagrams
+
+Regenerate with `python scripts/build_docs.py`.
+
+### CMake Target Dependencies
+
+![CMake target dependency graph](docs/deps/deps.svg)
+
+### Class Diagram
+
+![C++ class diagram](docs/uml/spectre_classes.svg)

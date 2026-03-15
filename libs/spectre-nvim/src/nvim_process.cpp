@@ -1,6 +1,8 @@
 #include <spectre/log.h>
 #include <spectre/nvim.h>
 
+#include <sstream>
+
 #ifndef _WIN32
 #include <cerrno>
 #include <cstring>
@@ -14,7 +16,39 @@ namespace spectre
 
 #ifdef _WIN32
 
-bool NvimProcess::spawn(const std::string& nvim_path)
+namespace
+{
+
+std::string quote_windows_arg(const std::string& value)
+{
+    if (value.find_first_of(" \t\"") == std::string::npos)
+        return value;
+
+    std::string quoted = "\"";
+    size_t backslashes = 0;
+    for (char ch : value)
+    {
+        if (ch == '\\')
+        {
+            ++backslashes;
+            quoted.push_back(ch);
+            continue;
+        }
+        if (ch == '"')
+        {
+            quoted.append(backslashes, '\\');
+            quoted.push_back('\\');
+        }
+        backslashes = 0;
+        quoted.push_back(ch);
+    }
+    quoted.push_back('"');
+    return quoted;
+}
+
+} // namespace
+
+bool NvimProcess::spawn(const std::string& nvim_path, const std::vector<std::string>& extra_args)
 {
     SECURITY_ATTRIBUTES sa = {};
     sa.nLength = sizeof(sa);
@@ -49,7 +83,11 @@ bool NvimProcess::spawn(const std::string& nvim_path)
     si.hStdError = nul_handle;
     si.dwFlags |= STARTF_USESTDHANDLES;
 
-    std::string cmd = nvim_path + " --embed";
+    std::ostringstream command;
+    command << quote_windows_arg(nvim_path) << " --embed";
+    for (const auto& arg : extra_args)
+        command << ' ' << quote_windows_arg(arg);
+    std::string cmd = command.str();
 
     if (!CreateProcessA(
             nullptr,
@@ -135,7 +173,7 @@ bool NvimProcess::is_running() const
 
 #else // POSIX (macOS, Linux)
 
-bool NvimProcess::spawn(const std::string& nvim_path)
+bool NvimProcess::spawn(const std::string& nvim_path, const std::vector<std::string>& extra_args)
 {
     int stdin_pipe[2];
     int stdout_pipe[2];
@@ -182,7 +220,15 @@ bool NvimProcess::spawn(const std::string& nvim_path)
         close(stdin_pipe[0]);
         close(stdout_pipe[1]);
 
-        execlp(nvim_path.c_str(), nvim_path.c_str(), "--embed", nullptr);
+        std::vector<char*> argv;
+        argv.reserve(extra_args.size() + 3);
+        argv.push_back(const_cast<char*>(nvim_path.c_str()));
+        argv.push_back(const_cast<char*>("--embed"));
+        for (const auto& arg : extra_args)
+            argv.push_back(const_cast<char*>(arg.c_str()));
+        argv.push_back(nullptr);
+
+        execvp(nvim_path.c_str(), argv.data());
         _exit(127);
     }
 

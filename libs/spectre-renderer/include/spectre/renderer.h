@@ -1,13 +1,27 @@
 #pragma once
 #include <memory>
+#include <optional>
 #include <span>
 #include <spectre/types.h>
 #include <utility>
+#include <vector>
 
 namespace spectre
 {
 
 class IWindow;
+
+struct CapturedFrame
+{
+    int width = 0;
+    int height = 0;
+    std::vector<uint8_t> rgba;
+
+    bool valid() const
+    {
+        return width > 0 && height > 0 && rgba.size() == static_cast<size_t>(width * height * 4);
+    }
+};
 
 class IRenderer
 {
@@ -26,6 +40,8 @@ public:
     virtual std::pair<int, int> cell_size_pixels() const = 0;
     virtual void set_cell_size(int w, int h) = 0;
     virtual void set_ascender(int a) = 0;
+    virtual void request_frame_capture() = 0;
+    virtual std::optional<CapturedFrame> take_captured_frame() = 0;
     virtual int padding() const = 0;
 };
 

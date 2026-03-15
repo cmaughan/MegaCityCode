@@ -4,6 +4,7 @@
 #include "vk_buffers.h"
 #include "vk_context.h"
 #include "vk_pipeline.h"
+#include <optional>
 #include <spectre/renderer.h>
 
 namespace spectre
@@ -27,6 +28,8 @@ public:
     std::pair<int, int> cell_size_pixels() const override;
     void set_cell_size(int w, int h) override;
     void set_ascender(int a) override;
+    void request_frame_capture() override;
+    std::optional<CapturedFrame> take_captured_frame() override;
     int padding() const override
     {
         return padding_;
@@ -41,6 +44,9 @@ private:
     void update_all_descriptor_sets();
     void record_command_buffer(VkCommandBuffer cmd, uint32_t image_index);
     void upload_dirty_state();
+    bool ensure_capture_buffer(size_t required_size);
+    void destroy_capture_buffer();
+    void finish_capture_readback();
 
     VkContext ctx_;
     VkPipelineManager pipeline_;
@@ -71,6 +77,12 @@ private:
     RendererState state_;
     bool needs_descriptor_update_ = true;
     uint32_t desc_update_pending_frames_ = 0;
+    bool capture_requested_ = false;
+    std::optional<CapturedFrame> captured_frame_;
+    VkBuffer capture_buffer_ = VK_NULL_HANDLE;
+    VmaAllocation capture_allocation_ = VK_NULL_HANDLE;
+    void* capture_mapped_ = nullptr;
+    size_t capture_buffer_size_ = 0;
 };
 
 } // namespace spectre

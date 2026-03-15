@@ -12,6 +12,18 @@
 namespace spectre
 {
 
+namespace
+{
+
+NSUInteger align_capture_row_bytes(NSUInteger width)
+{
+    const NSUInteger raw = width * 4;
+    const NSUInteger alignment = 256;
+    return ((raw + alignment - 1) / alignment) * alignment;
+}
+
+} // namespace
+
 void MetalRenderer::upload_dirty_state()
 {
     id<MTLBuffer> buf = (__bridge id<MTLBuffer>)grid_buffer_;
@@ -30,6 +42,33 @@ void MetalRenderer::upload_dirty_state()
     }
 
     state_.clear_dirty();
+}
+
+bool MetalRenderer::ensure_capture_buffer(size_t width, size_t height)
+{
+    const size_t bytes_per_row = align_capture_row_bytes(static_cast<NSUInteger>(width));
+    const size_t required_size = static_cast<size_t>(bytes_per_row * height);
+    if (capture_buffer_ && required_size <= capture_buffer_size_ && bytes_per_row == capture_bytes_per_row_)
+        return true;
+
+    if (capture_buffer_)
+    {
+        (void)(__bridge_transfer id)capture_buffer_;
+        capture_buffer_ = nullptr;
+    }
+
+    id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
+    id<MTLBuffer> buffer = [device newBufferWithLength:required_size options:MTLResourceStorageModeShared];
+    if (!buffer)
+    {
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create Metal capture buffer");
+        return false;
+    }
+
+    capture_buffer_ = (__bridge_retained void*)buffer;
+    capture_buffer_size_ = required_size;
+    capture_bytes_per_row_ = bytes_per_row;
+    return true;
 }
 
 bool MetalRenderer::initialize(IWindow& window)
@@ -53,7 +92,7 @@ bool MetalRenderer::initialize(IWindow& window)
     CAMetalLayer* layer = (__bridge CAMetalLayer*)SDL_Metal_GetLayer(metalView);
     layer.device = device;
     layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
-    layer.framebufferOnly = YES;
+    layer.framebufferOnly = NO;
     layer_ = (__bridge_retained void*)layer;
 
     auto [w, h] = window.size_pixels();
@@ -213,6 +252,7 @@ void MetalRenderer::shutdown()
     release(atlas_sampler_);
     release(atlas_texture_);
     release(grid_buffer_);
+    release(capture_buffer_);
     release(fg_pipeline_);
     release(bg_pipeline_);
     release(command_queue_);
@@ -293,6 +333,18 @@ void MetalRenderer::set_ascender(int a)
 {
     ascender_ = a;
     state_.set_ascender(a);
+}
+
+void MetalRenderer::request_frame_capture()
+{
+    capture_requested_ = true;
+}
+
+std::optional<CapturedFrame> MetalRenderer::take_captured_frame()
+{
+    auto frame = std::move(captured_frame_);
+    captured_frame_.reset();
+    return frame;
 }
 
 bool MetalRenderer::begin_frame()
@@ -376,6 +428,30 @@ void MetalRenderer::end_frame()
 
     [encoder endEncoding];
 
+    if (capture_requested_)
+    {
+        const size_t width = drawable.texture.width;
+        const size_t height = drawable.texture.height;
+        if (ensure_capture_buffer(width, height))
+        {
+            id<MTLBlitCommandEncoder> blit = [cmdBuf blitCommandEncoder];
+            [blit copyFromTexture:drawable.texture
+                             sourceSlice:0
+                             sourceLevel:0
+                            sourceOrigin:MTLOriginMake(0, 0, 0)
+                              sourceSize:MTLSizeMake(width, height, 1)
+                                toBuffer:(__bridge id<MTLBuffer>)capture_buffer_
+                       destinationOffset:0
+                  destinationBytesPerRow:capture_bytes_per_row_
+                destinationBytesPerImage:capture_bytes_per_row_ * height];
+            [blit endEncoding];
+        }
+        else
+        {
+            capture_requested_ = false;
+        }
+    }
+
     [cmdBuf presentDrawable:drawable];
 
     // Signal semaphore when GPU is done
@@ -385,6 +461,37 @@ void MetalRenderer::end_frame()
     }];
 
     [cmdBuf commit];
+
+    if (capture_requested_)
+    {
+        [cmdBuf waitUntilCompleted];
+
+        CapturedFrame frame;
+        frame.width = pixel_w_;
+        frame.height = pixel_h_;
+        frame.rgba.resize(static_cast<size_t>(frame.width) * frame.height * 4);
+
+        const auto* src = static_cast<const uint8_t*>((__bridge id<MTLBuffer>)capture_buffer_ ? [(__bridge id<MTLBuffer>)capture_buffer_ contents] : nullptr);
+        if (src)
+        {
+            for (int y = 0; y < frame.height; ++y)
+            {
+                const size_t src_row = static_cast<size_t>(y) * capture_bytes_per_row_;
+                const size_t dst_row = static_cast<size_t>(y) * frame.width * 4;
+                for (int x = 0; x < frame.width; ++x)
+                {
+                    const size_t src_index = src_row + static_cast<size_t>(x * 4);
+                    const size_t dst_index = dst_row + static_cast<size_t>(x * 4);
+                    frame.rgba[dst_index + 0] = src[src_index + 2];
+                    frame.rgba[dst_index + 1] = src[src_index + 1];
+                    frame.rgba[dst_index + 2] = src[src_index + 0];
+                    frame.rgba[dst_index + 3] = src[src_index + 3];
+                }
+            }
+            captured_frame_ = std::move(frame);
+        }
+        capture_requested_ = false;
+    }
 }
 
 } // namespace spectre

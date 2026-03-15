@@ -3,15 +3,15 @@
 
 Runs:
   1. scripts/gen_deps.py  →  docs/deps/deps.svg   (CMake target dependency graph)
-  2. scripts/gen_uml.py   →  docs/uml/*.png        (C++ class / package UML diagrams)
+  2. scripts/gen_uml.py   →  docs/uml/*.svg        (C++ class UML diagrams)
 
 Requirements: cmake, dot (graphviz), clang-uml, plantuml
 Usage:
-    python build_docs.py                  # build everything
-    python build_docs.py --deps-only
-    python build_docs.py --uml-only
-    python build_docs.py --dry-run        # print commands without running
-    python build_docs.py --format svg     # UML render format (default: png)
+    python scripts/build_docs.py                  # build everything
+    python scripts/build_docs.py --deps-only
+    python scripts/build_docs.py --uml-only
+    python scripts/build_docs.py --dry-run        # print commands without running
+    python scripts/build_docs.py --format svg     # UML render format (default: svg)
 """
 from __future__ import annotations
 
@@ -38,13 +38,13 @@ def main() -> int:
     parser.add_argument("--deps-only", action="store_true", help="Only run gen_deps.py")
     parser.add_argument("--uml-only",  action="store_true", help="Only run gen_uml.py")
     parser.add_argument(
-        "--format", default="png", choices=["png", "svg", "pdf"],
-        help="UML render format (default: png)",
+        "--format", default="svg", choices=["png", "svg", "pdf"],
+        help="UML render format (default: svg)",
     )
     parser.add_argument("--dry-run", action="store_true", help="Print commands without executing them")
     args = parser.parse_args()
 
-    repo_root = Path(__file__).resolve().parent
+    repo_root = Path(__file__).resolve().parent.parent
     scripts   = repo_root / "scripts"
 
     run_deps = not args.uml_only

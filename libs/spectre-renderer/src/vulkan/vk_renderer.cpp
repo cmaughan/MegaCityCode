@@ -9,6 +9,30 @@
 namespace spectre
 {
 
+namespace
+{
+
+void transition_image_layout(VkCommandBuffer cmd, VkImage image, VkImageLayout old_layout, VkImageLayout new_layout,
+    VkAccessFlags src_access, VkAccessFlags dst_access, VkPipelineStageFlags src_stage, VkPipelineStageFlags dst_stage)
+{
+    VkImageMemoryBarrier barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+    barrier.oldLayout = old_layout;
+    barrier.newLayout = new_layout;
+    barrier.srcAccessMask = src_access;
+    barrier.dstAccessMask = dst_access;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+    vkCmdPipelineBarrier(cmd, src_stage, dst_stage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+}
+
+} // namespace
+
 void VkRenderer::upload_dirty_state()
 {
     auto* mapped = static_cast<std::byte*>(grid_buffer_.mapped());
@@ -21,6 +45,73 @@ void VkRenderer::upload_dirty_state()
         state_.copy_overlay_cell_to(mapped + state_.overlay_offset_bytes());
 
     state_.clear_dirty();
+}
+
+bool VkRenderer::ensure_capture_buffer(size_t required_size)
+{
+    if (required_size <= capture_buffer_size_ && capture_buffer_ != VK_NULL_HANDLE)
+        return true;
+
+    destroy_capture_buffer();
+
+    VkBufferCreateInfo buffer_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+    buffer_info.size = required_size;
+    buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VmaAllocationCreateInfo alloc_info = {};
+    alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+    alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+    VmaAllocationInfo allocation_info = {};
+    if (vmaCreateBuffer(ctx_.allocator(), &buffer_info, &alloc_info, &capture_buffer_, &capture_allocation_, &allocation_info) != VK_SUCCESS)
+    {
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create Vulkan readback buffer");
+        return false;
+    }
+
+    capture_mapped_ = allocation_info.pMappedData;
+    capture_buffer_size_ = required_size;
+    return true;
+}
+
+void VkRenderer::destroy_capture_buffer()
+{
+    if (capture_buffer_ == VK_NULL_HANDLE)
+        return;
+
+    vmaDestroyBuffer(ctx_.allocator(), capture_buffer_, capture_allocation_);
+    capture_buffer_ = VK_NULL_HANDLE;
+    capture_allocation_ = VK_NULL_HANDLE;
+    capture_mapped_ = nullptr;
+    capture_buffer_size_ = 0;
+}
+
+void VkRenderer::finish_capture_readback()
+{
+    if (!capture_requested_ || capture_buffer_ == VK_NULL_HANDLE || capture_mapped_ == nullptr)
+        return;
+
+    vmaInvalidateAllocation(ctx_.allocator(), capture_allocation_, 0, VK_WHOLE_SIZE);
+
+    const uint32_t width = ctx_.swapchain().extent.width;
+    const uint32_t height = ctx_.swapchain().extent.height;
+    CapturedFrame frame;
+    frame.width = static_cast<int>(width);
+    frame.height = static_cast<int>(height);
+    frame.rgba.resize(static_cast<size_t>(width) * height * 4);
+
+    const auto* src = static_cast<const uint8_t*>(capture_mapped_);
+    for (size_t i = 0; i < frame.rgba.size(); i += 4)
+    {
+        frame.rgba[i + 0] = src[i + 2];
+        frame.rgba[i + 1] = src[i + 1];
+        frame.rgba[i + 2] = src[i + 0];
+        frame.rgba[i + 3] = src[i + 3];
+    }
+
+    captured_frame_ = std::move(frame);
+    capture_requested_ = false;
 }
 
 bool VkRenderer::initialize(IWindow& window)
@@ -63,6 +154,7 @@ void VkRenderer::shutdown()
         vkDestroyCommandPool(ctx_.device(), cmd_pool_, nullptr);
     if (desc_pool_)
         vkDestroyDescriptorPool(ctx_.device(), desc_pool_, nullptr);
+    destroy_capture_buffer();
 
     grid_buffer_.shutdown(ctx_.allocator());
     pipeline_.shutdown(ctx_.device());
@@ -262,6 +354,18 @@ void VkRenderer::set_ascender(int a)
     state_.set_ascender(a);
 }
 
+void VkRenderer::request_frame_capture()
+{
+    capture_requested_ = true;
+}
+
+std::optional<CapturedFrame> VkRenderer::take_captured_frame()
+{
+    auto frame = std::move(captured_frame_);
+    captured_frame_.reset();
+    return frame;
+}
+
 bool VkRenderer::begin_frame()
 {
     vkWaitForFences(ctx_.device(), 1, &in_flight_fences_[current_frame_], VK_TRUE, UINT64_MAX);
@@ -275,9 +379,19 @@ bool VkRenderer::begin_frame()
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
     {
+        SPECTRE_LOG_WARN(LogCategory::Renderer, "Vulkan acquire returned VK_ERROR_OUT_OF_DATE_KHR");
         if (!recreate_frame_resources())
             SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to rebuild Vulkan frame resources after acquire");
         return false;
+    }
+    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+    {
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "vkAcquireNextImageKHR failed: %d", (int)result);
+        return false;
+    }
+    if (result == VK_SUBOPTIMAL_KHR)
+    {
+        SPECTRE_LOG_WARN(LogCategory::Renderer, "Vulkan acquire returned VK_SUBOPTIMAL_KHR");
     }
 
     if (needs_descriptor_update_)
@@ -352,6 +466,32 @@ void VkRenderer::record_command_buffer(VkCommandBuffer cmd, uint32_t image_index
     }
 
     vkCmdEndRenderPass(cmd);
+    if (capture_requested_)
+    {
+        transition_image_layout(cmd, ctx_.swapchain().images[image_index],
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+        VkBufferImageCopy region = {};
+        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.imageSubresource.layerCount = 1;
+        region.imageExtent = { ctx_.swapchain().extent.width, ctx_.swapchain().extent.height, 1 };
+        vkCmdCopyImageToBuffer(cmd, ctx_.swapchain().images[image_index], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            capture_buffer_, 1, &region);
+
+        transition_image_layout(cmd, ctx_.swapchain().images[image_index],
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+            VK_ACCESS_TRANSFER_READ_BIT, 0,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+    }
+    else
+    {
+        transition_image_layout(cmd, ctx_.swapchain().images[image_index],
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+    }
     vkEndCommandBuffer(cmd);
 }
 
@@ -359,6 +499,10 @@ void VkRenderer::end_frame()
 {
     state_.apply_cursor();
     upload_dirty_state();
+    if (capture_requested_ && !ensure_capture_buffer(static_cast<size_t>(ctx_.swapchain().extent.width) * ctx_.swapchain().extent.height * 4))
+    {
+        capture_requested_ = false;
+    }
     record_command_buffer(cmd_buffers_[current_frame_], current_image_);
 
     VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -390,6 +534,12 @@ void VkRenderer::end_frame()
         framebuffer_resized_ = false;
         if (!recreate_frame_resources())
             SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to rebuild Vulkan frame resources after present");
+    }
+
+    if (capture_requested_)
+    {
+        vkWaitForFences(ctx_.device(), 1, &in_flight_fences_[current_frame_], VK_TRUE, UINT64_MAX);
+        finish_capture_readback();
     }
 
     current_frame_ = (current_frame_ + 1) % MAX_FRAMES_IN_FLIGHT;

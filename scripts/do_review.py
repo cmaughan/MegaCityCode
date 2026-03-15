@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 def main() -> int:
-    repo_root = Path(__file__).resolve().parent
+    repo_root = Path(__file__).resolve().parent.parent
     prompt_file = repo_root / "plans" / "prompts" / "review.md"
     output_file = repo_root / "plans" / "reviews" / "review-latest.md"
     all_code_file = repo_root / "plans" / "reviews" / "all_code.md"

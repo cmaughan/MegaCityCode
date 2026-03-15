@@ -1,6 +1,6 @@
 # .clang-uml
 # Configuration for clang-uml (https://clang-uml.github.io/)
-# Generates class and package diagrams from C++ source using compile_commands.json.
+# Generates a class diagram from C++ source using compile_commands.json.
 #
 # Usage:
 #   clang-uml                              # generate all diagrams
@@ -23,21 +23,28 @@ diagrams:
     title: "Spectre — Class Diagram"
     using_namespace: spectre
     glob:
-      - libs/spectre-types/include/spectre/*.h
-      - libs/spectre-window/include/spectre/*.h
-      - libs/spectre-renderer/include/spectre/*.h
-      - libs/spectre-font/include/spectre/*.h
-      - libs/spectre-grid/include/spectre/*.h
-      - libs/spectre-nvim/include/spectre/*.h
-      - libs/spectre-renderer/src/renderer_state.h
-      - libs/spectre-nvim/src/mpack_codec.h
-      - libs/spectre-font/src/font_engine.h
-      - app/app.h
+      - libs/spectre-types/src/*.cpp
+      - libs/spectre-window/src/*.cpp
+      - libs/spectre-renderer/src/*.cpp
+      - libs/spectre-renderer/src/vulkan/*.cpp
+      - libs/spectre-font/src/*.cpp
+      # grid.cpp excluded: triggers a clang-uml 0.6.2 crash (STATUS_ILLEGAL_INSTRUCTION)
+      - libs/spectre-nvim/src/nvim_process.cpp
+      - libs/spectre-nvim/src/rpc.cpp
+      - libs/spectre-nvim/src/input.cpp
+      - libs/spectre-nvim/src/mpack_codec.cpp
+      # ui_events.cpp excluded: triggers a clang-uml 0.6.2 crash (STATUS_ILLEGAL_INSTRUCTION)
+      - app/app.cpp
     include:
       namespaces:
         - spectre
     exclude:
-      # Strip platform-specific detail structs from the diagram to reduce noise
+      namespaces:
+        - std
+        - mpack
+        - boost
+        - freetype
+        - harfbuzz
       elements:
         - spectre::MpackValue::ArrayStorage
         - spectre::MpackValue::MapStorage
@@ -45,23 +52,6 @@ diagrams:
     generate_method_arguments: none
     generate_packages: false
 
-  # ── Package diagram ──────────────────────────────────────────────────────
-  # Shows each library (spectre-types, spectre-window, …) as a package and
-  # draws dependency arrows between them based on #include relationships.
-  spectre_packages:
-    type: package
-    title: "Spectre — Package Diagram"
-    using_namespace: spectre
-    package_type: directory
-    glob:
-      - libs/spectre-types/include/spectre/*.h
-      - libs/spectre-window/include/spectre/*.h
-      - libs/spectre-renderer/include/spectre/*.h
-      - libs/spectre-font/include/spectre/*.h
-      - libs/spectre-grid/include/spectre/*.h
-      - libs/spectre-nvim/include/spectre/*.h
-      - app/app.h
-    include:
-      namespaces:
-        - spectre
-    generate_packages: true
+  # Package diagram omitted: all code lives in one 'spectre' namespace so
+  # there are no sub-namespaces to group. Library-level dependencies are
+  # better visualised by the CMake graphviz graph (docs/deps/deps.svg).

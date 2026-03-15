@@ -22,15 +22,19 @@ void apply_ui_option(UiOptions& options, const std::string& name, const MpackVal
 
 } // namespace
 
-App::App()
-    : grid_pipeline_(grid_, highlights_, text_service_)
+App::App(AppOptions options)
+    : options_(std::move(options))
+    , config_(options_.initial_config)
+    , grid_pipeline_(grid_, highlights_, text_service_)
 {
+    pending_window_activation_ = options_.activate_window_on_startup;
 }
 
 bool App::initialize()
 {
     SPECTRE_LOG_INFO(LogCategory::App, "Initializing");
-    config_ = AppConfig::load();
+    if (options_.load_user_config)
+        config_ = AppConfig::load();
 
     struct InitRollback
     {
@@ -53,16 +57,20 @@ bool App::initialize()
     wire_ui_callbacks();
     wire_window_callbacks();
 
-    if (!attach_ui())
-        return false;
-
-    SPECTRE_LOG_INFO(LogCategory::App, "UI attached: %dx%d", grid_cols_, grid_rows_);
     saw_flush_ = false;
     saw_frame_ = false;
     frame_requested_ = false;
     cursor_visible_ = true;
     cursor_busy_ = false;
     next_blink_deadline_.reset();
+    last_activity_time_ = std::chrono::steady_clock::now();
+
+    if (!attach_ui())
+        return false;
+    if (!execute_startup_commands())
+        return false;
+
+    SPECTRE_LOG_INFO(LogCategory::App, "UI attached: %dx%d", grid_cols_, grid_rows_);
     running_ = true;
     rollback.armed = false;
     return true;
@@ -125,7 +133,7 @@ bool App::initialize_text_service()
 
 bool App::initialize_nvim()
 {
-    if (!nvim_process_.spawn())
+    if (!nvim_process_.spawn("nvim", options_.nvim_args))
     {
         SPECTRE_LOG_ERROR(LogCategory::App, "Failed to spawn nvim");
         return false;
@@ -153,6 +161,20 @@ bool App::attach_ui()
     {
         SPECTRE_LOG_ERROR(LogCategory::App, "nvim_ui_attach failed");
         return false;
+    }
+    return true;
+}
+
+bool App::execute_startup_commands()
+{
+    for (const auto& command : options_.startup_commands)
+    {
+        auto response = rpc_.request("nvim_command", { NvimRpc::make_str(command) });
+        if (!response.ok())
+        {
+            SPECTRE_LOG_ERROR(LogCategory::App, "Startup command failed: %s", command.c_str());
+            return false;
+        }
     }
     return true;
 }
@@ -257,6 +279,55 @@ bool App::run_smoke_test(std::chrono::milliseconds timeout)
     return false;
 }
 
+std::optional<CapturedFrame> App::run_render_test(std::chrono::milliseconds timeout, std::chrono::milliseconds settle)
+{
+    auto deadline = std::chrono::steady_clock::now() + timeout;
+    bool capture_started = false;
+    last_render_test_error_.clear();
+
+    while (running_ && std::chrono::steady_clock::now() < deadline)
+    {
+        pump_once(deadline);
+
+        if (auto captured = renderer_->take_captured_frame())
+            return captured;
+
+        auto now = std::chrono::steady_clock::now();
+        if (saw_flush_ && saw_frame_ && !frame_requested_ && now - last_activity_time_ >= settle)
+        {
+            if (!capture_started)
+            {
+                SPECTRE_LOG_INFO(LogCategory::App, "Render test requesting capture frame");
+                capture_started = true;
+            }
+            renderer_->request_frame_capture();
+            if (renderer_->begin_frame())
+            {
+                saw_frame_ = true;
+                renderer_->end_frame();
+                if (auto captured = renderer_->take_captured_frame())
+                    return captured;
+            }
+            else
+            {
+                SPECTRE_LOG_WARN(LogCategory::App, "Renderer begin_frame() returned false during synchronous render-test capture");
+            }
+        }
+    }
+
+    auto quiet_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - last_activity_time_).count();
+    last_render_test_error_ = "Timed out waiting for a stable render capture"
+                              " (flush="
+        + std::to_string(saw_flush_ ? 1 : 0)
+        + " frame=" + std::to_string(saw_frame_ ? 1 : 0)
+        + " frame_requested=" + std::to_string(frame_requested_ ? 1 : 0)
+        + " quiet_ms=" + std::to_string(quiet_ms)
+        + " settle_ms=" + std::to_string(settle.count())
+        + " capture_started=" + std::to_string(capture_started ? 1 : 0) + ")";
+    SPECTRE_LOG_ERROR(LogCategory::App, "%s", last_render_test_error_.c_str());
+    return std::nullopt;
+}
+
 bool App::pump_once(std::optional<std::chrono::steady_clock::time_point> wait_deadline)
 {
     while (running_)
@@ -298,6 +369,10 @@ bool App::pump_once(std::optional<std::chrono::steady_clock::time_point> wait_de
                 renderer_->end_frame();
                 frame_requested_ = false;
             }
+            else
+            {
+                SPECTRE_LOG_WARN(LogCategory::App, "Renderer begin_frame() returned false while a frame was requested");
+            }
             return running_;
         }
 
@@ -319,6 +394,7 @@ void App::on_flush()
 {
     bool first_flush = !saw_flush_;
     saw_flush_ = true;
+    last_activity_time_ = std::chrono::steady_clock::now();
     grid_pipeline_.flush();
     if (first_flush && startup_resize_pending_)
     {
@@ -332,12 +408,14 @@ void App::on_flush()
 void App::on_busy(bool busy)
 {
     cursor_busy_ = busy;
+    last_activity_time_ = std::chrono::steady_clock::now();
     restart_cursor_blink(std::chrono::steady_clock::now());
 }
 
 void App::on_resize(int pixel_w, int pixel_h)
 {
     renderer_->resize(pixel_w, pixel_h);
+    last_activity_time_ = std::chrono::steady_clock::now();
     request_frame();
     update_text_input_area();
 
@@ -561,15 +639,18 @@ int App::wait_timeout_ms(std::optional<std::chrono::steady_clock::time_point> wa
 
 void App::shutdown()
 {
-    auto [window_w, window_h] = window_.size_logical();
-    if (window_w > 0 && window_h > 0)
+    if (options_.save_user_config)
     {
-        config_.window_width = window_w;
-        config_.window_height = window_h;
+        auto [window_w, window_h] = window_.size_logical();
+        if (window_w > 0 && window_h > 0)
+        {
+            config_.window_width = window_w;
+            config_.window_height = window_h;
+        }
+        config_.font_size = text_service_.point_size();
+        config_.font_path = text_service_.primary_font_path();
+        config_.save();
     }
-    config_.font_size = text_service_.point_size();
-    config_.font_path = text_service_.primary_font_path();
-    config_.save();
 
     ui_request_worker_.stop();
 

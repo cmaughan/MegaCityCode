@@ -6,8 +6,6 @@ node [
 ];
 
     "node0" [ label = "SDL3-static\n(SDL3::SDL3)\n(SDL3::SDL3-static)", shape = octagon, fillcolor="#e8e8e8", fontcolor="black" ];
-    "node1" [ label = "SDL_uclibc", shape = octagon, fillcolor="#e8e8e8", fontcolor="black" ];
-    "node0" -> "node1"  // SDL3-static -> SDL_uclibc
     "node2" [ label = "SDL3_test\n(SDL3::SDL3_test)", shape = octagon, fillcolor="#e8e8e8", fontcolor="black" ];
     "node3" [ label = "freetype", shape = octagon, fillcolor="#e8e8e8", fontcolor="black" ];
     "node4" [ label = "harfbuzz", shape = octagon, fillcolor="#e8e8e8", fontcolor="black" ];

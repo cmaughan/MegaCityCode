@@ -13,3 +13,4 @@ out/
 /plans/prompts/history/
 /plans/reviews/all_code.md
 __pycache__/
+/tests/render/out/

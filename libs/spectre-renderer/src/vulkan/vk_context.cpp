@@ -103,7 +103,7 @@ bool VkContext::create_render_pass(VkFormat format)
     color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    color_attachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
     VkAttachmentReference color_ref = {};
     color_ref.attachment = 0;
@@ -154,6 +154,7 @@ bool VkContext::recreate_swapchain(int width, int height)
                       .set_desired_format({ VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
                       .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
                       .set_desired_extent(width, height)
+                      .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_SRC_BIT)
                       .set_old_swapchain(swapchain_.swapchain)
                       .build();
 

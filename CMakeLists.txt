@@ -46,6 +46,7 @@ if(APPLE)
         app/app.cpp
         app/app_config.cpp
         app/grid_rendering_pipeline.cpp
+        app/render_test.cpp
         app/ui_request_worker.cpp
     )
 else()
@@ -54,6 +55,7 @@ else()
         app/app.cpp
         app/app_config.cpp
         app/grid_rendering_pipeline.cpp
+        app/render_test.cpp
         app/ui_request_worker.cpp
     )
 endif()
@@ -113,6 +115,34 @@ if(BUILD_TESTING)
             add_test(NAME spectre-app-smoke COMMAND $<TARGET_FILE:spectre> --smoke-test)
         endif()
         set_tests_properties(spectre-app-smoke PROPERTIES TIMEOUT 20)
+
+        if(WIN32)
+            set(SPECTRE_RENDER_PLATFORM "windows")
+        elseif(APPLE)
+            set(SPECTRE_RENDER_PLATFORM "macos")
+        else()
+            set(SPECTRE_RENDER_PLATFORM "linux")
+        endif()
+
+        set(SPECTRE_RENDER_SCENARIOS
+            basic-view
+            cmdline-view
+            unicode-view
+        )
+        foreach(SPECTRE_RENDER_NAME IN LISTS SPECTRE_RENDER_SCENARIOS)
+            set(SPECTRE_RENDER_SCENARIO ${CMAKE_SOURCE_DIR}/tests/render/${SPECTRE_RENDER_NAME}.toml)
+            set(SPECTRE_RENDER_REFERENCE ${CMAKE_SOURCE_DIR}/tests/render/reference/${SPECTRE_RENDER_NAME}.${SPECTRE_RENDER_PLATFORM}.bmp)
+            if(EXISTS ${SPECTRE_RENDER_SCENARIO} AND EXISTS ${SPECTRE_RENDER_REFERENCE})
+                if(WIN32)
+                    add_test(NAME spectre-render-${SPECTRE_RENDER_NAME} COMMAND $<TARGET_FILE:spectre> --console --render-test ${SPECTRE_RENDER_SCENARIO})
+                else()
+                    add_test(NAME spectre-render-${SPECTRE_RENDER_NAME} COMMAND $<TARGET_FILE:spectre> --render-test ${SPECTRE_RENDER_SCENARIO})
+                endif()
+                set_tests_properties(spectre-render-${SPECTRE_RENDER_NAME} PROPERTIES TIMEOUT 30)
+            else()
+                message(STATUS "Skipping spectre-render-${SPECTRE_RENDER_NAME} because ${SPECTRE_RENDER_REFERENCE} is not available")
+            endif()
+        endforeach()
     else()
         message(WARNING "Skipping spectre-app-smoke test because nvim was not found on PATH")
     endif()

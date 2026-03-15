@@ -83,8 +83,8 @@ def main() -> int:
     parser.add_argument("--output", default="docs/uml", help="Output directory (default: docs/uml)")
     parser.add_argument("--diagram", metavar="NAME", help="Generate only this diagram (default: all)")
     parser.add_argument(
-        "--format", default="png", choices=["png", "svg", "eps", "pdf"],
-        help="PlantUML render format (default: png)",
+        "--format", default="svg", choices=["png", "svg", "eps", "pdf"],
+        help="PlantUML render format (default: svg)",
     )
     parser.add_argument("--puml-only", action="store_true", help="Emit .puml files but do not render them")
     parser.add_argument("--dry-run", action="store_true", help="Print commands without executing them")
@@ -108,11 +108,28 @@ def main() -> int:
 
     ensure_tools_build_configured(repo_root, args.dry_run)
 
-    # --- Run clang-uml ---
-    cmd: list[str] = [clang_uml, "--config", str(repo_root / ".clang-uml")]
+    # --- Run clang-uml (one diagram at a time to avoid a parallel-processing crash) ---
+    config = str(repo_root / ".clang-uml")
     if args.diagram:
-        cmd += ["--diagram", args.diagram]
-    run(cmd, cwd=repo_root, dry_run=args.dry_run)
+        diagrams = [args.diagram]
+    else:
+        # Enumerate diagram names so we can run them sequentially (-n one at a time).
+        # Running all diagrams in one invocation triggers a thread-safety crash in
+        # clang-uml 0.6.2 on Windows when two diagrams share translation units.
+        out = subprocess.run(
+            [clang_uml, "--config", config, "--list-diagrams"],
+            capture_output=True, text=True,
+        )
+        diagrams = [
+            line.strip().lstrip("- ").split()[0]
+            for line in out.stdout.splitlines()
+            if line.strip().startswith("-")
+        ]
+        if not diagrams:
+            raise RuntimeError("Could not enumerate diagrams from .clang-uml config")
+
+    for name in diagrams:
+        run([clang_uml, "--config", config, "-n", name], cwd=repo_root, dry_run=args.dry_run)
 
     if args.puml_only or args.dry_run:
         if not args.dry_run:
