@@ -94,6 +94,11 @@ What we learned:
 Important operational detail:
 - `update_screenshot.py` does **not** launch a normal visible desktop window. It runs Spectre in render-test/export mode and grabs pixels from the renderer backbuffer. That is why "the app is not popping up" during screenshot generation is expected behavior, not a startup failure.
 
+Another practical upside:
+- being able to generate a fresh screenshot directly from the app and drop it straight into the README is extremely useful during UI work
+- it keeps the documentation current without manual screenshot editing
+- it gives the user and the agent a shared visual artifact to reason about when polishing presentation or chasing regressions
+
 ---
 
 ### Multi-line array parsing in render scenarios was a real bug
@@ -152,6 +157,25 @@ Current outcome:
 
 Still useful to remember:
 - pure-Python RGBA downsampling is easy to add for doc assets if we ever want a smaller supersampled output path later
+
+---
+
+### Small visual regressions are much easier to fix once the bless loop exists
+
+The new render snapshot and screenshot path paid for itself again when the debug overlay landed.
+
+What happened:
+- the first overlay implementation introduced a small packing bug in the renderer-side extra-cell region
+- cursor and overlay cells ended up fighting over the tail slots
+- the regression was minor, but immediately visible once the frame capture path and bless/diff workflow were in place
+
+Why this was useful:
+- the problem showed up as a concrete visual mismatch instead of a vague "something looks a bit off"
+- the actual image and diff made it obvious that the bug was in overlay/cursor packing, not glyph rasterization or Neovim redraws
+- the fix was quick because the feedback loop was already there
+
+Lesson:
+- once a UI project has reliable capture, diff, and bless mechanics, even small regressions become cheap to spot and cheap to repair
 
 ---
 

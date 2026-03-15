@@ -29,6 +29,7 @@ void run_render_test_parser_tests()
         "name = \"multiline\"\n"
         "width = 900\n"
         "height = 700\n"
+        "debug_overlay = true\n"
         "commands = [\n"
         "  \"edit ${PROJECT_ROOT}/README.md\",\n"
         "  \"set nowrap\",\n"
@@ -44,6 +45,7 @@ void run_render_test_parser_tests()
     expect_eq(scenario->name, std::string("multiline"), "scenario name should parse");
     expect_eq(scenario->width, 900, "scenario width should parse");
     expect_eq(scenario->height, 700, "scenario height should parse");
+    expect(scenario->debug_overlay, "scenario debug overlay flag should parse");
     expect_eq(static_cast<int>(scenario->commands.size()), 3, "multiline commands array should parse");
     expect_eq(scenario->commands[0], std::string("edit " + (scenario_dir.parent_path().parent_path() / "README.md").lexically_normal().generic_string()),
         "project root placeholder should expand inside multiline commands");

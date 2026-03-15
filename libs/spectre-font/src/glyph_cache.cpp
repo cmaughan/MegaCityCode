@@ -142,6 +142,7 @@ bool GlyphCache::initialize(FT_Face face, int pixel_size, int atlas_size)
     shelf_x_ = 0;
     shelf_y_ = 0;
     shelf_height_ = 0;
+    used_pixels_ = 0;
     cluster_cache_.clear();
     return true;
 }
@@ -155,6 +156,7 @@ void GlyphCache::reset(FT_Face face, int pixel_size)
     shelf_x_ = 0;
     shelf_y_ = 0;
     shelf_height_ = 0;
+    used_pixels_ = 0;
     dirty_ = true;
     dirty_rect_ = { 0, 0, atlas_size_, atlas_size_ };
     overflowed_ = false;
@@ -273,6 +275,7 @@ bool GlyphCache::rasterize_cluster(const std::string& text, FT_Face face, TextSh
     int atlas_y = 0;
     if (!reserve_region(cluster_width, cluster_height, atlas_x, atlas_y, "cluster"))
         return false;
+    used_pixels_ += (size_t)cluster_width * cluster_height;
 
     std::vector<uint8_t> composite((size_t)cluster_width * cluster_height * ATLAS_PIXEL_SIZE, 0);
     bool cluster_is_color = false;

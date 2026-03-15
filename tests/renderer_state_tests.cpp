@@ -25,11 +25,12 @@ void run_renderer_state_tests()
         update.style_flags = 5;
         state.update_cells({ &update, 1 });
 
-        std::vector<GpuCell> gpu(state.total_cells() + 1);
+        std::vector<GpuCell> gpu(state.total_cells() + RendererState::OVERLAY_CELL_CAPACITY + 1);
         state.copy_to(gpu.data());
 
-        expect_eq(static_cast<int>(state.buffer_size_bytes()), static_cast<int>((state.total_cells() + 1) * sizeof(GpuCell)),
-            "buffer includes overlay cell");
+        expect_eq(static_cast<int>(state.buffer_size_bytes()),
+            static_cast<int>((state.total_cells() + RendererState::OVERLAY_CELL_CAPACITY + 1) * sizeof(GpuCell)),
+            "buffer includes overlay region and cursor slot");
         expect_eq(static_cast<int>(gpu[1].pos_x), 11, "cell x position uses cell width and padding");
         expect_eq(static_cast<int>(gpu[1].pos_y), 1, "cell y position uses padding");
         expect_eq(gpu[1].bg_b, 0.3f, "background color is copied");
@@ -60,7 +61,7 @@ void run_renderer_state_tests()
         state.set_cursor(0, 0, cursor);
         state.apply_cursor();
 
-        std::vector<GpuCell> gpu(state.total_cells() + 1);
+        std::vector<GpuCell> gpu(state.total_cells() + RendererState::OVERLAY_CELL_CAPACITY + 1);
         state.copy_to(gpu.data());
         expect_eq(gpu[0].bg_r, 0.0f, "block cursor overrides background");
         expect_eq(gpu[0].fg_r, 1.0f, "block cursor overrides foreground");
@@ -89,13 +90,39 @@ void run_renderer_state_tests()
         state.set_cursor(0, 0, cursor);
         state.apply_cursor();
 
-        std::vector<GpuCell> gpu(state.total_cells() + 1);
+        std::vector<GpuCell> gpu(state.total_cells() + RendererState::OVERLAY_CELL_CAPACITY + 1);
         state.copy_to(gpu.data());
 
         expect_eq(state.bg_instances(), 2, "line cursor adds one overlay background instance");
-        expect_eq(gpu[1].bg_r, 1.0f, "overlay cell carries cursor background");
-        expect_eq(gpu[1].size_x, 3.0f, "overlay width uses cell percentage");
-        expect_eq(gpu[1].size_y, 20.0f, "overlay height spans the cell");
+        expect_eq(gpu[state.total_cells()].bg_r, 1.0f, "overlay cell carries cursor background");
+        expect_eq(gpu[state.total_cells()].size_x, 3.0f, "overlay width uses cell percentage");
+        expect_eq(gpu[state.total_cells()].size_y, 20.0f, "overlay height spans the cell");
+    });
+
+    run_test("renderer state keeps debug overlay cells separate from the grid", []() {
+        RendererState state;
+        state.set_grid_size(2, 1, 1);
+        state.set_cell_size(10, 20);
+        state.set_ascender(16);
+        state.clear_dirty();
+
+        CellUpdate overlay;
+        overlay.col = 1;
+        overlay.row = 0;
+        overlay.bg = { 0.0f, 0.0f, 0.0f, 0.8f };
+        overlay.fg = { 0.1f, 0.8f, 1.0f, 1.0f };
+        overlay.sp = overlay.fg;
+        overlay.glyph = { 0.1f, 0.2f, 0.3f, 0.4f, 1, 2, 7, 8 };
+        state.set_overlay_cells({ &overlay, 1 });
+
+        std::vector<GpuCell> gpu(state.total_cells() + RendererState::OVERLAY_CELL_CAPACITY + 1);
+        state.copy_to(gpu.data());
+
+        expect_eq(state.bg_instances(), 3, "debug overlay contributes a background instance");
+        expect_eq(state.fg_instances(), 3, "debug overlay contributes a foreground instance");
+        expect(state.overlay_region_dirty(), "setting the debug overlay dirties the overlay region");
+        expect_eq(gpu[state.total_cells()].pos_x, 11.0f, "overlay cell position uses grid coordinates");
+        expect_eq(gpu[state.total_cells()].fg_g, 0.8f, "overlay cell foreground is copied");
     });
 
     run_test("renderer state tracks dirty ranges for incremental uploads", []() {
@@ -104,7 +131,7 @@ void run_renderer_state_tests()
         expect(state.has_dirty_cells(), "initial layout dirties the cell buffer");
         expect_eq(static_cast<int>(state.dirty_cell_offset_bytes()), 0, "initial dirty range starts at zero");
         expect_eq(static_cast<int>(state.dirty_cell_size_bytes()), static_cast<int>(3 * sizeof(GpuCell)), "initial dirty range spans the grid");
-        expect(state.overlay_slot_dirty(), "initial layout dirties the overlay slot too");
+        expect(state.overlay_region_dirty(), "initial layout dirties the overlay region too");
 
         state.clear_dirty();
 
@@ -120,7 +147,7 @@ void run_renderer_state_tests()
         expect(state.has_dirty_cells(), "cell updates produce a dirty range");
         expect_eq(static_cast<int>(state.dirty_cell_offset_bytes()), 0, "dirty range starts at the first updated cell");
         expect_eq(static_cast<int>(state.dirty_cell_size_bytes()), static_cast<int>(3 * sizeof(GpuCell)), "dirty range expands to cover the touched span");
-        expect(!state.overlay_slot_dirty(), "plain cell updates do not dirty the overlay slot");
+        expect(!state.overlay_region_dirty(), "plain cell updates do not dirty the overlay region");
 
         CursorStyle cursor;
         cursor.shape = CursorShape::Vertical;
@@ -129,6 +156,6 @@ void run_renderer_state_tests()
         state.set_cursor(1, 0, cursor);
         state.apply_cursor();
 
-        expect(state.overlay_slot_dirty(), "overlay cursor dirties the overlay slot");
+        expect(state.overlay_region_dirty(), "overlay cursor dirties the overlay region");
     });
 }

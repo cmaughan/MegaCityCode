@@ -42,6 +42,10 @@ public:
     void mark_dirty(int col, int row);
     void mark_all_dirty();
     void clear_dirty();
+    size_t dirty_cell_count() const
+    {
+        return dirty_cells_.size();
+    }
 
     struct DirtyCell
     {

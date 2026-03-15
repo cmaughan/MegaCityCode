@@ -192,6 +192,20 @@ double parse_double(const std::string& value, double fallback)
     }
 }
 
+bool parse_bool(const std::string& value, bool fallback)
+{
+    std::string normalized = trim(value);
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+
+    if (normalized == "true")
+        return true;
+    if (normalized == "false")
+        return false;
+    return fallback;
+}
+
 void append_u16(std::vector<uint8_t>& out, uint16_t value)
 {
     out.push_back(static_cast<uint8_t>(value & 0xff));
@@ -467,6 +481,7 @@ AppOptions RenderTestScenario::make_app_options() const
     options.load_user_config = false;
     options.save_user_config = false;
     options.activate_window_on_startup = false;
+    options.show_debug_overlay_on_startup = debug_overlay;
     options.initial_config.window_width = static_cast<int>(std::round(width / display_scale));
     options.initial_config.window_height = static_cast<int>(std::round(height / display_scale));
     options.initial_config.font_size = font_size;
@@ -546,6 +561,8 @@ std::optional<RenderTestScenario> load_render_test_scenario(const std::filesyste
             scenario.pixel_tolerance = parse_int(value, scenario.pixel_tolerance);
         else if (key == "changed_pixels_threshold_pct")
             scenario.changed_pixels_threshold_pct = parse_double(value, scenario.changed_pixels_threshold_pct);
+        else if (key == "debug_overlay")
+            scenario.debug_overlay = parse_bool(value, scenario.debug_overlay);
         else if (key == "font_path")
         {
             const auto expanded = expand_placeholders(unquote(value), scenario_dir);

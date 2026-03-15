@@ -31,6 +31,7 @@ public:
     void end_frame() override;
     void set_grid_size(int cols, int rows) override;
     void update_cells(std::span<const CellUpdate> updates) override;
+    void set_overlay_cells(std::span<const CellUpdate> updates) override;
     void set_atlas_texture(const uint8_t* data, int w, int h) override;
     void update_atlas_region(int x, int y, int w, int h, const uint8_t* data) override;
     void set_cursor(int col, int row, const CursorStyle& style) override;

@@ -41,8 +41,8 @@ void VkRenderer::upload_dirty_state()
 
     if (state_.has_dirty_cells())
         state_.copy_dirty_cells_to(mapped + state_.dirty_cell_offset_bytes());
-    if (state_.overlay_slot_dirty())
-        state_.copy_overlay_cell_to(mapped + state_.overlay_offset_bytes());
+    if (state_.overlay_region_dirty())
+        state_.copy_overlay_region_to(mapped + state_.overlay_offset_bytes());
 
     state_.clear_dirty();
 }
@@ -313,6 +313,12 @@ void VkRenderer::update_cells(std::span<const CellUpdate> updates)
     upload_dirty_state();
 }
 
+void VkRenderer::set_overlay_cells(std::span<const CellUpdate> updates)
+{
+    state_.set_overlay_cells(updates);
+    upload_dirty_state();
+}
+
 void VkRenderer::set_atlas_texture(const uint8_t* data, int w, int h)
 {
     atlas_.upload(ctx_, data, w, h);
@@ -440,10 +446,10 @@ void VkRenderer::record_command_buffer(VkCommandBuffer cmd, uint32_t image_index
     scissor.extent = ctx_.swapchain().extent;
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-    int total_cells = state_.total_cells();
+    int total_cells = state_.fg_instances();
     int bg_instances = state_.bg_instances();
 
-    if (total_cells > 0)
+    if (bg_instances > 0)
     {
         float push_data[4] = {
             (float)ctx_.swapchain().extent.width,

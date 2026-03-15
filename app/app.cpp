@@ -28,6 +28,7 @@ App::App(AppOptions options)
     , grid_pipeline_(grid_, highlights_, text_service_)
 {
     pending_window_activation_ = options_.activate_window_on_startup;
+    debug_overlay_enabled_ = options_.show_debug_overlay_on_startup;
 }
 
 bool App::initialize()
@@ -97,13 +98,13 @@ bool App::initialize_window_and_renderer()
 
 bool App::initialize_text_service()
 {
-    float display_ppi = window_.display_ppi();
-    SPECTRE_LOG_INFO(LogCategory::App, "Display PPI: %.0f", display_ppi);
+    display_ppi_ = window_.display_ppi();
+    SPECTRE_LOG_INFO(LogCategory::App, "Display PPI: %.0f", display_ppi_);
 
     TextServiceConfig text_config;
     text_config.font_path = config_.font_path;
     text_config.fallback_paths = config_.fallback_paths;
-    if (!text_service_.initialize(text_config, config_.font_size, display_ppi))
+    if (!text_service_.initialize(text_config, config_.font_size, display_ppi_))
     {
         SPECTRE_LOG_ERROR(LogCategory::App, "Failed to load font");
         return false;
@@ -209,6 +210,12 @@ void App::wire_ui_callbacks()
 void App::wire_window_callbacks()
 {
     window_.on_key = [this](const KeyEvent& e) {
+        if (e.pressed && e.keycode == SDLK_F12)
+        {
+            toggle_debug_overlay();
+            return;
+        }
+
         if (e.pressed && (e.mod & SDL_KMOD_CTRL) && (e.mod & SDL_KMOD_SHIFT))
         {
             if (e.keycode == SDLK_C)
@@ -363,11 +370,17 @@ bool App::pump_once(std::optional<std::chrono::steady_clock::time_point> wait_de
 
         if (frame_requested_)
         {
+            update_debug_overlay();
+            auto frame_start = std::chrono::steady_clock::now();
             if (renderer_->begin_frame())
             {
                 saw_frame_ = true;
                 renderer_->end_frame();
                 frame_requested_ = false;
+                last_frame_ms_ = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - frame_start).count();
+                recent_frame_ms_[recent_frame_ms_index_] = last_frame_ms_;
+                recent_frame_ms_index_ = (recent_frame_ms_index_ + 1) % recent_frame_ms_.size();
+                recent_frame_ms_count_ = std::min(recent_frame_ms_count_ + 1, recent_frame_ms_.size());
             }
             else
             {
@@ -394,6 +407,7 @@ void App::on_flush()
 {
     bool first_flush = !saw_flush_;
     saw_flush_ = true;
+    last_flush_dirty_cells_ = grid_.dirty_cell_count();
     last_activity_time_ = std::chrono::steady_clock::now();
     grid_pipeline_.flush();
     if (first_flush && startup_resize_pending_)
@@ -605,6 +619,44 @@ void App::apply_cursor_visibility()
     renderer_->set_cursor(cursor_col, cursor_row, cursor_style_);
     update_text_input_area();
     request_frame();
+}
+
+void App::toggle_debug_overlay()
+{
+    debug_overlay_enabled_ = !debug_overlay_enabled_;
+    update_debug_overlay();
+    request_frame();
+}
+
+double App::average_frame_ms() const
+{
+    if (recent_frame_ms_count_ == 0)
+        return 0.0;
+
+    double total = 0.0;
+    for (size_t i = 0; i < recent_frame_ms_count_; ++i)
+        total += recent_frame_ms_[i];
+    return total / static_cast<double>(recent_frame_ms_count_);
+}
+
+void App::update_debug_overlay()
+{
+    auto [cell_w, cell_h] = renderer_->cell_size_pixels();
+
+    DebugOverlayState overlay;
+    overlay.enabled = debug_overlay_enabled_;
+    overlay.display_ppi = display_ppi_;
+    overlay.cell_width = cell_w;
+    overlay.cell_height = cell_h;
+    overlay.grid_cols = grid_cols_;
+    overlay.grid_rows = grid_rows_;
+    overlay.dirty_cells = last_flush_dirty_cells_;
+    overlay.frame_ms = last_frame_ms_;
+    overlay.average_frame_ms = average_frame_ms();
+    overlay.atlas_usage_ratio = text_service_.atlas_usage_ratio();
+    overlay.atlas_glyph_count = text_service_.atlas_glyph_count();
+    overlay.atlas_reset_count = text_service_.atlas_reset_count();
+    grid_pipeline_.set_debug_overlay(overlay);
 }
 
 void App::update_text_input_area()

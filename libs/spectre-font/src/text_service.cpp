@@ -420,6 +420,21 @@ AtlasDirtyRect TextService::atlas_dirty_rect() const
     return { dirty.x, dirty.y, dirty.w, dirty.h };
 }
 
+float TextService::atlas_usage_ratio() const
+{
+    return impl_->glyph_cache.usage_ratio();
+}
+
+size_t TextService::atlas_glyph_count() const
+{
+    return impl_->glyph_cache.glyph_count();
+}
+
+int TextService::atlas_reset_count() const
+{
+    return impl_->atlas_reset_count;
+}
+
 bool TextService::consume_atlas_reset()
 {
     bool reset = impl_->atlas_reset_pending;

@@ -235,6 +235,32 @@ Notes:
 - GUI launches without a console will fall back to a log file automatically.
 - The DPI diagnostics in the window layer are now `debug`-only instead of always-on.
 
+## Debug Overlay
+
+Press `F12` to toggle the built-in debug overlay.
+
+It renders through the normal text and atlas path and exposes the state that tends to matter most while working on UI and performance issues:
+
+- display DPI
+- cell size
+- grid size
+- last frame time
+- rolling average frame time
+- dirty-cell count from the last flush
+- atlas usage, glyph count, and reset count
+
+Windows example:
+
+![Spectre debug overlay on Windows](screenshots/spectre-overlay-pc.png)
+
+This is useful when changing startup, redraw, or renderer code because it makes "why is this redrawing?" and "what size are we actually rendering at?" visible without attaching a debugger.
+
+To refresh the overlay screenshot locally:
+
+```powershell
+python .\scripts\update_screenshot.py --scenario tests\render\readme-overlay.toml --output screenshots\spectre-overlay-pc.png
+```
+
 ## Project Layout
 
 ```text

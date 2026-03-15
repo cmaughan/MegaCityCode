@@ -2,7 +2,9 @@
 #include "app_config.h"
 #include "grid_rendering_pipeline.h"
 #include "ui_request_worker.h"
+#include <array>
 #include <chrono>
+#include <cstddef>
 #include <optional>
 #include <spectre/sdl_window.h>
 #include <string>
@@ -26,6 +28,7 @@ struct AppOptions
     bool load_user_config = true;
     bool save_user_config = true;
     bool activate_window_on_startup = true;
+    bool show_debug_overlay_on_startup = false;
     AppConfig initial_config = {};
     std::vector<std::string> nvim_args;
     std::vector<std::string> startup_commands;
@@ -74,9 +77,12 @@ private:
     void restart_cursor_blink(std::chrono::steady_clock::time_point now);
     void advance_cursor_blink(std::chrono::steady_clock::time_point now);
     void apply_cursor_visibility();
+    void toggle_debug_overlay();
+    void update_debug_overlay();
     void update_text_input_area();
     void queue_resize_request(int cols, int rows, const char* reason);
     int wait_timeout_ms(std::optional<std::chrono::steady_clock::time_point> wait_deadline) const;
+    double average_frame_ms() const;
 
     AppOptions options_;
     AppConfig config_;
@@ -100,6 +106,7 @@ private:
     bool frame_requested_ = false;
     bool cursor_visible_ = true;
     bool cursor_busy_ = false;
+    bool debug_overlay_enabled_ = false;
     bool startup_resize_pending_ = false;
     CursorStyle cursor_style_ = {};
     CursorBlinkPhase cursor_blink_phase_ = CursorBlinkPhase::Steady;
@@ -107,6 +114,12 @@ private:
     int pending_startup_resize_cols_ = 0;
     int pending_startup_resize_rows_ = 0;
     int grid_cols_ = 0, grid_rows_ = 0;
+    size_t last_flush_dirty_cells_ = 0;
+    double last_frame_ms_ = 0.0;
+    std::array<double, 32> recent_frame_ms_ = {};
+    size_t recent_frame_ms_count_ = 0;
+    size_t recent_frame_ms_index_ = 0;
+    float display_ppi_ = 96.0f;
     std::chrono::steady_clock::time_point last_activity_time_ = std::chrono::steady_clock::now();
     std::string last_render_test_error_;
 };

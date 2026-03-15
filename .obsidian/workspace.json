@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "plans/work-items/01 vulkan robustness and upload path -bug.md",
+                "file": "plans/work-items/08 gui ergonomics and observability -feature.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "01 vulkan robustness and upload path -bug"
+              "title": "08 gui ergonomics and observability -feature"
             }
           }
         ]
@@ -183,8 +183,18 @@
       "bases:Create new base": false
     }
   },
-  "active": "9de3041c59ecb7e1",
+  "active": "c378cd0fc68e32e5",
   "lastOpenFiles": [
+    "plans/work-items/07 platform text and display integration -feature.md",
+    "plans/work-items/08 gui ergonomics and observability -feature.md",
+    "plans/work-items/06 test seam cleanup and lifecycle coverage -test.md",
+    "plans/work-items/04 grid wide-cell repair and redraw robustness -bug.md",
+    "plans/work-items/02 render test extraction and parser unification -feature.md",
+    "plans/work-items/05 vulkan robustness and atlas upload rework -bug.md",
+    "plans/reviews/review-latest.gpt.md",
+    "plans/reviews/review-latest.claude.md",
+    "plans/reviews/review-concensus.md",
+    "plans/reviews/all_code.md",
     "build/x64/Debug/ALL_BUILD/ALL_BUILD.tlog/unsuccessfulbuild",
     "build/tests/spectre-tests.dir/Debug/spectre-tests.tlog/unsuccessfulbuild",
     "build/spectre.dir/Debug/spectre.tlog/unsuccessfulbuild",
@@ -195,7 +205,6 @@
     "build/libs/spectre-font/spectre-font.dir/Debug/spectre-font.tlog/unsuccessfulbuild",
     "build/_deps/harfbuzz-build/harfbuzz.dir/Debug/harfbuzz.tlog/unsuccessfulbuild",
     "build/_deps/sdl3-build/SDL3_test.dir/Debug/SDL3_test.tlog/unsuccessfulbuild",
-    "build/_deps/sdl3-build/SDL3-static.dir/Debug/SDL3-static.tlog/unsuccessfulbuild",
     "tests/render/out/unicode-view.windows.diff.bmp",
     "tests/render/out/cmdline-view.windows.diff.bmp",
     "tests/render/reference/unicode-view.windows.bmp",
@@ -221,15 +230,6 @@
     "build-tools/_deps/harfbuzz-src/test/shape/data/text-rendering-tests/fonts/Selawik-README.md",
     "build-tools/_deps/harfbuzz-src/test/shape/README.md",
     "build-tools/_deps/harfbuzz-src/test/fuzzing/README.md",
-    "build-tools/_deps/harfbuzz-src/perf/README.md",
-    "build-tools/_deps/harfbuzz-src/docs/wasm-shaper.md",
-    "build-tools/_deps/harfbuzz-src/docs/subset-preprocessing.md",
-    "build-tools/_deps/harfbuzz-src/docs/serializer.md",
-    "build-tools/_deps/harfbuzz-src/docs/repacker.md",
-    "build-tools/_deps/harfbuzz-src/TESTING.md",
-    "build-tools/_deps/harfbuzz-src/SECURITY.md",
-    "build-tools/_deps/harfbuzz-src/RELEASING.md",
-    "build-tools/_deps/harfbuzz-src/README.python.md",
-    "build-tools/_deps/harfbuzz-src/README.md"
+    "build-tools/_deps/harfbuzz-src/perf/README.md"
   ]
 }

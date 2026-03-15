@@ -54,6 +54,9 @@ public:
     int atlas_width() const;
     int atlas_height() const;
     AtlasDirtyRect atlas_dirty_rect() const;
+    float atlas_usage_ratio() const;
+    size_t atlas_glyph_count() const;
+    int atlas_reset_count() const;
     bool consume_atlas_reset();
 
 private:

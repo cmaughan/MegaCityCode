@@ -126,6 +126,19 @@ public:
     {
         return atlas_size_;
     }
+    size_t glyph_count() const
+    {
+        return cluster_cache_.size();
+    }
+    size_t used_pixels() const
+    {
+        return used_pixels_;
+    }
+    float usage_ratio() const
+    {
+        const size_t total_pixels = (size_t)atlas_size_ * atlas_size_;
+        return total_pixels ? static_cast<float>(used_pixels_) / static_cast<float>(total_pixels) : 0.0f;
+    }
     const DirtyRect& dirty_rect() const
     {
         return dirty_rect_;
@@ -165,6 +178,7 @@ private:
     int shelf_x_ = 0;
     int shelf_y_ = 0;
     int shelf_height_ = 0;
+    size_t used_pixels_ = 0;
 
     bool dirty_ = false;
     DirtyRect dirty_rect_ = {};

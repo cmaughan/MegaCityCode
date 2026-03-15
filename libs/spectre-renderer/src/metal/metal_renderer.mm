@@ -36,9 +36,9 @@ void MetalRenderer::upload_dirty_state()
         state_.copy_dirty_cells_to(bytes + state_.dirty_cell_offset_bytes());
     }
 
-    if (state_.overlay_slot_dirty())
+    if (state_.overlay_region_dirty())
     {
-        state_.copy_overlay_cell_to(bytes + state_.overlay_offset_bytes());
+        state_.copy_overlay_region_to(bytes + state_.overlay_offset_bytes());
     }
 
     state_.clear_dirty();
@@ -290,6 +290,12 @@ void MetalRenderer::update_cells(std::span<const CellUpdate> updates)
     upload_dirty_state();
 }
 
+void MetalRenderer::set_overlay_cells(std::span<const CellUpdate> updates)
+{
+    state_.set_overlay_cells(updates);
+    upload_dirty_state();
+}
+
 void MetalRenderer::set_atlas_texture(const uint8_t* data, int w, int h)
 {
     id<MTLTexture> tex = (__bridge id<MTLTexture>)atlas_texture_;
@@ -387,10 +393,10 @@ void MetalRenderer::end_frame()
 
     id<MTLRenderCommandEncoder> encoder = [cmdBuf renderCommandEncoderWithDescriptor:rpDesc];
 
-    int total_cells = state_.total_cells();
+    int total_cells = state_.fg_instances();
     int bg_instances = state_.bg_instances();
 
-    if (total_cells > 0)
+    if (bg_instances > 0)
     {
         // Push constants
         struct

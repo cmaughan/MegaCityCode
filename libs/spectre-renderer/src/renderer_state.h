@@ -9,11 +9,14 @@ namespace spectre
 class RendererState
 {
 public:
+    static constexpr size_t OVERLAY_CELL_CAPACITY = 256;
+
     void set_grid_size(int cols, int rows, int padding);
     void set_cell_size(int w, int h);
     void set_ascender(int a);
 
     void update_cells(std::span<const CellUpdate> updates);
+    void set_overlay_cells(std::span<const CellUpdate> updates);
     void set_cursor(int col, int row, const CursorStyle& style);
     void restore_cursor();
     void apply_cursor();
@@ -35,12 +38,17 @@ public:
 
     int bg_instances() const
     {
-        return total_cells() + (cursor_overlay_active_ ? 1 : 0);
+        return total_cells() + static_cast<int>(overlay_cell_count_) + (cursor_overlay_active_ ? 1 : 0);
+    }
+
+    int fg_instances() const
+    {
+        return total_cells() + static_cast<int>(overlay_cell_count_);
     }
 
     size_t buffer_size_bytes() const
     {
-        return (gpu_cells_.size() + 1) * sizeof(GpuCell);
+        return (gpu_cells_.size() + OVERLAY_CELL_CAPACITY + 1) * sizeof(GpuCell);
     }
 
     void copy_to(void* dst) const;
@@ -48,12 +56,14 @@ public:
     size_t dirty_cell_offset_bytes() const;
     size_t dirty_cell_size_bytes() const;
     void copy_dirty_cells_to(void* dst) const;
-    bool overlay_slot_dirty() const;
+    bool overlay_region_dirty() const;
     size_t overlay_offset_bytes() const;
-    void copy_overlay_cell_to(void* dst) const;
+    size_t overlay_region_size_bytes() const;
+    void copy_overlay_region_to(void* dst) const;
     void clear_dirty();
 
 private:
+    void apply_update_to_cell(GpuCell& cell, const CellUpdate& update);
     void relayout();
     void mark_all_cells_dirty();
     void mark_cell_dirty(size_t index);
@@ -70,6 +80,8 @@ private:
     CursorStyle cursor_style_ = {};
 
     std::vector<GpuCell> gpu_cells_;
+    std::vector<GpuCell> overlay_cells_ = std::vector<GpuCell>(OVERLAY_CELL_CAPACITY);
+    size_t overlay_cell_count_ = 0;
     GpuCell overlay_cell_ = {};
     GpuCell cursor_saved_cell_ = {};
     bool cursor_applied_ = false;

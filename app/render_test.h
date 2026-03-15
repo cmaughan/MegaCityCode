@@ -24,6 +24,7 @@ struct RenderTestScenario
     int settle_ms = 100;
     int pixel_tolerance = 8;
     double changed_pixels_threshold_pct = 0.1;
+    bool debug_overlay = false;
 
     std::filesystem::path reference_image_path() const;
     std::filesystem::path actual_image_path() const;
