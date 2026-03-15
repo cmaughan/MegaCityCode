@@ -26,6 +26,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-file", required=True, help="Path to write the final agent response.")
     parser.add_argument("--model", default="gpt-5.4", help="Codex model name to use. Default: gpt-5.4")
     parser.add_argument("--working-dir", help="Working directory for codex exec. Defaults to repo root.")
+    parser.add_argument(
+        "--sandbox",
+        choices=["read-only", "workspace-write", "danger-full-access"],
+        default="workspace-write",
+        help="Sandbox mode for codex exec. Default: workspace-write",
+    )
+    parser.add_argument(
+        "--approval-policy",
+        choices=["untrusted", "on-request", "never"],
+        help="Codex approval policy. Passed before the exec subcommand.",
+    )
     parser.add_argument("--profile", help="Optional Codex profile name.")
     parser.add_argument(
         "--add-dir",
@@ -38,6 +49,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         help="Image to attach to the initial prompt. Repeatable.",
+    )
+    parser.add_argument(
+        "--prepend-file",
+        action="append",
+        default=[],
+        help="File to append to the prompt as additional startup context. Repeatable.",
     )
     parser.add_argument(
         "--ephemeral",
@@ -54,12 +71,22 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print the resolved command and exit without running codex.",
     )
+    parser.add_argument(
+        "--review-safe",
+        action="store_true",
+        help="Force an unattended review-only run: read-only sandbox, approval policy 'never', no full-auto, and a review-only instruction prefix.",
+    )
     return parser
 
 
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+
+    if args.review_safe:
+        args.sandbox = "read-only"
+        args.approval_policy = "never"
+        args.no_full_auto = True
 
     codex = shutil.which("codex")
     if not codex:
@@ -72,17 +99,49 @@ def main() -> int:
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
     prompt_text = prompt_file.read_text(encoding="utf-8")
+    if args.review_safe:
+        prompt_text = "\n".join(
+            [
+                "This is an unattended review-only batch run.",
+                "- Read files and inspect the repository only.",
+                "- Do not edit, create, delete, format, build, install, or run project binaries or tests.",
+                "- Do not ask for approvals or attempt escalation.",
+                "- If a command would require more permissions, skip it and continue with static inspection.",
+                "- Produce the best review you can from read-only repository access.",
+                "",
+                prompt_text,
+            ]
+        )
 
-    command = [
-        codex,
-        "exec",
-        "--cd",
-        str(working_dir),
-        "--model",
-        args.model,
-        "--output-last-message",
-        str(output_file),
-    ]
+    for prepend_file in args.prepend_file:
+        prepend_path = resolve_path(prepend_file, must_exist=True)
+        prepend_text = prepend_path.read_text(encoding="utf-8", errors="replace")
+        prompt_text = "\n\n".join(
+            [
+                prompt_text,
+                f"Attached repository context from `{prepend_path}` follows.",
+                prepend_text,
+            ]
+        )
+
+    command = [codex]
+
+    if args.approval_policy:
+        command.extend(["--ask-for-approval", args.approval_policy])
+
+    command.extend(
+        [
+            "exec",
+            "--cd",
+            str(working_dir),
+            "--model",
+            args.model,
+            "--sandbox",
+            args.sandbox,
+            "--output-last-message",
+            str(output_file),
+        ]
+    )
 
     if not args.no_full_auto:
         command.append("--full-auto")
@@ -106,6 +165,12 @@ def main() -> int:
         print(f"Output file : {output_file}")
         print(f"Working dir : {working_dir}")
         print(f"Model       : {args.model}")
+        print(f"Sandbox     : {args.sandbox}")
+        if args.approval_policy:
+            print(f"Approval    : {args.approval_policy}")
+        print(f"Review safe : {args.review_safe}")
+        if args.prepend_file:
+            print("Prepend     : " + ", ".join(str(resolve_path(path, must_exist=True)) for path in args.prepend_file))
         print("Command     : " + " ".join(command))
         return 0
 
@@ -116,6 +181,8 @@ def main() -> int:
         text=True,
         cwd=working_dir,
         check=False,
+        encoding="utf-8",
+        errors="replace",
     )
 
     if completed.returncode != 0:

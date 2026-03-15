@@ -7,3 +7,5 @@ Testing/
 CMakeUserPresets.json
 out/
 /plans/prompts/history/
+/plans/reviews/all_code.md
+__pycache__/

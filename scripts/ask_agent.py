@@ -58,6 +58,39 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--profile", help="Optional Codex profile name for the GPT helper.")
     parser.add_argument(
+        "--gpt-sandbox",
+        choices=["read-only", "workspace-write", "danger-full-access"],
+        help="Override the GPT helper sandbox mode.",
+    )
+    parser.add_argument(
+        "--gpt-approval-policy",
+        choices=["untrusted", "on-request", "never"],
+        help="Override the Codex approval policy used by the GPT helper.",
+    )
+    parser.add_argument(
+        "--gpt-review-safe",
+        action="store_true",
+        help="Force the GPT helper into read-only unattended review mode.",
+    )
+    parser.add_argument(
+        "--gpt-prepend-file",
+        action="append",
+        default=[],
+        help="Extra file to append into the GPT helper prompt as startup context. Repeatable.",
+    )
+    parser.add_argument(
+        "--claude-prepend-file",
+        action="append",
+        default=[],
+        help="Extra file to append into the Claude helper prompt as startup context. Repeatable.",
+    )
+    parser.add_argument(
+        "--gemini-prepend-file",
+        action="append",
+        default=[],
+        help="Extra file to append into the Gemini helper prompt as startup context. Repeatable.",
+    )
+    parser.add_argument(
         "--add-dir",
         action="append",
         default=[],
@@ -79,6 +112,19 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Disable full-auto mode for all enabled helpers.",
     )
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "--interactive",
+        dest="interactive",
+        action="store_true",
+        help="Run helpers sequentially on the shared terminal so approval prompts can surface cleanly. Default mode; implies --no-full-auto.",
+    )
+    mode_group.add_argument(
+        "--parallel",
+        dest="interactive",
+        action="store_false",
+        help="Run helpers in parallel unattended mode.",
+    )
     parser.add_argument(
         "--allowed-tools",
         default="Bash,Read,Write,Edit,Glob,Grep",
@@ -89,6 +135,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print the derived commands and exit without running any helpers.",
     )
+    parser.set_defaults(interactive=True)
     return parser
 
 
@@ -116,6 +163,12 @@ def build_gpt_command(
     if args.profile:
         command.extend(["--profile", args.profile])
 
+    if args.gpt_sandbox:
+        command.extend(["--sandbox", args.gpt_sandbox])
+
+    if args.gpt_approval_policy:
+        command.extend(["--approval-policy", args.gpt_approval_policy])
+
     for add_dir in args.add_dir:
         command.extend(["--add-dir", str(resolve_path(add_dir, must_exist=True))])
 
@@ -127,6 +180,12 @@ def build_gpt_command(
 
     if args.no_full_auto:
         command.append("--no-full-auto")
+
+    if args.gpt_review_safe:
+        command.append("--review-safe")
+
+    for prepend_file in args.gpt_prepend_file:
+        command.extend(["--prepend-file", str(resolve_path(prepend_file, must_exist=True))])
 
     return command
 
@@ -157,6 +216,9 @@ def build_claude_command(
     if not args.no_full_auto:
         command.append("--full-auto")
 
+    for prepend_file in args.claude_prepend_file:
+        command.extend(["--prepend-file", str(resolve_path(prepend_file, must_exist=True))])
+
     return command
 
 
@@ -184,6 +246,9 @@ def build_gemini_command(
     if not args.no_full_auto:
         command.append("--full-auto")
 
+    for prepend_file in args.gemini_prepend_file:
+        command.extend(["--prepend-file", str(resolve_path(prepend_file, must_exist=True))])
+
     return command
 
 
@@ -205,6 +270,8 @@ def run_command(label: str, command: list[str], cwd: Path) -> tuple[str, int]:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    if args.interactive:
+        args.no_full_auto = True
 
     repo_root = Path(__file__).resolve().parent.parent
     scripts_dir = Path(__file__).resolve().parent
@@ -238,17 +305,28 @@ def main() -> int:
         if gemini_command is not None:
             print(f"Gemini output : {gemini_output}")
             print("Gemini command: " + " ".join(gemini_command))
+        print(f"Mode          : {'serial' if (args.interactive or args.no_full_auto) else 'parallel'}")
         return 0
 
-    with ThreadPoolExecutor(max_workers=3 if gemini_command is not None else 2) as executor:
-        futures = [
-            executor.submit(run_command, "gpt", gpt_command, working_dir),
-            executor.submit(run_command, "claude", claude_command, working_dir),
-        ]
-        if gemini_command is not None:
-            futures.append(executor.submit(run_command, "gemini", gemini_command, working_dir))
+    serial_mode = args.interactive or args.no_full_auto
+    labels_and_commands = [
+        ("gpt", gpt_command),
+        ("claude", claude_command),
+    ]
+    if gemini_command is not None:
+        labels_and_commands.append(("gemini", gemini_command))
 
-        results = [future.result() for future in futures]
+    if serial_mode:
+        print("[ask_agent] running in serial mode so approval prompts can use the terminal cleanly", flush=True)
+        results = [run_command(label, command, working_dir) for label, command in labels_and_commands]
+    else:
+        print("[ask_agent] running in parallel unattended mode", flush=True)
+        with ThreadPoolExecutor(max_workers=len(labels_and_commands)) as executor:
+            futures = [
+                executor.submit(run_command, label, command, working_dir)
+                for label, command in labels_and_commands
+            ]
+            results = [future.result() for future in futures]
 
     failed = False
     for label, returncode in results:

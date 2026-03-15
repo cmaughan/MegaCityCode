@@ -32,6 +32,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Use --approval-mode=yolo to skip tool confirmation prompts.",
     )
     parser.add_argument(
+        "--prepend-file",
+        action="append",
+        default=[],
+        help="File to append to the prompt as additional startup context. Repeatable.",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print the resolved command and exit without running gemini.",
@@ -55,6 +61,17 @@ def main() -> int:
     output_file.parent.mkdir(parents=True, exist_ok=True)
     prompt_text = prompt_file.read_text(encoding="utf-8")
 
+    for prepend_file in args.prepend_file:
+        prepend_path = resolve_path(prepend_file, must_exist=True)
+        prepend_text = prepend_path.read_text(encoding="utf-8", errors="replace")
+        prompt_text = "\n\n".join(
+            [
+                prompt_text,
+                f"Attached repository context from `{prepend_path}` follows.",
+                prepend_text,
+            ]
+        )
+
     command = [
         gemini,
         "--model", args.model,
@@ -72,6 +89,8 @@ def main() -> int:
         print(f"Output file : {output_file}")
         print(f"Working dir : {working_dir}")
         print(f"Model       : {args.model}")
+        if args.prepend_file:
+            print("Prepend     : " + ", ".join(str(resolve_path(path, must_exist=True)) for path in args.prepend_file))
         print("Command     : " + " ".join(command))
         return 0
 
@@ -82,6 +101,8 @@ def main() -> int:
         capture_output=True,
         cwd=working_dir,
         check=False,
+        encoding="utf-8",
+        errors="replace",
     )
 
     if completed.returncode != 0:
