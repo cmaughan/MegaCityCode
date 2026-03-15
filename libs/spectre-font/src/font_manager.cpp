@@ -53,6 +53,7 @@ bool FontManager::initialize(const std::string& font_path, int point_size, float
     }
 
     FT_Set_Char_Size(face_, 0, point_size * 64, (FT_UInt)display_ppi, (FT_UInt)display_ppi);
+    select_best_fixed_size();
 
     update_metrics();
 
@@ -77,6 +78,7 @@ bool FontManager::set_point_size(int point_size)
 {
     point_size_ = point_size;
     FT_Set_Char_Size(face_, 0, point_size * 64, (FT_UInt)display_ppi_, (FT_UInt)display_ppi_);
+    select_best_fixed_size();
 
     update_metrics();
 
@@ -85,6 +87,22 @@ bool FontManager::set_point_size(int point_size)
     hb_font_ = hb_ft_font_create(face_, nullptr);
 
     return hb_font_ != nullptr;
+}
+
+void FontManager::select_best_fixed_size()
+{
+    if (!FT_HAS_FIXED_SIZES(face_) || face_->num_fixed_sizes <= 0)
+        return;
+
+    int target_px = (int)std::round(point_size_ * display_ppi_ / 72.0f);
+    int best = 0;
+    for (int i = 1; i < face_->num_fixed_sizes; i++)
+    {
+        if (std::abs(face_->available_sizes[i].height - target_px) <
+            std::abs(face_->available_sizes[best].height - target_px))
+            best = i;
+    }
+    FT_Select_Size(face_, best);
 }
 
 void FontManager::update_metrics()

@@ -49,6 +49,7 @@ public:
 
 private:
     void update_metrics();
+    void select_best_fixed_size();
 
     FT_Library ft_lib_ = nullptr;
     FT_Face face_ = nullptr;

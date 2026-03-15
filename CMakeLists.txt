@@ -63,7 +63,6 @@ endif()
 target_include_directories(spectre PRIVATE app)
 
 target_link_libraries(spectre PRIVATE
-    spectre-types
     spectre-renderer
     spectre-font
     spectre-grid
