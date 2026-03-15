@@ -79,6 +79,7 @@ Preferred dependency direction:
 
 - If you touch RPC, redraw handling, or input translation, run `ctest`.
 - If you touch renderer code, build the platform-specific app target and verify startup at least once.
+- After implementing a user-facing feature or rendering-affecting change, run the render smoke/snapshot suite with `t.bat` or `ctest` and confirm the relevant `spectre-render-*` scenario still passes.
 - If you change build wiring, keep both Windows and macOS paths valid in CI.
 - After every completed work item, run one final `clang-format` pass across all touched source files in a single shot instead of formatting piecemeal during the work.
 

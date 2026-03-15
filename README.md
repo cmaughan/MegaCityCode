@@ -262,3 +262,30 @@ Regenerate with `python scripts/build_docs.py`.
 ### Class Diagram
 
 ![C++ class diagram](docs/uml/spectre_classes.svg)
+
+## Unicode Snapshot Example
+
+Reference image:
+
+![Unicode render reference](tests/render/reference/unicode-view.windows.bmp)
+
+What the render smoke does:
+
+- launches a deterministic Neovim UI scenario at a fixed size with fixed fonts and commands
+- waits for redraw activity to settle instead of capturing a half-initialized frame
+- reads pixels back from the renderer output directly, not from the desktop compositor
+- compares the captured image against a blessed platform reference
+- writes `actual`, `diff`, and `report` artifacts under `tests/render/out/`
+
+Why this is useful:
+
+- it catches visual regressions that ordinary unit tests miss, such as tofu, broken fallback fonts, missing line numbers, layout shifts, or highlight mistakes
+- the `diff` artifact makes it obvious what changed and roughly how much changed
+- the `report` gives a mechanical pass/fail threshold instead of relying on guesswork
+- `--bless-render-test` gives a controlled way to accept intentional visual changes
+
+Why this helps agents:
+
+- agents can change rendering, shaping, fallback fonts, cursor logic, or redraw handling and then immediately check whether the visible UI still matches the expected reference
+- it reduces the risk of "looks fine in code review, obviously broken on screen" regressions
+- it gives a shared, deterministic artifact for review instead of relying on hand-run screenshots or subjective descriptions

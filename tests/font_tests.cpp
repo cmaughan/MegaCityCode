@@ -35,6 +35,39 @@ std::filesystem::path color_emoji_font_path()
 #endif
 }
 
+std::filesystem::path cjk_font_path()
+{
+#ifdef _WIN32
+    const char* windir = std::getenv("WINDIR");
+    auto windows_dir = std::filesystem::path(windir ? windir : "C:\\Windows") / "Fonts";
+    const std::filesystem::path candidates[] = {
+        windows_dir / "YuGothR.ttc",
+        windows_dir / "YuGothM.ttc",
+        windows_dir / "meiryo.ttc",
+        windows_dir / "msgothic.ttc",
+        windows_dir / "msyh.ttc",
+        windows_dir / "simsun.ttc",
+    };
+#elif defined(__APPLE__)
+    const std::filesystem::path candidates[] = {
+        "/System/Library/Fonts/Hiragino Sans GB.ttc",
+        "/System/Library/Fonts/Supplemental/Songti.ttc",
+    };
+#else
+    const std::filesystem::path candidates[] = {
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    };
+#endif
+
+    for (const auto& candidate : candidates)
+    {
+        if (std::filesystem::exists(candidate))
+            return candidate;
+    }
+    return {};
+}
+
 } // namespace
 
 void run_font_tests()
@@ -162,6 +195,27 @@ void run_font_tests()
         }
 
         expect(found_colored_pixel, "emoji atlas region contains non-monochrome pixels");
+        service.shutdown();
+    });
+
+    run_test("wide japanese text resolves through CJK fallback fonts", []() {
+        auto primary_font_path = repo_root() / "fonts" / "JetBrainsMonoNerdFont-Regular.ttf";
+        auto cjk_path = cjk_font_path();
+        expect(std::filesystem::exists(primary_font_path), "bundled font exists");
+        if (cjk_path.empty())
+            skip("cjk fallback font not available on this machine");
+
+        TextService service;
+        TextServiceConfig config;
+        config.font_path = primary_font_path.string();
+        config.fallback_paths = { cjk_path.string() };
+        expect(service.initialize(config, 11, 96.0f), "text service initializes");
+
+        constexpr char japanese_bytes[] = "\xE3\x81\x93\xE3\x82\x93\xE3\x81\xAB\xE3\x81\xA1\xE3\x81\xAF";
+        const std::string japanese = japanese_bytes;
+        const auto region = service.resolve_cluster(japanese);
+        expect(region.width > 0, "japanese text rasterizes");
+        expect(region.height > 0, "japanese text has height");
         service.shutdown();
     });
 }

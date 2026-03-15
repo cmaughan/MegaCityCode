@@ -24,16 +24,26 @@ std::vector<std::string> default_fallback_font_candidates()
     return {
         windows_dir + "\\Fonts\\seguiemj.ttf",
         windows_dir + "\\Fonts\\seguisym.ttf",
+        windows_dir + "\\Fonts\\YuGothR.ttc",
+        windows_dir + "\\Fonts\\YuGothM.ttc",
+        windows_dir + "\\Fonts\\meiryo.ttc",
+        windows_dir + "\\Fonts\\msgothic.ttc",
+        windows_dir + "\\Fonts\\msyh.ttc",
+        windows_dir + "\\Fonts\\simsun.ttc",
     };
 #elif defined(__APPLE__)
     return {
         "/System/Library/Fonts/Apple Color Emoji.ttc",
         "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "/System/Library/Fonts/Hiragino Sans GB.ttc",
+        "/System/Library/Fonts/Supplemental/Songti.ttc",
     };
 #else
     return {
         "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
         "/usr/share/fonts/truetype/noto/NotoEmoji-Regular.ttf",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     };
 #endif
