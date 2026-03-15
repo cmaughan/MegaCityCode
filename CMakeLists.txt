@@ -44,13 +44,17 @@ if(APPLE)
     add_executable(spectre
         app/main.cpp
         app/app.cpp
+        app/app_config.cpp
         app/grid_rendering_pipeline.cpp
+        app/ui_request_worker.cpp
     )
 else()
     add_executable(spectre
         app/main.cpp
         app/app.cpp
+        app/app_config.cpp
         app/grid_rendering_pipeline.cpp
+        app/ui_request_worker.cpp
     )
 endif()
 

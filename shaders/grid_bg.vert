@@ -12,6 +12,7 @@ struct Cell {
     float size_x, size_y;
     float bg_r, bg_g, bg_b, bg_a;
     float fg_r, fg_g, fg_b, fg_a;
+    float sp_r, sp_g, sp_b, sp_a;
     float uv_x0, uv_y0, uv_x1, uv_y1;
     float glyph_offset_x, glyph_offset_y;
     float glyph_size_x, glyph_size_y;
@@ -24,6 +25,10 @@ layout(set = 0, binding = 0) readonly buffer CellBuffer {
 };
 
 layout(location = 0) out vec4 frag_bg;
+layout(location = 1) out vec4 frag_fg;
+layout(location = 2) out vec4 frag_sp;
+layout(location = 3) out vec2 frag_local_uv;
+layout(location = 4) flat out uint frag_style_flags;
 
 void main() {
     Cell cell = cells[gl_InstanceIndex];
@@ -42,4 +47,8 @@ void main() {
 
     gl_Position = vec4(ndc, 0.0, 1.0);
     frag_bg = vec4(cell.bg_r, cell.bg_g, cell.bg_b, cell.bg_a);
+    frag_fg = vec4(cell.fg_r, cell.fg_g, cell.fg_b, cell.fg_a);
+    frag_sp = vec4(cell.sp_r, cell.sp_g, cell.sp_b, cell.sp_a);
+    frag_local_uv = offset;
+    frag_style_flags = cell.style_flags;
 }

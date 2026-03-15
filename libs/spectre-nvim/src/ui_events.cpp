@@ -61,6 +61,8 @@ void UiEventHandler::process_redraw(const std::vector<MpackValue>& params)
                 handle_mode_change(args);
             else if (name == "option_set")
                 handle_option_set(args);
+            else if (name == "set_title")
+                handle_set_title(args);
         }
     }
 }
@@ -129,8 +131,9 @@ void UiEventHandler::handle_grid_scroll(const MpackValue& args)
     int left = (int)args_array[3].as_int();
     int right = (int)args_array[4].as_int();
     int rows = (int)args_array[5].as_int();
+    int cols = args_array.size() >= 7 ? (int)args_array[6].as_int() : 0;
 
-    grid_->scroll(top, bot, left, right, rows);
+    grid_->scroll(top, bot, left, right, rows, cols);
 }
 
 void UiEventHandler::handle_grid_clear(const MpackValue& args)
@@ -170,14 +173,17 @@ void UiEventHandler::handle_hl_attr_define(const MpackValue& args)
             if (k == "foreground")
             {
                 hl.fg = Color::from_rgb((uint32_t)val.as_int());
+                hl.has_fg = true;
             }
             else if (k == "background")
             {
                 hl.bg = Color::from_rgb((uint32_t)val.as_int());
+                hl.has_bg = true;
             }
             else if (k == "special")
             {
                 hl.sp = Color::from_rgb((uint32_t)val.as_int());
+                hl.has_sp = true;
             }
             else if (k == "bold")
             {
@@ -283,6 +289,16 @@ void UiEventHandler::handle_option_set(const MpackValue& args)
     const std::string& name = args_array[0].as_str();
     if (on_option_set)
         on_option_set(name, args_array[1]);
+}
+
+void UiEventHandler::handle_set_title(const MpackValue& args)
+{
+    if (args.type() != MpackValue::Array || args.as_array().empty())
+        return;
+
+    const auto& args_array = args.as_array();
+    if (on_title)
+        on_title(args_array[0].as_str());
 }
 
 } // namespace spectre

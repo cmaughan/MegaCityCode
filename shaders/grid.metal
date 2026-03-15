@@ -1,11 +1,13 @@
 #include <metal_stdlib>
 using namespace metal;
 
-struct Cell {
+struct Cell
+{
     float pos_x, pos_y;
     float size_x, size_y;
     float bg_r, bg_g, bg_b, bg_a;
     float fg_r, fg_g, fg_b, fg_a;
+    float sp_r, sp_g, sp_b, sp_a;
     float uv_x0, uv_y0, uv_x1, uv_y1;
     float glyph_offset_x, glyph_offset_y;
     float glyph_size_x, glyph_size_y;
@@ -13,7 +15,8 @@ struct Cell {
     uint _pad0, _pad1, _pad2;
 };
 
-struct PushConstants {
+struct PushConstants
+{
     float screen_w;
     float screen_h;
     float cell_w;
@@ -22,9 +25,14 @@ struct PushConstants {
 
 // Background pass
 
-struct BgVertexOut {
+struct BgVertexOut
+{
     float4 position [[position]];
     float4 bg_color;
+    float4 fg_color;
+    float4 sp_color;
+    float2 local_uv;
+    uint style_flags;
 };
 
 vertex BgVertexOut bg_vertex(
@@ -51,17 +59,43 @@ vertex BgVertexOut bg_vertex(
     BgVertexOut out;
     out.position = float4(ndc, 0.0, 1.0);
     out.bg_color = float4(cell.bg_r, cell.bg_g, cell.bg_b, cell.bg_a);
+    out.fg_color = float4(cell.fg_r, cell.fg_g, cell.fg_b, cell.fg_a);
+    out.sp_color = float4(cell.sp_r, cell.sp_g, cell.sp_b, cell.sp_a);
+    out.local_uv = offset;
+    out.style_flags = cell.style_flags;
     return out;
 }
 
 fragment float4 bg_fragment(BgVertexOut in [[stage_in]])
 {
-    return in.bg_color;
+    float4 color = in.bg_color;
+    bool underline = (in.style_flags & 4u) != 0u;
+    bool strikethrough = (in.style_flags & 8u) != 0u;
+    bool undercurl = (in.style_flags & 16u) != 0u;
+    float4 accent = in.sp_color.a > 0.0 ? in.sp_color : in.fg_color;
+
+    if (underline && in.local_uv.y >= 0.86 && in.local_uv.y <= 0.93)
+    {
+        color = accent;
+    }
+    else if (strikethrough && in.local_uv.y >= 0.48 && in.local_uv.y <= 0.54)
+    {
+        color = in.fg_color;
+    }
+    else if (undercurl)
+    {
+        float baseline = 0.84 + 0.05 * sin(in.local_uv.x * 18.8495559);
+        if (fabs(in.local_uv.y - baseline) <= 0.03)
+            color = accent;
+    }
+
+    return color;
 }
 
 // Foreground pass
 
-struct FgVertexOut {
+struct FgVertexOut
+{
     float4 position [[position]];
     float2 uv;
     float4 fg_color;
@@ -84,7 +118,7 @@ vertex FgVertexOut fg_vertex(
 
     // Position the glyph within the cell using bearing/size
     float2 glyph_pos = float2(cell.pos_x + cell.glyph_offset_x,
-                               cell.pos_y + cell.size_y - cell.glyph_offset_y);
+        cell.pos_y + cell.size_y - cell.glyph_offset_y);
     float2 glyph_size = float2(cell.glyph_size_x, cell.glyph_size_y);
 
     float2 pos = glyph_pos + offset * glyph_size;
@@ -106,6 +140,7 @@ fragment float4 fg_fragment(
     sampler atlas_sampler [[sampler(0)]])
 {
     float alpha = atlas.sample(atlas_sampler, in.uv).r;
-    if (alpha < 0.01) discard_fragment();
+    if (alpha < 0.01)
+        discard_fragment();
     return float4(in.fg_color.rgb, in.fg_color.a * alpha);
 }

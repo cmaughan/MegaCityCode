@@ -20,8 +20,13 @@ public:
     {
         return window_;
     }
+    std::pair<int, int> size_logical() const override;
     std::pair<int, int> size_pixels() const override;
     float display_ppi() const override;
+    void set_title(const std::string& title) override;
+    std::string clipboard_text() const override;
+    bool set_clipboard_text(const std::string& text) override;
+    void set_text_input_area(int x, int y, int w, int h) override;
 
 private:
     bool handle_event(const SDL_Event& event);

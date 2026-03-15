@@ -76,4 +76,59 @@ void run_grid_tests()
         expect(grid.get_cell(1, 0).double_width_cont, "continuation cell scrolls with the source cell");
         expect_eq(grid.get_cell(0, 1).text, std::string(" "), "vacated row is cleared after scroll");
     });
+
+    run_test("grid scroll supports horizontal shifts within a partial region", []() {
+        Grid grid;
+        grid.resize(5, 1);
+        grid.set_cell(0, 0, "a", 1);
+        grid.set_cell(1, 0, "b", 1);
+        grid.set_cell(2, 0, "c", 1);
+        grid.set_cell(3, 0, "d", 1);
+        grid.set_cell(4, 0, "e", 1);
+        grid.clear_dirty();
+
+        grid.scroll(0, 1, 1, 5, 0, 1);
+
+        expect_eq(grid.get_cell(0, 0).text, std::string("a"), "cells outside the scrolled region stay unchanged");
+        expect_eq(grid.get_cell(1, 0).text, std::string("c"), "horizontal scroll shifts region content left");
+        expect_eq(grid.get_cell(2, 0).text, std::string("d"), "middle cells shift left");
+        expect_eq(grid.get_cell(3, 0).text, std::string("e"), "tail cell shifts left");
+        expect_eq(grid.get_cell(4, 0).text, std::string(" "), "newly uncovered cell is cleared");
+    });
+
+    run_test("grid ignores double-width continuation when placed at the right edge", []() {
+        Grid grid;
+        grid.resize(2, 1);
+
+        grid.set_cell(1, 0, "X", 7, true);
+
+        expect_eq(grid.get_cell(1, 0).text, std::string("X"), "edge cell text is written");
+        expect_eq(grid.get_cell(1, 0).double_width, true, "edge cell keeps the double-width flag");
+        expect_eq(grid.get_cell(0, 0).text, std::string(" "), "neighboring cells are untouched");
+    });
+
+    run_test("grid clear resets dirty bookkeeping for later cell updates", []() {
+        Grid grid;
+        grid.resize(4, 2);
+        grid.clear_dirty();
+
+        grid.clear();
+        grid.set_cell(0, 0, "X", 1);
+
+        auto dirty = grid.get_dirty_cells();
+        expect(!dirty.empty(), "dirty list is repopulated after clear");
+
+        bool saw_origin = false;
+        for (const auto& cell : dirty)
+        {
+            if (cell.col == 0 && cell.row == 0)
+            {
+                saw_origin = true;
+                break;
+            }
+        }
+
+        expect(saw_origin, "updated origin cell is present in dirty list");
+        expect_eq(grid.get_cell(0, 0).text, std::string("X"), "updated cell text is preserved");
+    });
 }

@@ -1,4 +1,8 @@
 build/
+build-tools/
+docs/deps/deps.dot
+docs/deps/deps_filtered.dot
+docs/deps/deps.dot.*
 .vs/
 .cache/
 .claude/

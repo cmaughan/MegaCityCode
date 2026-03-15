@@ -11,8 +11,11 @@ namespace spectre
 struct HlAttr
 {
     Color fg = { 1.0f, 1.0f, 1.0f, 1.0f };
-    Color bg = { 0.0f, 0.0f, 0.0f, 0.0f };
+    Color bg = { 0.0f, 0.0f, 0.0f, 1.0f };
     Color sp = { 1.0f, 1.0f, 1.0f, 1.0f };
+    bool has_fg = false;
+    bool has_bg = false;
+    bool has_sp = false;
     bool bold = false;
     bool italic = false;
     bool underline = false;
@@ -57,17 +60,20 @@ public:
     {
         default_fg_ = c;
         default_.fg = c;
+        default_.has_fg = true;
     }
 
     void set_default_bg(Color c)
     {
         default_bg_ = c;
         default_.bg = c;
+        default_.has_bg = true;
     }
 
     void set_default_sp(Color c)
     {
         default_.sp = c;
+        default_.has_sp = true;
     }
 
     Color default_fg() const
@@ -80,12 +86,14 @@ public:
         return default_bg_;
     }
 
-    void resolve(const HlAttr& attr, Color& fg, Color& bg) const
+    void resolve(const HlAttr& attr, Color& fg, Color& bg, Color* sp = nullptr) const
     {
-        fg = (attr.fg.a > 0) ? attr.fg : default_fg_;
-        bg = (attr.bg.a > 0) ? attr.bg : default_bg_;
+        fg = attr.has_fg ? attr.fg : default_fg_;
+        bg = attr.has_bg ? attr.bg : default_bg_;
         if (attr.reverse)
             std::swap(fg, bg);
+        if (sp)
+            *sp = attr.has_sp ? attr.sp : fg;
     }
 
 private:

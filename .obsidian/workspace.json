@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "plans/work-items/09 lifecycle and rendering regressions -test.md",
+                "file": "plans/work-items/01 vulkan robustness and upload path -bug.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "09 lifecycle and rendering regressions -test"
+              "title": "01 vulkan robustness and upload path -bug"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "plans/work-items/09 lifecycle and rendering regressions -test.md",
+                "file": "plans/work-items/01 vulkan robustness and upload path -bug.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for 09 lifecycle and rendering regressions -test"
+              "title": "Backlinks for 01 vulkan robustness and upload path -bug"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "plans/work-items/09 lifecycle and rendering regressions -test.md",
+                "file": "plans/work-items/01 vulkan robustness and upload path -bug.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from 09 lifecycle and rendering regressions -test"
+              "title": "Outgoing links from 01 vulkan robustness and upload path -bug"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "plans/work-items/09 lifecycle and rendering regressions -test.md",
+                "file": "plans/work-items/01 vulkan robustness and upload path -bug.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of 09 lifecycle and rendering regressions -test"
+              "title": "Outline of 01 vulkan robustness and upload path -bug"
             }
           }
         ]
@@ -183,21 +183,53 @@
       "bases:Create new base": false
     }
   },
-  "active": "c378cd0fc68e32e5",
+  "active": "9de3041c59ecb7e1",
   "lastOpenFiles": [
-    "plans/work-items/06 highlight fidelity -feature.md",
-    "plans/work-items/05 font and shared api boundary cleanup -feature.md",
-    "plans/work-items/00 atlas recovery -bug.md",
-    "plans/work-items/02 app lifecycle split and rollback -feature.md",
-    "plans/work-items/01 vulkan robustness and upload path -bug.md",
-    "plans/reviews/review-concensus.md",
-    "plans/work-items/index.md",
-    "plans/work-items/03 ui path rpc decoupling -bug.md",
-    "plans/prompts/consensus_review.md",
-    "plans/reviews/review-latest.gpt.md",
-    "plans/work-items/09 lifecycle and rendering regressions -test.md",
-    "plans/work-items/08 clipboard ime and title integration -feature.md",
-    "plans/work-items/07 user configuration and font selection -feature.md",
-    "plans/work-items/04 redraw completeness and dirty tracking -bug.md"
+    "build-tools/build.ninja",
+    "build-tools/CMakeFiles/rules.ninja",
+    "build-tools/compile_commands.json",
+    "build-tools/CMakeFiles/TargetDirectories.txt",
+    "build-tools/_deps/sdl3-build/SDL3testTargets.cmake",
+    "build-tools/_deps/sdl3-build/SDL3staticTargets.cmake",
+    "build-tools/_deps/sdl3-build/SDL3headersTargets.cmake",
+    "build-tools/tests/CTestTestfile.cmake",
+    "build-tools/tests/cmake_install.cmake",
+    "build-tools/tests/CMakeFiles/spectre-tests.dir",
+    "build-tools/tests/CMakeFiles/spectre-rpc-fake.dir",
+    "build-tools/_deps/mpack-src/test/README.md",
+    "build-tools/_deps/mpack-src/docs/reader.md",
+    "build-tools/_deps/mpack-src/docs/protocol.md",
+    "build-tools/_deps/mpack-src/docs/node.md",
+    "build-tools/_deps/mpack-src/docs/features.md",
+    "build-tools/_deps/mpack-src/docs/expect.md",
+    "build-tools/_deps/mpack-src/README.md",
+    "build-tools/_deps/mpack-src/CHANGELOG.md",
+    "build-tools/_deps/mpack-src/AUTHORS.md",
+    "build-tools/_deps/harfbuzz-src/xkcd.png",
+    "build-tools/_deps/harfbuzz-src/test/shape/data/text-rendering-tests/fonts/Selawik-README.md",
+    "build-tools/_deps/harfbuzz-src/test/shape/README.md",
+    "build-tools/_deps/harfbuzz-src/test/fuzzing/README.md",
+    "build-tools/_deps/harfbuzz-src/perf/README.md",
+    "build-tools/_deps/harfbuzz-src/docs/wasm-shaper.md",
+    "build-tools/_deps/harfbuzz-src/docs/subset-preprocessing.md",
+    "build-tools/_deps/harfbuzz-src/docs/serializer.md",
+    "build-tools/_deps/harfbuzz-src/docs/repacker.md",
+    "build-tools/_deps/harfbuzz-src/docs/HarfBuzz.png",
+    "build-tools/_deps/harfbuzz-src/docs/HarfBuzz.svg",
+    "build-tools/_deps/harfbuzz-src/TESTING.md",
+    "build-tools/_deps/harfbuzz-src/SECURITY.md",
+    "build-tools/_deps/harfbuzz-src/RELEASING.md",
+    "build-tools/_deps/harfbuzz-src/README.python.md",
+    "build-tools/_deps/harfbuzz-src/README.md",
+    "build-tools/_deps/harfbuzz-src/CONFIG.md",
+    "build-tools/_deps/harfbuzz-src/BUILD.md",
+    "build-tools/_deps/freetype-src/subprojects/dlg/docs/examples/example.png",
+    "build-tools/_deps/freetype-src/subprojects/dlg/docs/todo.md",
+    "build-tools/_deps/vulkanmemoryallocator-src/media/Thumbnail.png",
+    "build-tools/_deps/vulkanmemoryallocator-src/docs/html/search/mag_seld.svg",
+    "build-tools/_deps/vulkanmemoryallocator-src/docs/html/search/mag_sel.svg",
+    "build-tools/_deps/vulkanmemoryallocator-src/docs/html/search/mag_d.svg",
+    "build-tools/_deps/vulkanmemoryallocator-src/docs/html/search/mag.svg",
+    "build-tools/_deps/vulkanmemoryallocator-src/docs/html/search/close.svg"
   ]
 }

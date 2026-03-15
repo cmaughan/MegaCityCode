@@ -1,0 +1,67 @@
+# .clang-uml
+# Configuration for clang-uml (https://clang-uml.github.io/)
+# Generates class and package diagrams from C++ source using compile_commands.json.
+#
+# Usage:
+#   clang-uml                              # generate all diagrams
+#   python scripts/gen_uml.py              # generate + render to PNG/SVG
+#   python scripts/gen_uml.py --diagram spectre_classes
+#
+# Diagrams are written to docs/uml/ as PlantUML (.puml) files.
+# Render them with PlantUML or via scripts/gen_uml.py (which calls plantuml).
+
+compilation_database_dir: ./build-tools
+output_directory: ./docs/uml
+
+diagrams:
+
+  # ── Class diagram ────────────────────────────────────────────────────────
+  # Shows all classes, interfaces, and structs in the spectre namespace with
+  # their inheritance and composition relationships.
+  spectre_classes:
+    type: class
+    title: "Spectre — Class Diagram"
+    using_namespace: spectre
+    glob:
+      - libs/spectre-types/include/spectre/*.h
+      - libs/spectre-window/include/spectre/*.h
+      - libs/spectre-renderer/include/spectre/*.h
+      - libs/spectre-font/include/spectre/*.h
+      - libs/spectre-grid/include/spectre/*.h
+      - libs/spectre-nvim/include/spectre/*.h
+      - libs/spectre-renderer/src/renderer_state.h
+      - libs/spectre-nvim/src/mpack_codec.h
+      - libs/spectre-font/src/font_engine.h
+      - app/app.h
+    include:
+      namespaces:
+        - spectre
+    exclude:
+      # Strip platform-specific detail structs from the diagram to reduce noise
+      elements:
+        - spectre::MpackValue::ArrayStorage
+        - spectre::MpackValue::MapStorage
+        - spectre::MpackValue::Storage
+    generate_method_arguments: none
+    generate_packages: false
+
+  # ── Package diagram ──────────────────────────────────────────────────────
+  # Shows each library (spectre-types, spectre-window, …) as a package and
+  # draws dependency arrows between them based on #include relationships.
+  spectre_packages:
+    type: package
+    title: "Spectre — Package Diagram"
+    using_namespace: spectre
+    package_type: directory
+    glob:
+      - libs/spectre-types/include/spectre/*.h
+      - libs/spectre-window/include/spectre/*.h
+      - libs/spectre-renderer/include/spectre/*.h
+      - libs/spectre-font/include/spectre/*.h
+      - libs/spectre-grid/include/spectre/*.h
+      - libs/spectre-nvim/include/spectre/*.h
+      - app/app.h
+    include:
+      namespaces:
+        - spectre
+    generate_packages: true

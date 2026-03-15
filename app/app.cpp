@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <spectre/log.h>
+#include <utility>
 #include <vector>
 
 namespace spectre
@@ -21,19 +22,61 @@ void apply_ui_option(UiOptions& options, const std::string& name, const MpackVal
 
 } // namespace
 
+App::App()
+    : grid_pipeline_(grid_, highlights_, text_service_)
+{
+}
+
 bool App::initialize()
 {
     SPECTRE_LOG_INFO(LogCategory::App, "Initializing");
+    config_ = AppConfig::load();
 
-    // 1. Create window
-    if (!window_.initialize("Spectre", 1280, 800))
+    struct InitRollback
+    {
+        App* app = nullptr;
+        bool armed = true;
+        ~InitRollback()
+        {
+            if (armed)
+                app->shutdown();
+        }
+    } rollback{ this };
+
+    if (!initialize_window_and_renderer())
+        return false;
+    if (!initialize_text_service())
+        return false;
+    if (!initialize_nvim())
+        return false;
+
+    wire_ui_callbacks();
+    wire_window_callbacks();
+
+    if (!attach_ui())
+        return false;
+
+    SPECTRE_LOG_INFO(LogCategory::App, "UI attached: %dx%d", grid_cols_, grid_rows_);
+    saw_flush_ = false;
+    saw_frame_ = false;
+    frame_requested_ = false;
+    cursor_visible_ = true;
+    cursor_busy_ = false;
+    next_blink_deadline_.reset();
+    running_ = true;
+    rollback.armed = false;
+    return true;
+}
+
+bool App::initialize_window_and_renderer()
+{
+    if (!window_.initialize("Spectre", config_.window_width, config_.window_height))
     {
         SPECTRE_LOG_ERROR(LogCategory::App, "Failed to create window");
         return false;
     }
     SPECTRE_LOG_INFO(LogCategory::App, "Window created");
 
-    // 2. Init renderer
     renderer_ = create_renderer();
     if (!renderer_ || !renderer_->initialize(window_))
     {
@@ -41,23 +84,28 @@ bool App::initialize()
         return false;
     }
     SPECTRE_LOG_INFO(LogCategory::App, "Renderer initialized");
+    return true;
+}
 
-    // 3. Load font
+bool App::initialize_text_service()
+{
     float display_ppi = window_.display_ppi();
     SPECTRE_LOG_INFO(LogCategory::App, "Display PPI: %.0f", display_ppi);
-    if (!text_service_.initialize(TextService::DEFAULT_POINT_SIZE, display_ppi))
+
+    TextServiceConfig text_config;
+    text_config.font_path = config_.font_path;
+    text_config.fallback_paths = config_.fallback_paths;
+    if (!text_service_.initialize(text_config, config_.font_size, display_ppi))
     {
         SPECTRE_LOG_ERROR(LogCategory::App, "Failed to load font");
         return false;
     }
     SPECTRE_LOG_INFO(LogCategory::App, "Font loaded");
 
-    // Set cell size from font metrics
     const auto& metrics = text_service_.metrics();
     renderer_->set_cell_size(metrics.cell_width, metrics.cell_height);
     renderer_->set_ascender(metrics.ascender);
 
-    // 4. Calculate grid dimensions
     auto [pw, ph] = window_.size_pixels();
     int pad = renderer_->padding();
     grid_cols_ = (pw - pad * 2) / metrics.cell_width;
@@ -69,24 +117,48 @@ bool App::initialize()
 
     grid_.resize(grid_cols_, grid_rows_);
     renderer_->set_grid_size(grid_cols_, grid_rows_);
-    grid_pipeline_.initialize(renderer_.get(), &grid_, &highlights_, &text_service_);
+    grid_pipeline_.set_renderer(renderer_.get());
+    input_.initialize(&rpc_, metrics.cell_width, metrics.cell_height);
+    update_text_input_area();
+    return true;
+}
 
-    // 5. Spawn nvim
+bool App::initialize_nvim()
+{
     if (!nvim_process_.spawn())
     {
         SPECTRE_LOG_ERROR(LogCategory::App, "Failed to spawn nvim");
         return false;
     }
 
-    // 6. Init RPC
     if (!rpc_.initialize(nvim_process_))
     {
         SPECTRE_LOG_ERROR(LogCategory::App, "Failed to init RPC");
         return false;
     }
-    rpc_.on_notification_available = [this]() { window_.wake(); };
 
-    // 7. Setup UI event handler
+    rpc_.on_notification_available = [this]() { window_.wake(); };
+    ui_request_worker_.start(&rpc_);
+    return true;
+}
+
+bool App::attach_ui()
+{
+    auto attach = rpc_.request("nvim_ui_attach", { NvimRpc::make_int(grid_cols_), NvimRpc::make_int(grid_rows_), NvimRpc::make_map({
+                                                                                                                     { NvimRpc::make_str("rgb"), NvimRpc::make_bool(true) },
+                                                                                                                     { NvimRpc::make_str("ext_linegrid"), NvimRpc::make_bool(true) },
+                                                                                                                     { NvimRpc::make_str("ext_multigrid"), NvimRpc::make_bool(false) },
+                                                                                                                 }) });
+    if (!attach.ok())
+    {
+        SPECTRE_LOG_ERROR(LogCategory::App, "nvim_ui_attach failed");
+        return false;
+    }
+    return true;
+}
+
+void App::wire_ui_callbacks()
+{
     ui_events_.set_grid(&grid_);
     ui_events_.set_highlights(&highlights_);
     ui_events_.set_options(&ui_options_);
@@ -96,19 +168,41 @@ bool App::initialize()
         grid_rows_ = rows;
         renderer_->set_grid_size(cols, rows);
         grid_pipeline_.force_full_atlas_upload();
+        update_text_input_area();
     };
-    ui_events_.on_cursor_goto = [this](int, int) { restart_cursor_blink(std::chrono::steady_clock::now()); };
+    ui_events_.on_cursor_goto = [this](int, int) {
+        restart_cursor_blink(std::chrono::steady_clock::now());
+        update_text_input_area();
+    };
     ui_events_.on_mode_change = [this](int) { refresh_cursor_style(true); };
     ui_events_.on_option_set = [this](const std::string& name, const MpackValue& value) {
         apply_ui_option(ui_options_, name, value);
     };
     ui_events_.on_busy = [this](bool busy) { on_busy(busy); };
+    ui_events_.on_title = [this](const std::string& title) {
+        window_.set_title(title.empty() ? "Spectre" : title);
+    };
+}
 
-    // 8. Setup input handler
-    input_.initialize(&rpc_, metrics.cell_width, metrics.cell_height);
-
-    // 9. Wire window events
+void App::wire_window_callbacks()
+{
     window_.on_key = [this](const KeyEvent& e) {
+        if (e.pressed && (e.mod & SDL_KMOD_CTRL) && (e.mod & SDL_KMOD_SHIFT))
+        {
+            if (e.keycode == SDLK_C)
+            {
+                auto copied = rpc_.request("nvim_eval", { NvimRpc::make_str("getreg('\"')") });
+                if (copied.ok() && copied.result.type() == MpackValue::String)
+                    window_.set_clipboard_text(copied.result.as_str());
+                return;
+            }
+            if (e.keycode == SDLK_V)
+            {
+                input_.paste_text(window_.clipboard_text());
+                return;
+            }
+        }
+
         if (e.pressed && (e.mod & SDL_KMOD_CTRL))
         {
             if (e.keycode == SDLK_EQUALS || e.keycode == SDLK_PLUS)
@@ -116,12 +210,12 @@ bool App::initialize()
                 change_font_size(text_service_.point_size() + 1);
                 return;
             }
-            else if (e.keycode == SDLK_MINUS)
+            if (e.keycode == SDLK_MINUS)
             {
                 change_font_size(text_service_.point_size() - 1);
                 return;
             }
-            else if (e.keycode == SDLK_0)
+            if (e.keycode == SDLK_0)
             {
                 change_font_size(TextService::DEFAULT_POINT_SIZE);
                 return;
@@ -130,31 +224,11 @@ bool App::initialize()
         input_.on_key(e);
     };
     window_.on_text_input = [this](const TextInputEvent& e) { input_.on_text_input(e); };
+    window_.on_text_editing = [this](const TextEditingEvent& e) { input_.on_text_editing(e); };
     window_.on_mouse_button = [this](const MouseButtonEvent& e) { input_.on_mouse_button(e); };
     window_.on_mouse_move = [this](const MouseMoveEvent& e) { input_.on_mouse_move(e); };
     window_.on_mouse_wheel = [this](const MouseWheelEvent& e) { input_.on_mouse_wheel(e); };
     window_.on_resize = [this](const WindowResizeEvent& e) { on_resize(e.width, e.height); };
-
-    // 10. Attach UI
-    auto attach = rpc_.request("nvim_ui_attach", { NvimRpc::make_int(grid_cols_), NvimRpc::make_int(grid_rows_), NvimRpc::make_map({
-                                                                                                                     { NvimRpc::make_str("rgb"), NvimRpc::make_bool(true) },
-                                                                                                                     { NvimRpc::make_str("ext_linegrid"), NvimRpc::make_bool(true) },
-                                                                                                                 }) });
-    if (!attach.ok())
-    {
-        SPECTRE_LOG_ERROR(LogCategory::App, "nvim_ui_attach failed");
-        return false;
-    }
-
-    SPECTRE_LOG_INFO(LogCategory::App, "UI attached: %dx%d", grid_cols_, grid_rows_);
-    saw_flush_ = false;
-    saw_frame_ = false;
-    frame_requested_ = false;
-    cursor_visible_ = true;
-    cursor_busy_ = false;
-    next_blink_deadline_.reset();
-    running_ = true;
-    return true;
 }
 
 void App::run()
@@ -243,8 +317,15 @@ bool App::pump_once(std::optional<std::chrono::steady_clock::time_point> wait_de
 
 void App::on_flush()
 {
+    bool first_flush = !saw_flush_;
     saw_flush_ = true;
     grid_pipeline_.flush();
+    if (first_flush && startup_resize_pending_)
+    {
+        startup_resize_pending_ = false;
+        if (pending_startup_resize_cols_ != grid_cols_ || pending_startup_resize_rows_ != grid_rows_)
+            queue_resize_request(pending_startup_resize_cols_, pending_startup_resize_rows_, "startup resize");
+    }
     refresh_cursor_style(true);
 }
 
@@ -258,6 +339,7 @@ void App::on_resize(int pixel_w, int pixel_h)
 {
     renderer_->resize(pixel_w, pixel_h);
     request_frame();
+    update_text_input_area();
 
     auto [cell_w, cell_h] = renderer_->cell_size_pixels();
     int pad = renderer_->padding();
@@ -269,14 +351,18 @@ void App::on_resize(int pixel_w, int pixel_h)
     if (new_rows < 1)
         new_rows = 1;
 
-    if (new_cols != grid_cols_ || new_rows != grid_rows_)
+    if (new_cols == grid_cols_ && new_rows == grid_rows_)
+        return;
+
+    if (!saw_flush_)
     {
-        auto resize = rpc_.request("nvim_ui_try_resize", { NvimRpc::make_int(new_cols), NvimRpc::make_int(new_rows) });
-        if (!resize.ok())
-        {
-            SPECTRE_LOG_WARN(LogCategory::App, "nvim_ui_try_resize failed during window resize");
-        }
+        startup_resize_pending_ = true;
+        pending_startup_resize_cols_ = new_cols;
+        pending_startup_resize_rows_ = new_rows;
+        return;
     }
+
+    queue_resize_request(new_cols, new_rows, "window resize");
 }
 
 void App::change_font_size(int new_size)
@@ -295,6 +381,7 @@ void App::change_font_size(int new_size)
     input_.set_cell_size(metrics.cell_width, metrics.cell_height);
     grid_.mark_all_dirty();
     grid_pipeline_.force_full_atlas_upload();
+    update_text_input_area();
 
     auto [pw, ph] = window_.size_pixels();
     int pad = renderer_->padding();
@@ -309,13 +396,10 @@ void App::change_font_size(int new_size)
     refresh_cursor_style(true);
 
     if (new_cols != grid_cols_ || new_rows != grid_rows_)
-    {
-        auto resize = rpc_.request("nvim_ui_try_resize", { NvimRpc::make_int(new_cols), NvimRpc::make_int(new_rows) });
-        if (!resize.ok())
-        {
-            SPECTRE_LOG_WARN(LogCategory::App, "nvim_ui_try_resize failed during font resize");
-        }
-    }
+        queue_resize_request(new_cols, new_rows, "font resize");
+
+    config_.font_size = new_size;
+    config_.save();
 }
 
 void App::request_frame()
@@ -441,7 +525,21 @@ void App::apply_cursor_visibility()
     int cursor_col = cursor_visible_ ? ui_events_.cursor_col() : -1;
     int cursor_row = cursor_visible_ ? ui_events_.cursor_row() : -1;
     renderer_->set_cursor(cursor_col, cursor_row, cursor_style_);
+    update_text_input_area();
     request_frame();
+}
+
+void App::update_text_input_area()
+{
+    auto [cell_w, cell_h] = renderer_->cell_size_pixels();
+    int x = renderer_->padding() + ui_events_.cursor_col() * cell_w;
+    int y = renderer_->padding() + ui_events_.cursor_row() * cell_h;
+    window_.set_text_input_area(x, y, cell_w, cell_h);
+}
+
+void App::queue_resize_request(int cols, int rows, const char* reason)
+{
+    ui_request_worker_.request_resize(cols, rows, reason);
 }
 
 int App::wait_timeout_ms(std::optional<std::chrono::steady_clock::time_point> wait_deadline) const
@@ -463,6 +561,18 @@ int App::wait_timeout_ms(std::optional<std::chrono::steady_clock::time_point> wa
 
 void App::shutdown()
 {
+    auto [window_w, window_h] = window_.size_logical();
+    if (window_w > 0 && window_h > 0)
+    {
+        config_.window_width = window_w;
+        config_.window_height = window_h;
+    }
+    config_.font_size = text_service_.point_size();
+    config_.font_path = text_service_.primary_font_path();
+    config_.save();
+
+    ui_request_worker_.stop();
+
     if (nvim_process_.is_running())
     {
         rpc_.notify("nvim_input", { NvimRpc::make_str("<C-\\><C-n>:qa!<CR>") });

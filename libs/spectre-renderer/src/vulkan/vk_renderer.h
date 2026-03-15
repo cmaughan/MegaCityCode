@@ -35,24 +35,24 @@ public:
 private:
     bool create_sync_objects();
     bool create_command_buffers();
-    void create_descriptor_pool();
+    bool create_descriptor_pool();
+    bool recreate_frame_resources();
     void update_descriptor_sets_for_frame(int frame);
     void update_all_descriptor_sets();
     void record_command_buffer(VkCommandBuffer cmd, uint32_t image_index);
     void upload_dirty_state();
+
     VkContext ctx_;
     VkPipelineManager pipeline_;
     VkAtlas atlas_;
     VkGridBuffer grid_buffer_;
 
-    // Per-frame sync
     VkCommandPool cmd_pool_ = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> cmd_buffers_;
     std::vector<VkSemaphore> image_available_sem_;
     std::vector<VkSemaphore> render_finished_sem_;
     std::vector<VkFence> in_flight_fences_;
 
-    // Descriptors
     VkDescriptorPool desc_pool_ = VK_NULL_HANDLE;
     std::vector<VkDescriptorSet> bg_desc_sets_;
     std::vector<VkDescriptorSet> fg_desc_sets_;

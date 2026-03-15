@@ -1,9 +1,13 @@
 #include <spectre/text_service.h>
 
+#include "font_engine.h"
+
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <spectre/log.h>
+#include <unordered_map>
+#include <utility>
 
 namespace spectre
 {
@@ -11,7 +15,7 @@ namespace spectre
 namespace
 {
 
-std::vector<std::string> fallback_font_candidates()
+std::vector<std::string> default_fallback_font_candidates()
 {
 #ifdef _WIN32
     const char* windir = std::getenv("WINDIR");
@@ -34,7 +38,7 @@ std::vector<std::string> fallback_font_candidates()
 #endif
 }
 
-std::vector<std::string> primary_font_candidates()
+std::vector<std::string> default_primary_font_candidates()
 {
 #ifdef _WIN32
     const char* windir = std::getenv("WINDIR");
@@ -47,13 +51,13 @@ std::vector<std::string> primary_font_candidates()
     std::vector<std::string> candidates;
     if (!local_fonts.empty())
     {
-        candidates.push_back(local_fonts + "JetBrainsMonoNerdFontMono-Regular.ttf");
         candidates.push_back(local_fonts + "JetBrainsMonoNerdFont-Regular.ttf");
+        candidates.push_back(local_fonts + "JetBrainsMonoNerdFontMono-Regular.ttf");
     }
-    candidates.push_back(windows_dir + "\\Fonts\\JetBrainsMonoNerdFontMono-Regular.ttf");
     candidates.push_back(windows_dir + "\\Fonts\\JetBrainsMonoNerdFont-Regular.ttf");
-    candidates.push_back(windows_dir + "\\Fonts\\JetBrains Mono Regular Nerd Font Complete Mono Windows Compatible.ttf");
+    candidates.push_back(windows_dir + "\\Fonts\\JetBrainsMonoNerdFontMono-Regular.ttf");
     candidates.push_back(windows_dir + "\\Fonts\\JetBrains Mono Regular Nerd Font Complete Windows Compatible.ttf");
+    candidates.push_back(windows_dir + "\\Fonts\\JetBrains Mono Regular Nerd Font Complete Mono Windows Compatible.ttf");
     candidates.push_back("fonts/JetBrainsMonoNerdFont-Regular.ttf");
     return candidates;
 #else
@@ -61,15 +65,14 @@ std::vector<std::string> primary_font_candidates()
 #endif
 }
 
-std::string resolve_primary_font_path()
+std::string first_existing_path(const std::vector<std::string>& candidates)
 {
-    for (const auto& path : primary_font_candidates())
+    for (const auto& path : candidates)
     {
         if (std::filesystem::exists(path))
             return path;
     }
-
-    return "fonts/JetBrainsMonoNerdFont-Regular.ttf";
+    return {};
 }
 
 bool can_render_cluster(FT_Face face, TextShaper& shaper, const std::string& text)
@@ -96,165 +99,249 @@ bool can_render_cluster(FT_Face face, TextShaper& shaper, const std::string& tex
 
 } // namespace
 
+struct TextService::Impl
+{
+    struct FallbackFont
+    {
+        FontManager font;
+        TextShaper shaper;
+        std::string path;
+    };
+
+    TextServiceConfig config;
+    std::string font_path;
+    float display_ppi = 96.0f;
+    FontManager font;
+    GlyphCache glyph_cache;
+    TextShaper shaper;
+    std::vector<FallbackFont> fallback_fonts;
+    std::unordered_map<std::string, int> font_choice_cache;
+    bool atlas_reset_pending = false;
+    int atlas_reset_count = 0;
+
+    bool initialize(int point_size, float ppi)
+    {
+        display_ppi = ppi;
+        font_path = config.font_path.empty() ? first_existing_path(default_primary_font_candidates()) : config.font_path;
+        if (font_path.empty())
+            font_path = "fonts/JetBrainsMonoNerdFont-Regular.ttf";
+
+        SPECTRE_LOG_INFO(LogCategory::Font, "Primary font path: %s", font_path.c_str());
+        if (!font.initialize(font_path, point_size, display_ppi))
+            return false;
+
+        glyph_cache.initialize(font.face(), font.point_size());
+        shaper.initialize(font.hb_font());
+        initialize_fallback_fonts();
+        atlas_reset_pending = false;
+        atlas_reset_count = 0;
+        return true;
+    }
+
+    void shutdown()
+    {
+        shaper.shutdown();
+        for (auto& fallback : fallback_fonts)
+        {
+            fallback.shaper.shutdown();
+            fallback.font.shutdown();
+        }
+        fallback_fonts.clear();
+        font_choice_cache.clear();
+        font.shutdown();
+        atlas_reset_pending = false;
+    }
+
+    bool set_point_size(int point_size)
+    {
+        point_size = std::max(TextService::MIN_POINT_SIZE, std::min(TextService::MAX_POINT_SIZE, point_size));
+        if (point_size == font.point_size())
+            return true;
+
+        if (!font.set_point_size(point_size))
+            return false;
+
+        glyph_cache.reset(font.face(), font.point_size());
+        shaper.initialize(font.hb_font());
+        font_choice_cache.clear();
+        atlas_reset_pending = true;
+
+        for (auto& fallback : fallback_fonts)
+        {
+            fallback.font.set_point_size(point_size);
+            fallback.shaper.initialize(fallback.font.hb_font());
+        }
+
+        return true;
+    }
+
+    AtlasRegion resolve_cluster(const std::string& text)
+    {
+        auto [face, text_shaper] = resolve_font_for_text(text);
+        AtlasRegion region = glyph_cache.get_cluster(text, face, *text_shaper);
+        if (region.width > 0 || region.height > 0 || !glyph_cache.consume_overflowed())
+            return region;
+
+        glyph_cache.reset(font.face(), font.point_size());
+        atlas_reset_pending = true;
+        atlas_reset_count++;
+        SPECTRE_LOG_WARN(LogCategory::Font, "Glyph atlas reset after exhaustion (count=%d)", atlas_reset_count);
+
+        std::tie(face, text_shaper) = resolve_font_for_text(text);
+        return glyph_cache.get_cluster(text, face, *text_shaper);
+    }
+
+    void initialize_fallback_fonts()
+    {
+        fallback_fonts.clear();
+        font_choice_cache.clear();
+
+        std::vector<std::string> candidates = config.fallback_paths.empty()
+            ? default_fallback_font_candidates()
+            : config.fallback_paths;
+
+        fallback_fonts.reserve(candidates.size());
+        for (const auto& path : candidates)
+        {
+            if (path == font_path || !std::filesystem::exists(path))
+                continue;
+
+            fallback_fonts.emplace_back();
+            auto& fallback = fallback_fonts.back();
+            fallback.path = path;
+            if (!fallback.font.initialize(path, font.point_size(), display_ppi))
+            {
+                fallback.font.shutdown();
+                fallback_fonts.pop_back();
+                continue;
+            }
+
+            fallback.shaper.initialize(fallback.font.hb_font());
+            SPECTRE_LOG_INFO(LogCategory::Font, "Fallback font loaded: %s", path.c_str());
+        }
+    }
+
+    std::pair<FT_Face, TextShaper*> resolve_font_for_text(const std::string& text)
+    {
+        auto cached = font_choice_cache.find(text);
+        if (cached != font_choice_cache.end())
+        {
+            if (cached->second < 0)
+                return { font.face(), &shaper };
+
+            int idx = cached->second;
+            if (idx >= 0 && idx < (int)fallback_fonts.size())
+                return { fallback_fonts[(size_t)idx].font.face(), &fallback_fonts[(size_t)idx].shaper };
+        }
+
+        if (can_render_cluster(font.face(), shaper, text))
+        {
+            font_choice_cache[text] = -1;
+            return { font.face(), &shaper };
+        }
+
+        for (int i = 0; i < (int)fallback_fonts.size(); i++)
+        {
+            if (can_render_cluster(fallback_fonts[(size_t)i].font.face(), fallback_fonts[(size_t)i].shaper, text))
+            {
+                font_choice_cache[text] = i;
+                return { fallback_fonts[(size_t)i].font.face(), &fallback_fonts[(size_t)i].shaper };
+            }
+        }
+
+        font_choice_cache[text] = -1;
+        return { font.face(), &shaper };
+    }
+};
+
+TextService::TextService()
+    : impl_(std::make_unique<Impl>())
+{
+}
+
+TextService::~TextService() = default;
+
+TextService::TextService(TextService&& other) noexcept = default;
+
+TextService& TextService::operator=(TextService&& other) noexcept = default;
+
 bool TextService::initialize(int point_size, float display_ppi)
 {
-    display_ppi_ = display_ppi;
-    font_path_ = resolve_primary_font_path();
-    SPECTRE_LOG_INFO(LogCategory::Font, "Primary font path: %s", font_path_.c_str());
+    return initialize(TextServiceConfig{}, point_size, display_ppi);
+}
 
-    if (!font_.initialize(font_path_, point_size, display_ppi_))
-        return false;
-
-    glyph_cache_.initialize(font_.face(), font_.point_size());
-    shaper_.initialize(font_.hb_font());
-    initialize_fallback_fonts();
-    return true;
+bool TextService::initialize(const TextServiceConfig& config, int point_size, float display_ppi)
+{
+    impl_->config = config;
+    return impl_->initialize(point_size, display_ppi);
 }
 
 void TextService::shutdown()
 {
-    shaper_.shutdown();
-    for (auto& fallback : fallback_fonts_)
-    {
-        fallback.shaper.shutdown();
-        fallback.font.shutdown();
-    }
-    fallback_fonts_.clear();
-    font_choice_cache_.clear();
-    font_.shutdown();
+    impl_->shutdown();
 }
 
 bool TextService::set_point_size(int point_size)
 {
-    point_size = std::max(MIN_POINT_SIZE, std::min(MAX_POINT_SIZE, point_size));
-    if (point_size == font_.point_size())
-        return true;
-
-    if (!font_.set_point_size(point_size))
-        return false;
-
-    glyph_cache_.reset(font_.face(), font_.point_size());
-    shaper_.initialize(font_.hb_font());
-    font_choice_cache_.clear();
-
-    for (auto& fallback : fallback_fonts_)
-    {
-        fallback.font.set_point_size(point_size);
-        fallback.shaper.initialize(fallback.font.hb_font());
-    }
-
-    return true;
+    return impl_->set_point_size(point_size);
 }
 
 int TextService::point_size() const
 {
-    return font_.point_size();
+    return impl_->font.point_size();
 }
 
 const FontMetrics& TextService::metrics() const
 {
-    return font_.metrics();
+    return impl_->font.metrics();
 }
 
 const std::string& TextService::primary_font_path() const
 {
-    return font_path_;
+    return impl_->font_path;
 }
 
 AtlasRegion TextService::resolve_cluster(const std::string& text)
 {
-    auto [face, text_shaper] = resolve_font_for_text(text);
-    return glyph_cache_.get_cluster(text, face, *text_shaper);
+    return impl_->resolve_cluster(text);
 }
 
 bool TextService::atlas_dirty() const
 {
-    return glyph_cache_.atlas_dirty();
+    return impl_->glyph_cache.atlas_dirty();
 }
 
 void TextService::clear_atlas_dirty()
 {
-    glyph_cache_.clear_dirty();
+    impl_->glyph_cache.clear_dirty();
 }
 
 const uint8_t* TextService::atlas_data() const
 {
-    return glyph_cache_.atlas_data();
+    return impl_->glyph_cache.atlas_data();
 }
 
 int TextService::atlas_width() const
 {
-    return glyph_cache_.atlas_width();
+    return impl_->glyph_cache.atlas_width();
 }
 
 int TextService::atlas_height() const
 {
-    return glyph_cache_.atlas_height();
+    return impl_->glyph_cache.atlas_height();
 }
 
-const GlyphCache::DirtyRect& TextService::atlas_dirty_rect() const
+AtlasDirtyRect TextService::atlas_dirty_rect() const
 {
-    return glyph_cache_.dirty_rect();
+    const auto& dirty = impl_->glyph_cache.dirty_rect();
+    return { dirty.x, dirty.y, dirty.w, dirty.h };
 }
 
-void TextService::initialize_fallback_fonts()
+bool TextService::consume_atlas_reset()
 {
-    fallback_fonts_.clear();
-    font_choice_cache_.clear();
-
-    auto candidates = fallback_font_candidates();
-    fallback_fonts_.reserve(candidates.size());
-
-    for (const auto& path : candidates)
-    {
-        if (path == font_path_ || !std::filesystem::exists(path))
-            continue;
-
-        fallback_fonts_.emplace_back();
-        auto& fallback = fallback_fonts_.back();
-        fallback.path = path;
-        if (!fallback.font.initialize(path, font_.point_size(), display_ppi_))
-        {
-            fallback.font.shutdown();
-            fallback_fonts_.pop_back();
-            continue;
-        }
-
-        fallback.shaper.initialize(fallback.font.hb_font());
-        SPECTRE_LOG_INFO(LogCategory::Font, "Fallback font loaded: %s", path.c_str());
-    }
-}
-
-std::pair<FT_Face, TextShaper*> TextService::resolve_font_for_text(const std::string& text)
-{
-    auto cached = font_choice_cache_.find(text);
-    if (cached != font_choice_cache_.end())
-    {
-        if (cached->second < 0)
-            return { font_.face(), &shaper_ };
-
-        int idx = cached->second;
-        if (idx >= 0 && idx < (int)fallback_fonts_.size())
-            return { fallback_fonts_[idx].font.face(), &fallback_fonts_[idx].shaper };
-    }
-
-    if (can_render_cluster(font_.face(), shaper_, text))
-    {
-        font_choice_cache_[text] = -1;
-        return { font_.face(), &shaper_ };
-    }
-
-    for (int i = 0; i < (int)fallback_fonts_.size(); i++)
-    {
-        if (can_render_cluster(fallback_fonts_[i].font.face(), fallback_fonts_[i].shaper, text))
-        {
-            font_choice_cache_[text] = i;
-            return { fallback_fonts_[i].font.face(), &fallback_fonts_[i].shaper };
-        }
-    }
-
-    font_choice_cache_[text] = -1;
-    return { font_.face(), &shaper_ };
+    bool reset = impl_->atlas_reset_pending;
+    impl_->atlas_reset_pending = false;
+    return reset;
 }
 
 } // namespace spectre

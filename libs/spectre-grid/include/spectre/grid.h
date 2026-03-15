@@ -27,7 +27,7 @@ public:
     void set_cell(int col, int row, const std::string& text, uint16_t hl_id, bool double_width = false) override;
     const Cell& get_cell(int col, int row) const;
 
-    void scroll(int top, int bot, int left, int right, int rows) override;
+    void scroll(int top, int bot, int left, int right, int rows, int cols = 0) override;
 
     int cols() const
     {
@@ -50,8 +50,12 @@ public:
     std::vector<DirtyCell> get_dirty_cells() const;
 
 private:
+    void mark_dirty_index(int index);
+
     int cols_ = 0, rows_ = 0;
     std::vector<Cell> cells_;
+    std::vector<DirtyCell> dirty_cells_;
+    std::vector<uint8_t> dirty_marks_;
     Cell empty_cell_;
 };
 

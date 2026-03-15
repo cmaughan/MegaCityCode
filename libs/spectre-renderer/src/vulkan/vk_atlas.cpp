@@ -1,5 +1,6 @@
 #include "vk_atlas.h"
 #include "vk_context.h"
+
 #include <cstring>
 #include <spectre/log.h>
 
@@ -13,7 +14,11 @@ bool VkAtlas::initialize(VkContext& ctx)
     VkCommandPoolCreateInfo pool_ci = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
     pool_ci.queueFamilyIndex = ctx.graphics_queue_family();
     pool_ci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    vkCreateCommandPool(device, &pool_ci, nullptr, &cmd_pool_);
+    if (vkCreateCommandPool(device, &pool_ci, nullptr, &cmd_pool_) != VK_SUCCESS)
+    {
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create atlas command pool");
+        return false;
+    }
 
     VkImageCreateInfo img_ci = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
     img_ci.imageType = VK_IMAGE_TYPE_2D;
@@ -47,7 +52,11 @@ bool VkAtlas::initialize(VkContext& ctx)
     view_ci.components.g = VK_COMPONENT_SWIZZLE_R;
     view_ci.components.b = VK_COMPONENT_SWIZZLE_R;
     view_ci.components.a = VK_COMPONENT_SWIZZLE_R;
-    vkCreateImageView(device, &view_ci, nullptr, &image_view_);
+    if (vkCreateImageView(device, &view_ci, nullptr, &image_view_) != VK_SUCCESS)
+    {
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create atlas image view");
+        return false;
+    }
 
     VkSamplerCreateInfo samp_ci = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
     samp_ci.magFilter = VK_FILTER_LINEAR;
@@ -55,7 +64,11 @@ bool VkAtlas::initialize(VkContext& ctx)
     samp_ci.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     samp_ci.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     samp_ci.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    vkCreateSampler(device, &samp_ci, nullptr, &sampler_);
+    if (vkCreateSampler(device, &samp_ci, nullptr, &sampler_) != VK_SUCCESS)
+    {
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create atlas sampler");
+        return false;
+    }
 
     VkBufferCreateInfo buf_ci = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
     buf_ci.size = ATLAS_SIZE * ATLAS_SIZE;
@@ -65,13 +78,15 @@ bool VkAtlas::initialize(VkContext& ctx)
     staging_ci.usage = VMA_MEMORY_USAGE_AUTO;
     staging_ci.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
-    VmaAllocationInfo staging_info;
-    vmaCreateBuffer(ctx.allocator(), &buf_ci, &staging_ci, &staging_buffer_, &staging_alloc_, &staging_info);
+    VmaAllocationInfo staging_info = {};
+    if (vmaCreateBuffer(ctx.allocator(), &buf_ci, &staging_ci, &staging_buffer_, &staging_alloc_, &staging_info) != VK_SUCCESS)
+    {
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create atlas staging buffer");
+        return false;
+    }
     staging_mapped_ = staging_info.pMappedData;
 
-    transition_image_layout(ctx, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-    return true;
+    return upload_internal(ctx, 0, 0, 0, 0, nullptr);
 }
 
 void VkAtlas::shutdown(VkContext& ctx)
@@ -91,24 +106,14 @@ void VkAtlas::shutdown(VkContext& ctx)
 
 void VkAtlas::upload(VkContext& ctx, const uint8_t* data, int w, int h)
 {
-    memcpy(staging_mapped_, data, (size_t)w * h);
-
-    transition_image_layout(ctx, current_layout_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    copy_buffer_to_image(ctx, staging_buffer_, 0, 0, w, h);
-    transition_image_layout(ctx, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    if (!upload_internal(ctx, 0, 0, w, h, data))
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to upload full atlas");
 }
 
 void VkAtlas::upload_region(VkContext& ctx, int x, int y, int w, int h, const uint8_t* data)
 {
-    uint8_t* dst = static_cast<uint8_t*>(staging_mapped_);
-    for (int row = 0; row < h; row++)
-    {
-        memcpy(dst + row * w, data + row * w, w);
-    }
-
-    transition_image_layout(ctx, current_layout_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    copy_buffer_to_image(ctx, staging_buffer_, x, y, w, h);
-    transition_image_layout(ctx, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    if (!upload_internal(ctx, x, y, w, h, data))
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to upload atlas region");
 }
 
 VkCommandBuffer VkAtlas::begin_single_command(VkContext& ctx)
@@ -118,97 +123,100 @@ VkCommandBuffer VkAtlas::begin_single_command(VkContext& ctx)
     alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     alloc_info.commandBufferCount = 1;
 
-    VkCommandBuffer cmd;
-    vkAllocateCommandBuffers(ctx.device(), &alloc_info, &cmd);
+    VkCommandBuffer cmd = VK_NULL_HANDLE;
+    if (vkAllocateCommandBuffers(ctx.device(), &alloc_info, &cmd) != VK_SUCCESS)
+        return VK_NULL_HANDLE;
 
     VkCommandBufferBeginInfo begin_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
     begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    vkBeginCommandBuffer(cmd, &begin_info);
-
+    if (vkBeginCommandBuffer(cmd, &begin_info) != VK_SUCCESS)
+    {
+        vkFreeCommandBuffers(ctx.device(), cmd_pool_, 1, &cmd);
+        return VK_NULL_HANDLE;
+    }
     return cmd;
 }
 
-void VkAtlas::end_single_command(VkContext& ctx, VkCommandBuffer cmd)
+bool VkAtlas::end_single_command(VkContext& ctx, VkCommandBuffer cmd)
 {
-    vkEndCommandBuffer(cmd);
+    if (vkEndCommandBuffer(cmd) != VK_SUCCESS)
+    {
+        vkFreeCommandBuffers(ctx.device(), cmd_pool_, 1, &cmd);
+        return false;
+    }
+
+    VkFence fence = VK_NULL_HANDLE;
+    VkFenceCreateInfo fence_ci = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+    if (vkCreateFence(ctx.device(), &fence_ci, nullptr, &fence) != VK_SUCCESS)
+    {
+        vkFreeCommandBuffers(ctx.device(), cmd_pool_, 1, &cmd);
+        return false;
+    }
 
     VkSubmitInfo submit = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = &cmd;
 
-    vkQueueSubmit(ctx.graphics_queue(), 1, &submit, VK_NULL_HANDLE);
-    vkQueueWaitIdle(ctx.graphics_queue());
+    bool ok = vkQueueSubmit(ctx.graphics_queue(), 1, &submit, fence) == VK_SUCCESS
+        && vkWaitForFences(ctx.device(), 1, &fence, VK_TRUE, UINT64_MAX) == VK_SUCCESS;
 
+    vkDestroyFence(ctx.device(), fence, nullptr);
     vkFreeCommandBuffers(ctx.device(), cmd_pool_, 1, &cmd);
+    return ok;
 }
 
-void VkAtlas::transition_image_layout(VkContext& ctx, VkImageLayout old_layout, VkImageLayout new_layout)
+bool VkAtlas::upload_internal(VkContext& ctx, int x, int y, int w, int h, const uint8_t* data)
 {
-    auto cmd = begin_single_command(ctx);
+    VkCommandBuffer cmd = begin_single_command(ctx);
+    if (cmd == VK_NULL_HANDLE)
+        return false;
+
+    if (data && w > 0 && h > 0)
+    {
+        uint8_t* dst = static_cast<uint8_t*>(staging_mapped_);
+        for (int row = 0; row < h; row++)
+            memcpy(dst + row * w, data + row * w, w);
+    }
 
     VkImageMemoryBarrier barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
-    barrier.oldLayout = old_layout;
-    barrier.newLayout = new_layout;
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.image = image_;
     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     barrier.subresourceRange.levelCount = 1;
     barrier.subresourceRange.layerCount = 1;
+    barrier.oldLayout = current_layout_;
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.srcAccessMask = current_layout_ == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL ? VK_ACCESS_SHADER_READ_BIT : 0;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    vkCmdPipelineBarrier(cmd,
+        current_layout_ == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        0, 0, nullptr, 0, nullptr, 1, &barrier);
 
-    VkPipelineStageFlags src_stage, dst_stage;
-
-    if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+    if (data && w > 0 && h > 0)
     {
-        barrier.srcAccessMask = 0;
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-        dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    }
-    else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-    {
-        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    }
-    else if (old_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-    {
-        barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        src_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    }
-    else
-    {
-        barrier.srcAccessMask = 0;
-        barrier.dstAccessMask = 0;
-        src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-        dst_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+        VkBufferImageCopy region = {};
+        region.bufferOffset = 0;
+        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.imageSubresource.layerCount = 1;
+        region.imageOffset = { x, y, 0 };
+        region.imageExtent = { (uint32_t)w, (uint32_t)h, 1 };
+        vkCmdCopyBufferToImage(cmd, staging_buffer_, image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
     }
 
-    vkCmdPipelineBarrier(cmd, src_stage, dst_stage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
-    end_single_command(ctx, cmd);
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        0, 0, nullptr, 0, nullptr, 1, &barrier);
 
-    current_layout_ = new_layout;
-}
+    if (!end_single_command(ctx, cmd))
+        return false;
 
-void VkAtlas::copy_buffer_to_image(VkContext& ctx, VkBuffer buffer, int x, int y, int w, int h)
-{
-    auto cmd = begin_single_command(ctx);
-
-    VkBufferImageCopy region = {};
-    region.bufferOffset = 0;
-    region.bufferRowLength = 0;
-    region.bufferImageHeight = 0;
-    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    region.imageSubresource.layerCount = 1;
-    region.imageOffset = { x, y, 0 };
-    region.imageExtent = { (uint32_t)w, (uint32_t)h, 1 };
-
-    vkCmdCopyBufferToImage(cmd, buffer, image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-    end_single_command(ctx, cmd);
+    current_layout_ = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    return true;
 }
 
 } // namespace spectre

@@ -20,6 +20,7 @@ void run_renderer_state_tests()
         update.row = 0;
         update.bg = { 0.1f, 0.2f, 0.3f, 1.0f };
         update.fg = { 0.9f, 0.8f, 0.7f, 1.0f };
+        update.sp = { 0.5f, 0.4f, 0.3f, 1.0f };
         update.glyph = { 0.1f, 0.2f, 0.3f, 0.4f, 2, 3, 6, 7 };
         update.style_flags = 5;
         state.update_cells({ &update, 1 });
@@ -33,6 +34,7 @@ void run_renderer_state_tests()
         expect_eq(static_cast<int>(gpu[1].pos_y), 1, "cell y position uses padding");
         expect_eq(gpu[1].bg_b, 0.3f, "background color is copied");
         expect_eq(gpu[1].fg_r, 0.9f, "foreground color is copied");
+        expect_eq(gpu[1].sp_r, 0.5f, "special color is copied");
         expect_eq(gpu[1].glyph_size_x, 6.0f, "glyph width is copied");
         expect_eq(gpu[1].glyph_offset_y, 7.0f, "glyph y offset uses ascender and cell height");
         expect_eq(gpu[1].style_flags, static_cast<uint32_t>(5), "style flags are copied");

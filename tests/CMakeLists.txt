@@ -9,6 +9,7 @@ target_link_libraries(spectre-rpc-fake PRIVATE spectre-nvim)
 add_executable(spectre-tests
     test_main.cpp
     log_tests.cpp
+    highlight_tests.cpp
     font_tests.cpp
     grid_tests.cpp
     ui_events_tests.cpp
@@ -21,6 +22,7 @@ add_executable(spectre-tests
 
 target_include_directories(spectre-tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/support
+    ${PROJECT_SOURCE_DIR}/libs/spectre-font/src
     ${PROJECT_SOURCE_DIR}/libs/spectre-renderer/src
     ${PROJECT_SOURCE_DIR}/libs/spectre-nvim/src
 )

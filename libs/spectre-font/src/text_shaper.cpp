@@ -1,5 +1,5 @@
+#include "font_engine.h"
 #include <hb-ft.h>
-#include <spectre/font.h>
 #include <utility>
 
 namespace spectre
@@ -74,24 +74,6 @@ std::vector<ShapedGlyph> TextShaper::shape(const std::string& text)
     }
 
     return result;
-}
-
-uint32_t TextShaper::shape_codepoint(uint32_t codepoint)
-{
-    if (!font_ || !buffer_)
-        return 0;
-
-    hb_buffer_reset(buffer_);
-    hb_buffer_add_codepoints(buffer_, &codepoint, 1, 0, 1);
-    hb_buffer_guess_segment_properties(buffer_);
-
-    hb_shape(font_, buffer_, nullptr, 0);
-
-    unsigned int glyph_count;
-    hb_glyph_info_t* info = hb_buffer_get_glyph_infos(buffer_, &glyph_count);
-    if (glyph_count > 0)
-        return info[0].codepoint;
-    return 0;
 }
 
 } // namespace spectre

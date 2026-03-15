@@ -1,4 +1,5 @@
 #pragma once
+
 #include <string>
 #include <vulkan/vulkan.h>
 
@@ -40,6 +41,7 @@ public:
 
 private:
     VkShaderModule load_shader(VkDevice device, const std::string& path);
+    void reset_objects(VkDevice device);
 
     VkPipeline bg_pipeline_ = VK_NULL_HANDLE;
     VkPipeline fg_pipeline_ = VK_NULL_HANDLE;

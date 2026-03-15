@@ -3,6 +3,7 @@
 
 void run_font_tests();
 void run_log_tests();
+void run_highlight_tests();
 void run_grid_tests();
 void run_ui_events_tests();
 void run_input_tests();
@@ -16,6 +17,7 @@ int main()
     try
     {
         run_log_tests();
+        run_highlight_tests();
         run_font_tests();
         run_grid_tests();
         run_ui_events_tests();

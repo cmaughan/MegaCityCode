@@ -20,6 +20,12 @@ struct TextInputEvent
 {
     const char* text;
 };
+struct TextEditingEvent
+{
+    const char* text;
+    int start = 0;
+    int length = 0;
+};
 struct MouseButtonEvent
 {
     int button;

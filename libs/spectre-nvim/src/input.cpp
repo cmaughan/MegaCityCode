@@ -203,6 +203,19 @@ void NvimInput::on_text_input(const TextInputEvent& event)
     }
 }
 
+void NvimInput::on_text_editing(const TextEditingEvent& event)
+{
+    (void)event;
+}
+
+void NvimInput::paste_text(const std::string& text)
+{
+    if (text.empty())
+        return;
+
+    rpc_->request("nvim_paste", { NvimRpc::make_str(text), NvimRpc::make_bool(false), NvimRpc::make_int(-1) });
+}
+
 void NvimInput::on_mouse_button(const MouseButtonEvent& event)
 {
     int grid_col = event.x / cell_w_;

@@ -1,0 +1,66 @@
+digraph "spectre" {
+node [
+  fontsize = "12"
+];
+subgraph clusterLegend {
+  label = "Legend";
+  color = black;
+  edge [ style = invis ];
+  legendNode0 [ label = "Executable", shape = egg ];
+  legendNode1 [ label = "Static Library", shape = octagon ];
+  legendNode2 [ label = "Shared Library", shape = doubleoctagon ];
+  legendNode3 [ label = "Module Library", shape = tripleoctagon ];
+  legendNode4 [ label = "Interface Library", shape = pentagon ];
+  legendNode5 [ label = "Object Library", shape = hexagon ];
+  legendNode6 [ label = "Unknown Library", shape = septagon ];
+  legendNode7 [ label = "Custom Target", shape = box ];
+  legendNode0 -> legendNode1 [ style = solid ];
+  legendNode0 -> legendNode2 [ style = solid ];
+  legendNode0 -> legendNode3;
+  legendNode1 -> legendNode4 [ label = "Interface", style = dashed ];
+  legendNode2 -> legendNode5 [ label = "Private", style = dotted ];
+  legendNode3 -> legendNode6 [ style = solid ];
+  legendNode0 -> legendNode7;
+}
+    "node0" [ label = "SDL3-static\n(SDL3::SDL3)\n(SDL3::SDL3-static)", shape = octagon ];
+    "node1" [ label = "SDL_uclibc", shape = octagon ];
+    "node0" -> "node1"  // SDL3-static -> SDL_uclibc
+    "node2" [ label = "SDL3_test\n(SDL3::SDL3_test)", shape = octagon ];
+    "node3" [ label = "freetype", shape = octagon ];
+    "node4" [ label = "harfbuzz", shape = octagon ];
+    "node4" -> "node3"  // harfbuzz -> freetype
+    "node5" [ label = "mpack_lib", shape = octagon ];
+    "node6" [ label = "spectre", shape = egg ];
+    "node7" [ label = "spectre-font", shape = octagon ];
+    "node7" -> "node3"  // spectre-font -> freetype
+    "node7" -> "node4"  // spectre-font -> harfbuzz
+    "node8" [ label = "spectre-types", shape = octagon ];
+    "node7" -> "node8"  // spectre-font -> spectre-types
+    "node6" -> "node7" [ style = dotted ] // spectre -> spectre-font
+    "node9" [ label = "spectre-grid", shape = octagon ];
+    "node9" -> "node8"  // spectre-grid -> spectre-types
+    "node6" -> "node9" [ style = dotted ] // spectre -> spectre-grid
+    "node10" [ label = "spectre-nvim", shape = octagon ];
+    "node10" -> "node0"  // spectre-nvim -> SDL3-static
+    "node10" -> "node5"  // spectre-nvim -> mpack_lib
+    "node10" -> "node8"  // spectre-nvim -> spectre-types
+    "node6" -> "node10" [ style = dotted ] // spectre -> spectre-nvim
+    "node11" [ label = "spectre-renderer", shape = octagon ];
+    "node11" -> "node0"  // spectre-renderer -> SDL3-static
+    "node11" -> "node8"  // spectre-renderer -> spectre-types
+    "node12" [ label = "spectre-window", shape = octagon ];
+    "node12" -> "node0"  // spectre-window -> SDL3-static
+    "node12" -> "node8"  // spectre-window -> spectre-types
+    "node11" -> "node12"  // spectre-renderer -> spectre-window
+    "node13" [ label = "vk-bootstrap\n(vk-bootstrap::vk-bootstrap)", shape = octagon ];
+    "node11" -> "node13" [ style = dotted ] // spectre-renderer -> vk-bootstrap
+    "node6" -> "node11" [ style = dotted ] // spectre -> spectre-renderer
+    "node6" -> "node8" [ style = dotted ] // spectre -> spectre-types
+    "node14" [ label = "spectre-rpc-fake", shape = egg ];
+    "node14" -> "node10" [ style = dotted ] // spectre-rpc-fake -> spectre-nvim
+    "node15" [ label = "spectre-tests", shape = egg ];
+    "node15" -> "node7" [ style = dotted ] // spectre-tests -> spectre-font
+    "node15" -> "node9" [ style = dotted ] // spectre-tests -> spectre-grid
+    "node15" -> "node10" [ style = dotted ] // spectre-tests -> spectre-nvim
+    "node15" -> "node11" [ style = dotted ] // spectre-tests -> spectre-renderer
+}

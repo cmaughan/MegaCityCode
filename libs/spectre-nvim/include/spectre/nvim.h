@@ -258,6 +258,7 @@ public:
     std::function<void(int)> on_mode_change;
     std::function<void(const std::string&, const MpackValue&)> on_option_set;
     std::function<void(bool)> on_busy;
+    std::function<void(const std::string&)> on_title;
 
     const std::vector<ModeInfo>& modes() const
     {
@@ -287,6 +288,7 @@ private:
     void handle_mode_info_set(const MpackValue& args);
     void handle_mode_change(const MpackValue& args);
     void handle_option_set(const MpackValue& args);
+    void handle_set_title(const MpackValue& args);
 
     IGridSink* grid_ = nullptr;
     HighlightTable* highlights_ = nullptr;
@@ -311,9 +313,11 @@ public:
 
     void on_key(const KeyEvent& event);
     void on_text_input(const TextInputEvent& event);
+    void on_text_editing(const TextEditingEvent& event);
     void on_mouse_button(const MouseButtonEvent& event);
     void on_mouse_move(const MouseMoveEvent& event);
     void on_mouse_wheel(const MouseWheelEvent& event);
+    void paste_text(const std::string& text);
 
 private:
     void send_input(const std::string& keys);

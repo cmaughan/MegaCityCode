@@ -29,7 +29,6 @@ public:
     void create_framebuffers();
     void destroy_swapchain();
 
-    // Accessors
     VkInstance instance() const
     {
         return instance_;
@@ -68,7 +67,7 @@ public:
     }
 
 private:
-    bool create_render_pass();
+    bool create_render_pass(VkFormat format);
 
     VkInstance instance_ = VK_NULL_HANDLE;
     VkDebugUtilsMessengerEXT debug_messenger_ = VK_NULL_HANDLE;

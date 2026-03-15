@@ -1,6 +1,8 @@
 # Work Items
 
-Current consensus-derived work items:
+Consensus batch status: implemented.
+
+Implemented items:
 
 - [[00 atlas recovery -bug]]
 - [[01 vulkan robustness and upload path -bug]]
@@ -13,8 +15,8 @@ Current consensus-derived work items:
 - [[08 clipboard ime and title integration -feature]]
 - [[09 lifecycle and rendering regressions -test]]
 
-Reading order:
+Follow-up items:
 
-1. Fix correctness risks first: `00` through `04`
-2. Tighten architecture and fidelity next: `05` through `08`
-3. Keep closing regression holes with `09`
+- [[10 clipboard provider integration -feature]]
+
+Remaining follow-up is normal polish and validation, not an open consensus-plan backlog.

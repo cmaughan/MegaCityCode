@@ -144,20 +144,23 @@ bool SdlWindow::initialize(const std::string& title, int width, int height)
     Uint64 window_flags = SDL_WINDOW_METAL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
 #else
     Uint64 window_flags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
-
-    // On Windows, SDL uses per-monitor DPI v2 awareness: window dimensions are in
-    // physical pixels, not logical pixels. Scale up so the window appears at the
-    // intended logical size on the display.
-    {
-        SDL_DisplayID display = SDL_GetPrimaryDisplay();
-        float scale = display ? SDL_GetDisplayContentScale(display) : 1.0f;
-        if (scale > 1.0f)
-        {
-            width = (int)std::round(width * scale);
-            height = (int)std::round(height * scale);
-        }
-    }
 #endif
+
+    SDL_Rect usable_bounds = {};
+    SDL_DisplayID display = SDL_GetPrimaryDisplay();
+    if (display && SDL_GetDisplayUsableBounds(display, &usable_bounds))
+    {
+        int max_width = usable_bounds.w - 80;
+        int max_height = usable_bounds.h - 80;
+        if (max_width < 640)
+            max_width = 640;
+        if (max_height < 400)
+            max_height = 400;
+        if (width > max_width)
+            width = max_width;
+        if (height > max_height)
+            height = max_height;
+    }
 
     window_ = SDL_CreateWindow(
         title.c_str(),
@@ -261,6 +264,13 @@ bool SdlWindow::handle_event(const SDL_Event& event)
         }
         break;
 
+    case SDL_EVENT_TEXT_EDITING:
+        if (on_text_editing)
+        {
+            on_text_editing({ event.edit.text, event.edit.start, event.edit.length });
+        }
+        break;
+
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
     case SDL_EVENT_MOUSE_BUTTON_UP:
         if (on_mouse_button)
@@ -345,6 +355,16 @@ std::pair<int, int> SdlWindow::size_pixels() const
     return { w, h };
 }
 
+std::pair<int, int> SdlWindow::size_logical() const
+{
+    int w = 0, h = 0;
+    if (window_)
+    {
+        SDL_GetWindowSize(window_, &w, &h);
+    }
+    return { w, h };
+}
+
 float SdlWindow::display_ppi() const
 {
 #ifdef __APPLE__
@@ -386,6 +406,37 @@ float SdlWindow::display_ppi() const
     }
 #endif
     return 96.0f; // fallback
+}
+
+void SdlWindow::set_title(const std::string& title)
+{
+    if (window_)
+        SDL_SetWindowTitle(window_, title.c_str());
+}
+
+std::string SdlWindow::clipboard_text() const
+{
+    char* text = SDL_GetClipboardText();
+    if (!text)
+        return {};
+
+    std::string value = text;
+    SDL_free(text);
+    return value;
+}
+
+bool SdlWindow::set_clipboard_text(const std::string& text)
+{
+    return SDL_SetClipboardText(text.c_str());
+}
+
+void SdlWindow::set_text_input_area(int x, int y, int w, int h)
+{
+    if (!window_)
+        return;
+
+    SDL_Rect area = { x, y, w, h };
+    SDL_SetTextInputArea(window_, &area, 0);
 }
 
 } // namespace spectre

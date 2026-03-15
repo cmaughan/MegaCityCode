@@ -1,5 +1,5 @@
+#include "font_engine.h"
 #include <ft2build.h>
-#include <spectre/font.h>
 #include FT_FREETYPE_H
 #include <algorithm>
 #include <climits>
@@ -95,13 +95,19 @@ void expand_dirty_rect(GlyphCache::DirtyRect& dirty_rect, bool dirty, int x, int
 
 } // namespace
 
-bool GlyphCache::initialize(FT_Face face, int pixel_size)
+bool GlyphCache::initialize(FT_Face face, int pixel_size, int atlas_size)
 {
     face_ = face;
     pixel_size_ = pixel_size;
-    atlas_.resize(ATLAS_SIZE * ATLAS_SIZE, 0);
+    atlas_size_ = std::max(1, atlas_size);
+    atlas_.assign((size_t)atlas_size_ * atlas_size_, 0);
     dirty_ = false;
     dirty_rect_ = {};
+    overflowed_ = false;
+    shelf_x_ = 0;
+    shelf_y_ = 0;
+    shelf_height_ = 0;
+    cluster_cache_.clear();
     return true;
 }
 
@@ -109,14 +115,14 @@ void GlyphCache::reset(FT_Face face, int pixel_size)
 {
     face_ = face;
     pixel_size_ = pixel_size;
-    glyph_cache_.clear();
     cluster_cache_.clear();
     std::fill(atlas_.begin(), atlas_.end(), (uint8_t)0);
     shelf_x_ = 0;
     shelf_y_ = 0;
     shelf_height_ = 0;
     dirty_ = true;
-    dirty_rect_ = { 0, 0, ATLAS_SIZE, ATLAS_SIZE };
+    dirty_rect_ = { 0, 0, atlas_size_, atlas_size_ };
+    overflowed_ = false;
 }
 
 size_t GlyphCache::ClusterKeyHash::operator()(const ClusterKey& key) const
@@ -124,21 +130,6 @@ size_t GlyphCache::ClusterKeyHash::operator()(const ClusterKey& key) const
     size_t h1 = std::hash<FT_Face>()(key.face);
     size_t h2 = std::hash<std::string>()(key.text);
     return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
-}
-
-const AtlasRegion& GlyphCache::get_glyph(uint32_t glyph_id)
-{
-    auto it = glyph_cache_.find(glyph_id);
-    if (it != glyph_cache_.end())
-        return it->second;
-
-    AtlasRegion region = {};
-    if (rasterize_glyph(glyph_id, region))
-    {
-        auto [ins, _] = glyph_cache_.emplace(glyph_id, region);
-        return ins->second;
-    }
-    return empty_region_;
 }
 
 const AtlasRegion& GlyphCache::get_cluster(const std::string& text, FT_Face face, TextShaper& shaper)
@@ -166,16 +157,17 @@ bool GlyphCache::reserve_region(int w, int h, int& atlas_x, int& atlas_y, const 
     if (w <= 0 || h <= 0)
         return false;
 
-    if (shelf_x_ + w + 1 > ATLAS_SIZE)
+    if (shelf_x_ + w + 1 > atlas_size_)
     {
         shelf_y_ += shelf_height_ + 1;
         shelf_x_ = 0;
         shelf_height_ = 0;
     }
 
-    if (shelf_y_ + h > ATLAS_SIZE)
+    if (shelf_y_ + h > atlas_size_)
     {
         SPECTRE_LOG_WARN(LogCategory::Font, "Atlas full, cannot fit %s (%dx%d)", label, w, h);
+        overflowed_ = true;
         return false;
     }
 
@@ -183,64 +175,6 @@ bool GlyphCache::reserve_region(int w, int h, int& atlas_x, int& atlas_y, const 
     atlas_y = shelf_y_;
     shelf_x_ += w + 1;
     shelf_height_ = std::max(shelf_height_, h);
-    return true;
-}
-
-bool GlyphCache::rasterize_glyph(uint32_t glyph_id, AtlasRegion& region)
-{
-    if (FT_Load_Glyph(face_, glyph_id, FT_LOAD_DEFAULT | FT_LOAD_COLOR))
-    {
-        return false;
-    }
-
-    if (face_->glyph->format != FT_GLYPH_FORMAT_BITMAP
-        && FT_Render_Glyph(face_->glyph, FT_RENDER_MODE_NORMAL))
-    {
-        return false;
-    }
-
-    FT_Bitmap& bmp = face_->glyph->bitmap;
-    int w = (int)bmp.width;
-    int h = (int)bmp.rows;
-
-    if (w == 0 || h == 0)
-    {
-        region = {};
-        return true;
-    }
-
-    int atlas_x = 0;
-    int atlas_y = 0;
-    if (!reserve_region(w, h, atlas_x, atlas_y, "glyph"))
-    {
-        return false;
-    }
-
-    std::vector<uint8_t> pixels;
-    if (!bitmap_to_grayscale(bmp, pixels))
-        return false;
-
-    for (int row = 0; row < h; row++)
-    {
-        memcpy(
-            atlas_.data() + (atlas_y + row) * ATLAS_SIZE + atlas_x,
-            pixels.data() + (size_t)row * w,
-            w);
-    }
-
-    float inv_size = 1.0f / ATLAS_SIZE;
-    region.u0 = atlas_x * inv_size;
-    region.v0 = atlas_y * inv_size;
-    region.u1 = (atlas_x + w) * inv_size;
-    region.v1 = (atlas_y + h) * inv_size;
-    region.bearing_x = face_->glyph->bitmap_left;
-    region.bearing_y = face_->glyph->bitmap_top;
-    region.width = w;
-    region.height = h;
-
-    expand_dirty_rect(dirty_rect_, dirty_, atlas_x, atlas_y, w, h);
-    dirty_ = true;
-
     return true;
 }
 
@@ -322,12 +256,12 @@ bool GlyphCache::rasterize_cluster(const std::string& text, FT_Face face, TextSh
 
     for (int row = 0; row < cluster_height; row++)
     {
-        memcpy(atlas_.data() + (atlas_y + row) * ATLAS_SIZE + atlas_x,
+        memcpy(atlas_.data() + (size_t)(atlas_y + row) * atlas_size_ + atlas_x,
             composite.data() + row * cluster_width,
             cluster_width);
     }
 
-    float inv_size = 1.0f / ATLAS_SIZE;
+    float inv_size = 1.0f / atlas_size_;
     region.u0 = atlas_x * inv_size;
     region.v0 = atlas_y * inv_size;
     region.u1 = (atlas_x + cluster_width) * inv_size;

@@ -100,6 +100,10 @@ void RendererState::relayout()
             cell.fg_g = 1.0f;
             cell.fg_b = 1.0f;
             cell.fg_a = 1.0f;
+            cell.sp_r = 1.0f;
+            cell.sp_g = 1.0f;
+            cell.sp_b = 1.0f;
+            cell.sp_a = 1.0f;
         }
     }
 
@@ -125,6 +129,10 @@ void RendererState::update_cells(std::span<const CellUpdate> updates)
         cell.fg_g = u.fg.g;
         cell.fg_b = u.fg.b;
         cell.fg_a = u.fg.a;
+        cell.sp_r = u.sp.r;
+        cell.sp_g = u.sp.g;
+        cell.sp_b = u.sp.b;
+        cell.sp_a = u.sp.a;
         cell.uv_x0 = u.glyph.u0;
         cell.uv_y0 = u.glyph.v0;
         cell.uv_x1 = u.glyph.u1;

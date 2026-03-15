@@ -1,7 +1,9 @@
 #include "vk_renderer.h"
+
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <spectre/log.h>
 #include <spectre/window.h>
 
 namespace spectre
@@ -14,14 +16,9 @@ void VkRenderer::upload_dirty_state()
         return;
 
     if (state_.has_dirty_cells())
-    {
         state_.copy_dirty_cells_to(mapped + state_.dirty_cell_offset_bytes());
-    }
-
     if (state_.overlay_slot_dirty())
-    {
         state_.copy_overlay_cell_to(mapped + state_.overlay_offset_bytes());
-    }
 
     state_.clear_dirty();
 }
@@ -37,21 +34,17 @@ bool VkRenderer::initialize(IWindow& window)
 
     if (!atlas_.initialize(ctx_))
         return false;
-
-    size_t initial_buf = 80 * 24 * sizeof(GpuCell);
-    if (!grid_buffer_.initialize(ctx_, initial_buf))
+    if (!grid_buffer_.initialize(ctx_, 80 * 24 * sizeof(GpuCell)))
         return false;
-
     if (!pipeline_.initialize(ctx_, "shaders"))
         return false;
-
     if (!create_command_buffers())
         return false;
     if (!create_sync_objects())
         return false;
-    create_descriptor_pool();
+    if (!create_descriptor_pool())
+        return false;
     update_all_descriptor_sets();
-
     return true;
 }
 
@@ -89,9 +82,12 @@ bool VkRenderer::create_sync_objects()
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-        vkCreateSemaphore(ctx_.device(), &sem_ci, nullptr, &image_available_sem_[i]);
-        vkCreateSemaphore(ctx_.device(), &sem_ci, nullptr, &render_finished_sem_[i]);
-        vkCreateFence(ctx_.device(), &fence_ci, nullptr, &in_flight_fences_[i]);
+        if (vkCreateSemaphore(ctx_.device(), &sem_ci, nullptr, &image_available_sem_[i]) != VK_SUCCESS)
+            return false;
+        if (vkCreateSemaphore(ctx_.device(), &sem_ci, nullptr, &render_finished_sem_[i]) != VK_SUCCESS)
+            return false;
+        if (vkCreateFence(ctx_.device(), &fence_ci, nullptr, &in_flight_fences_[i]) != VK_SUCCESS)
+            return false;
     }
     return true;
 }
@@ -101,19 +97,18 @@ bool VkRenderer::create_command_buffers()
     VkCommandPoolCreateInfo pool_ci = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
     pool_ci.queueFamilyIndex = ctx_.graphics_queue_family();
     pool_ci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    vkCreateCommandPool(ctx_.device(), &pool_ci, nullptr, &cmd_pool_);
+    if (vkCreateCommandPool(ctx_.device(), &pool_ci, nullptr, &cmd_pool_) != VK_SUCCESS)
+        return false;
 
     cmd_buffers_.resize(MAX_FRAMES_IN_FLIGHT);
     VkCommandBufferAllocateInfo alloc_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
     alloc_info.commandPool = cmd_pool_;
     alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     alloc_info.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
-    vkAllocateCommandBuffers(ctx_.device(), &alloc_info, cmd_buffers_.data());
-
-    return true;
+    return vkAllocateCommandBuffers(ctx_.device(), &alloc_info, cmd_buffers_.data()) == VK_SUCCESS;
 }
 
-void VkRenderer::create_descriptor_pool()
+bool VkRenderer::create_descriptor_pool()
 {
     VkDescriptorPoolSize pool_sizes[] = {
         { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, (uint32_t)(MAX_FRAMES_IN_FLIGHT * 2) },
@@ -125,7 +120,8 @@ void VkRenderer::create_descriptor_pool()
     pool_ci.poolSizeCount = 2;
     pool_ci.pPoolSizes = pool_sizes;
     pool_ci.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    vkCreateDescriptorPool(ctx_.device(), &pool_ci, nullptr, &desc_pool_);
+    if (vkCreateDescriptorPool(ctx_.device(), &pool_ci, nullptr, &desc_pool_) != VK_SUCCESS)
+        return false;
 
     bg_desc_sets_.resize(MAX_FRAMES_IN_FLIGHT);
     fg_desc_sets_.resize(MAX_FRAMES_IN_FLIGHT);
@@ -137,12 +133,34 @@ void VkRenderer::create_descriptor_pool()
         alloc_info.descriptorPool = desc_pool_;
         alloc_info.descriptorSetCount = 1;
         alloc_info.pSetLayouts = &bg_layout;
-        vkAllocateDescriptorSets(ctx_.device(), &alloc_info, &bg_desc_sets_[i]);
+        if (vkAllocateDescriptorSets(ctx_.device(), &alloc_info, &bg_desc_sets_[i]) != VK_SUCCESS)
+            return false;
 
         VkDescriptorSetLayout fg_layout = pipeline_.fg_desc_layout();
         alloc_info.pSetLayouts = &fg_layout;
-        vkAllocateDescriptorSets(ctx_.device(), &alloc_info, &fg_desc_sets_[i]);
+        if (vkAllocateDescriptorSets(ctx_.device(), &alloc_info, &fg_desc_sets_[i]) != VK_SUCCESS)
+            return false;
     }
+
+    return true;
+}
+
+bool VkRenderer::recreate_frame_resources()
+{
+    if (!ctx_.recreate_swapchain(pixel_w_, pixel_h_))
+        return false;
+    pipeline_.shutdown(ctx_.device());
+    if (!pipeline_.initialize(ctx_, "shaders"))
+        return false;
+    if (desc_pool_)
+    {
+        vkDestroyDescriptorPool(ctx_.device(), desc_pool_, nullptr);
+        desc_pool_ = VK_NULL_HANDLE;
+    }
+    if (!create_descriptor_pool())
+        return false;
+    update_all_descriptor_sets();
+    return true;
 }
 
 void VkRenderer::update_descriptor_sets_for_frame(int frame)
@@ -185,21 +203,15 @@ void VkRenderer::update_descriptor_sets_for_frame(int frame)
 void VkRenderer::update_all_descriptor_sets()
 {
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-    {
         update_descriptor_sets_for_frame(i);
-    }
     needs_descriptor_update_ = false;
 }
 
 void VkRenderer::set_grid_size(int cols, int rows)
 {
     state_.set_grid_size(cols, rows, padding_);
-
-    size_t required = state_.buffer_size_bytes();
-    if (grid_buffer_.ensure_size(ctx_.allocator(), ctx_.device(), required))
-    {
+    if (grid_buffer_.ensure_size(ctx_.allocator(), ctx_.device(), state_.buffer_size_bytes()))
         needs_descriptor_update_ = true;
-    }
     upload_dirty_state();
 }
 
@@ -263,36 +275,27 @@ bool VkRenderer::begin_frame()
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
     {
-        ctx_.recreate_swapchain(pixel_w_, pixel_h_);
-        pipeline_.shutdown(ctx_.device());
-        pipeline_.initialize(ctx_, "shaders");
-        if (desc_pool_)
-        {
-            vkDestroyDescriptorPool(ctx_.device(), desc_pool_, nullptr);
-            desc_pool_ = VK_NULL_HANDLE;
-        }
-        create_descriptor_pool();
-        update_all_descriptor_sets();
+        if (!recreate_frame_resources())
+            SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to rebuild Vulkan frame resources after acquire");
         return false;
     }
 
     if (needs_descriptor_update_)
     {
-        update_descriptor_sets_for_frame(current_frame_);
-        desc_update_pending_frames_ |= ((1 << MAX_FRAMES_IN_FLIGHT) - 1);
-        desc_update_pending_frames_ &= ~(1 << current_frame_);
+        update_descriptor_sets_for_frame((int)current_frame_);
+        desc_update_pending_frames_ |= ((1u << MAX_FRAMES_IN_FLIGHT) - 1u);
+        desc_update_pending_frames_ &= ~(1u << current_frame_);
         if (desc_update_pending_frames_ == 0)
             needs_descriptor_update_ = false;
     }
-    else if (desc_update_pending_frames_ & (1 << current_frame_))
+    else if (desc_update_pending_frames_ & (1u << current_frame_))
     {
-        update_descriptor_sets_for_frame(current_frame_);
-        desc_update_pending_frames_ &= ~(1 << current_frame_);
+        update_descriptor_sets_for_frame((int)current_frame_);
+        desc_update_pending_frames_ &= ~(1u << current_frame_);
     }
 
     vkResetFences(ctx_.device(), 1, &in_flight_fences_[current_frame_]);
     vkResetCommandBuffer(cmd_buffers_[current_frame_], 0);
-
     return true;
 }
 
@@ -368,7 +371,11 @@ void VkRenderer::end_frame()
     submit.signalSemaphoreCount = 1;
     submit.pSignalSemaphores = &render_finished_sem_[current_frame_];
 
-    vkQueueSubmit(ctx_.graphics_queue(), 1, &submit, in_flight_fences_[current_frame_]);
+    if (vkQueueSubmit(ctx_.graphics_queue(), 1, &submit, in_flight_fences_[current_frame_]) != VK_SUCCESS)
+    {
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to submit Vulkan frame");
+        return;
+    }
 
     VkPresentInfoKHR present = { VK_STRUCTURE_TYPE_PRESENT_INFO_KHR };
     present.waitSemaphoreCount = 1;
@@ -381,16 +388,8 @@ void VkRenderer::end_frame()
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebuffer_resized_)
     {
         framebuffer_resized_ = false;
-        ctx_.recreate_swapchain(pixel_w_, pixel_h_);
-        pipeline_.shutdown(ctx_.device());
-        pipeline_.initialize(ctx_, "shaders");
-        if (desc_pool_)
-        {
-            vkDestroyDescriptorPool(ctx_.device(), desc_pool_, nullptr);
-            desc_pool_ = VK_NULL_HANDLE;
-        }
-        create_descriptor_pool();
-        update_all_descriptor_sets();
+        if (!recreate_frame_resources())
+            SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to rebuild Vulkan frame resources after present");
     }
 
     current_frame_ = (current_frame_ + 1) % MAX_FRAMES_IN_FLIGHT;

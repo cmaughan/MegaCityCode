@@ -1,5 +1,7 @@
 #pragma once
+#include "app_config.h"
 #include "grid_rendering_pipeline.h"
+#include "ui_request_worker.h"
 #include <chrono>
 #include <optional>
 #include <spectre/sdl_window.h>
@@ -20,12 +22,20 @@ namespace spectre
 class App
 {
 public:
+    App();
     bool initialize();
     void run();
     bool run_smoke_test(std::chrono::milliseconds timeout);
     void shutdown();
 
 private:
+    bool initialize_window_and_renderer();
+    bool initialize_text_service();
+    bool initialize_nvim();
+    bool attach_ui();
+    void wire_ui_callbacks();
+    void wire_window_callbacks();
+
     enum class CursorBlinkPhase
     {
         Steady,
@@ -45,8 +55,11 @@ private:
     void restart_cursor_blink(std::chrono::steady_clock::time_point now);
     void advance_cursor_blink(std::chrono::steady_clock::time_point now);
     void apply_cursor_visibility();
+    void update_text_input_area();
+    void queue_resize_request(int cols, int rows, const char* reason);
     int wait_timeout_ms(std::optional<std::chrono::steady_clock::time_point> wait_deadline) const;
 
+    AppConfig config_;
     SdlWindow window_;
     std::unique_ptr<IRenderer> renderer_;
     TextService text_service_;
@@ -58,6 +71,7 @@ private:
     NvimInput input_;
     GridRenderingPipeline grid_pipeline_;
     UiOptions ui_options_;
+    UiRequestWorker ui_request_worker_;
 
     bool running_ = false;
     bool pending_window_activation_ = true;
@@ -66,9 +80,12 @@ private:
     bool frame_requested_ = false;
     bool cursor_visible_ = true;
     bool cursor_busy_ = false;
+    bool startup_resize_pending_ = false;
     CursorStyle cursor_style_ = {};
     CursorBlinkPhase cursor_blink_phase_ = CursorBlinkPhase::Steady;
     std::optional<std::chrono::steady_clock::time_point> next_blink_deadline_;
+    int pending_startup_resize_cols_ = 0;
+    int pending_startup_resize_rows_ = 0;
     int grid_cols_ = 0, grid_rows_ = 0;
 };
 

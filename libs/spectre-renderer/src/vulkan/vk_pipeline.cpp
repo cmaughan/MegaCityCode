@@ -1,5 +1,6 @@
 #include "vk_pipeline.h"
 #include "vk_context.h"
+
 #include <fstream>
 #include <spectre/log.h>
 #include <vector>
@@ -16,7 +17,7 @@ VkShaderModule VkPipelineManager::load_shader(VkDevice device, const std::string
         return VK_NULL_HANDLE;
     }
 
-    size_t size = file.tellg();
+    size_t size = (size_t)file.tellg();
     std::vector<char> code(size);
     file.seekg(0);
     file.read(code.data(), size);
@@ -25,7 +26,7 @@ VkShaderModule VkPipelineManager::load_shader(VkDevice device, const std::string
     ci.codeSize = size;
     ci.pCode = reinterpret_cast<const uint32_t*>(code.data());
 
-    VkShaderModule module;
+    VkShaderModule module = VK_NULL_HANDLE;
     if (vkCreateShaderModule(device, &ci, nullptr, &module) != VK_SUCCESS)
     {
         SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create shader module: %s", path.c_str());
@@ -37,8 +38,8 @@ VkShaderModule VkPipelineManager::load_shader(VkDevice device, const std::string
 bool VkPipelineManager::initialize(VkContext& ctx, const std::string& shader_dir)
 {
     VkDevice device = ctx.device();
+    reset_objects(device);
 
-    // Load shaders
     auto bg_vert = load_shader(device, shader_dir + "/grid_bg.vert.spv");
     auto bg_frag = load_shader(device, shader_dir + "/grid_bg.frag.spv");
     auto fg_vert = load_shader(device, shader_dir + "/grid_fg.vert.spv");
@@ -47,13 +48,11 @@ bool VkPipelineManager::initialize(VkContext& ctx, const std::string& shader_dir
     if (!bg_vert || !bg_frag || !fg_vert || !fg_frag)
         return false;
 
-    // Push constant range: screen_size (vec2), cell_size (vec2)
     VkPushConstantRange push_range = {};
     push_range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     push_range.offset = 0;
     push_range.size = sizeof(float) * 4;
 
-    // BG descriptor set layout: just SSBO
     {
         VkDescriptorSetLayoutBinding ssbo_binding = {};
         ssbo_binding.binding = 0;
@@ -64,17 +63,16 @@ bool VkPipelineManager::initialize(VkContext& ctx, const std::string& shader_dir
         VkDescriptorSetLayoutCreateInfo layout_ci = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
         layout_ci.bindingCount = 1;
         layout_ci.pBindings = &ssbo_binding;
-        vkCreateDescriptorSetLayout(device, &layout_ci, nullptr, &bg_desc_layout_);
+        if (vkCreateDescriptorSetLayout(device, &layout_ci, nullptr, &bg_desc_layout_) != VK_SUCCESS)
+            return false;
     }
 
-    // FG descriptor set layout: SSBO + atlas sampler
     {
         VkDescriptorSetLayoutBinding bindings[2] = {};
         bindings[0].binding = 0;
         bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         bindings[0].descriptorCount = 1;
         bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-
         bindings[1].binding = 1;
         bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         bindings[1].descriptorCount = 1;
@@ -83,47 +81,42 @@ bool VkPipelineManager::initialize(VkContext& ctx, const std::string& shader_dir
         VkDescriptorSetLayoutCreateInfo layout_ci = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
         layout_ci.bindingCount = 2;
         layout_ci.pBindings = bindings;
-        vkCreateDescriptorSetLayout(device, &layout_ci, nullptr, &fg_desc_layout_);
+        if (vkCreateDescriptorSetLayout(device, &layout_ci, nullptr, &fg_desc_layout_) != VK_SUCCESS)
+            return false;
     }
 
-    // Pipeline layouts
     {
         VkPipelineLayoutCreateInfo layout_ci = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
         layout_ci.setLayoutCount = 1;
         layout_ci.pSetLayouts = &bg_desc_layout_;
         layout_ci.pushConstantRangeCount = 1;
         layout_ci.pPushConstantRanges = &push_range;
-        vkCreatePipelineLayout(device, &layout_ci, nullptr, &bg_layout_);
+        if (vkCreatePipelineLayout(device, &layout_ci, nullptr, &bg_layout_) != VK_SUCCESS)
+            return false;
 
         layout_ci.pSetLayouts = &fg_desc_layout_;
-        vkCreatePipelineLayout(device, &layout_ci, nullptr, &fg_layout_);
+        if (vkCreatePipelineLayout(device, &layout_ci, nullptr, &fg_layout_) != VK_SUCCESS)
+            return false;
     }
 
-    // Common pipeline state
     VkPipelineVertexInputStateCreateInfo vertex_input = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
-
     VkPipelineInputAssemblyStateCreateInfo input_assembly = { VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
     input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-
     VkPipelineViewportStateCreateInfo viewport_state = { VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO };
     viewport_state.viewportCount = 1;
     viewport_state.scissorCount = 1;
-
     VkPipelineRasterizationStateCreateInfo raster = { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
     raster.polygonMode = VK_POLYGON_MODE_FILL;
     raster.cullMode = VK_CULL_MODE_NONE;
     raster.frontFace = VK_FRONT_FACE_CLOCKWISE;
     raster.lineWidth = 1.0f;
-
     VkPipelineMultisampleStateCreateInfo multisample = { VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
     multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
     VkDynamicState dynamic_states[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
     VkPipelineDynamicStateCreateInfo dynamic_state = { VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
     dynamic_state.dynamicStateCount = 2;
     dynamic_state.pDynamicStates = dynamic_states;
 
-    // BG pipeline: no blending (opaque)
     {
         VkPipelineColorBlendAttachmentState blend_attachment = {};
         blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
@@ -157,10 +150,10 @@ bool VkPipelineManager::initialize(VkContext& ctx, const std::string& shader_dir
         pi.renderPass = ctx.render_pass();
         pi.subpass = 0;
 
-        vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pi, nullptr, &bg_pipeline_);
+        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pi, nullptr, &bg_pipeline_) != VK_SUCCESS)
+            return false;
     }
 
-    // FG pipeline: alpha blending
     {
         VkPipelineColorBlendAttachmentState blend_attachment = {};
         blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
@@ -200,19 +193,23 @@ bool VkPipelineManager::initialize(VkContext& ctx, const std::string& shader_dir
         pi.renderPass = ctx.render_pass();
         pi.subpass = 0;
 
-        vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pi, nullptr, &fg_pipeline_);
+        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pi, nullptr, &fg_pipeline_) != VK_SUCCESS)
+            return false;
     }
 
-    // Cleanup shader modules
     vkDestroyShaderModule(device, bg_vert, nullptr);
     vkDestroyShaderModule(device, bg_frag, nullptr);
     vkDestroyShaderModule(device, fg_vert, nullptr);
     vkDestroyShaderModule(device, fg_frag, nullptr);
-
     return true;
 }
 
 void VkPipelineManager::shutdown(VkDevice device)
+{
+    reset_objects(device);
+}
+
+void VkPipelineManager::reset_objects(VkDevice device)
 {
     if (bg_pipeline_)
         vkDestroyPipeline(device, bg_pipeline_, nullptr);
@@ -226,6 +223,13 @@ void VkPipelineManager::shutdown(VkDevice device)
         vkDestroyDescriptorSetLayout(device, bg_desc_layout_, nullptr);
     if (fg_desc_layout_)
         vkDestroyDescriptorSetLayout(device, fg_desc_layout_, nullptr);
+
+    bg_pipeline_ = VK_NULL_HANDLE;
+    fg_pipeline_ = VK_NULL_HANDLE;
+    bg_layout_ = VK_NULL_HANDLE;
+    fg_layout_ = VK_NULL_HANDLE;
+    bg_desc_layout_ = VK_NULL_HANDLE;
+    fg_desc_layout_ = VK_NULL_HANDLE;
 }
 
 } // namespace spectre

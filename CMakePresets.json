@@ -53,6 +53,17 @@
                 "lhs": "${hostSystemName}",
                 "rhs": "Darwin"
             }
+        },
+        {
+            "name": "clang-tools",
+            "displayName": "Clang tools / compile_commands.json (Ninja)",
+            "binaryDir": "${sourceDir}/build-tools",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "description": "Ninja build used only for generating compile_commands.json for clang-uml, clangd, etc. Not used for normal builds."
         }
     ],
     "buildPresets": [

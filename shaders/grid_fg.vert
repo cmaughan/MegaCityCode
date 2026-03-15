@@ -12,6 +12,7 @@ struct Cell {
     float size_x, size_y;
     float bg_r, bg_g, bg_b, bg_a;
     float fg_r, fg_g, fg_b, fg_a;
+    float sp_r, sp_g, sp_b, sp_a;
     float uv_x0, uv_y0, uv_x1, uv_y1;
     float glyph_offset_x, glyph_offset_y;
     float glyph_size_x, glyph_size_y;

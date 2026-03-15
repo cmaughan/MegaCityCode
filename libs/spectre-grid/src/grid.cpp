@@ -29,14 +29,19 @@ void Grid::resize(int cols, int rows)
     cols_ = cols;
     rows_ = rows;
     cells_.resize(cols * rows);
+    dirty_marks_.assign((size_t)cols * rows, 0);
+    dirty_cells_.clear();
     clear();
 }
 
 void Grid::clear()
 {
-    for (auto& c : cells_)
+    dirty_cells_.clear();
+    std::fill(dirty_marks_.begin(), dirty_marks_.end(), (uint8_t)0);
+    for (size_t i = 0; i < cells_.size(); i++)
     {
-        c = make_blank_cell();
+        cells_[i] = make_blank_cell();
+        mark_dirty_index((int)i);
     }
 }
 
@@ -50,15 +55,19 @@ void Grid::set_cell(int col, int row, const std::string& text, uint16_t hl_id, b
     {
         auto& next = cells_[row * cols_ + col + 1];
         if (next.double_width_cont)
+        {
             clear_continuation(next);
+            mark_dirty_index(row * cols_ + col + 1);
+        }
     }
 
     cell.text = text;
     cell.codepoint = utf8_first_codepoint(text);
     cell.hl_attr_id = hl_id;
-    cell.dirty = true;
+    cell.dirty = false;
     cell.double_width = double_width;
     cell.double_width_cont = false;
+    mark_dirty_index(row * cols_ + col);
 
     if (double_width && col + 1 < cols_)
     {
@@ -66,9 +75,10 @@ void Grid::set_cell(int col, int row, const std::string& text, uint16_t hl_id, b
         next.text.clear();
         next.codepoint = ' ';
         next.hl_attr_id = hl_id;
-        next.dirty = true;
+        next.dirty = false;
         next.double_width = false;
         next.double_width_cont = true;
+        mark_dirty_index(row * cols_ + col + 1);
     }
 }
 
@@ -79,9 +89,9 @@ const Cell& Grid::get_cell(int col, int row) const
     return cells_[row * cols_ + col];
 }
 
-void Grid::scroll(int top, int bot, int left, int right, int rows)
+void Grid::scroll(int top, int bot, int left, int right, int rows, int cols)
 {
-    if (rows == 0)
+    if (rows == 0 && cols == 0)
         return;
 
     bool valid = top >= 0 && top < bot && bot <= rows_
@@ -97,7 +107,7 @@ void Grid::scroll(int top, int bot, int left, int right, int rows)
             for (int c = left; c < right; c++)
             {
                 cells_[r * cols_ + c] = cells_[(r + rows) * cols_ + c];
-                cells_[r * cols_ + c].dirty = true;
+                mark_dirty_index(r * cols_ + c);
             }
         }
         for (int r = bot - rows; r < bot; r++)
@@ -105,10 +115,11 @@ void Grid::scroll(int top, int bot, int left, int right, int rows)
             for (int c = left; c < right; c++)
             {
                 cells_[r * cols_ + c] = make_blank_cell();
+                mark_dirty_index(r * cols_ + c);
             }
         }
     }
-    else
+    else if (rows < 0)
     {
         int shift = -rows;
         for (int r = bot - 1; r >= top + shift; r--)
@@ -116,7 +127,7 @@ void Grid::scroll(int top, int bot, int left, int right, int rows)
             for (int c = left; c < right; c++)
             {
                 cells_[r * cols_ + c] = cells_[(r - shift) * cols_ + c];
-                cells_[r * cols_ + c].dirty = true;
+                mark_dirty_index(r * cols_ + c);
             }
         }
         for (int r = top; r < top + shift; r++)
@@ -124,15 +135,42 @@ void Grid::scroll(int top, int bot, int left, int right, int rows)
             for (int c = left; c < right; c++)
             {
                 cells_[r * cols_ + c] = make_blank_cell();
+                mark_dirty_index(r * cols_ + c);
             }
         }
     }
 
-    for (int r = top; r < bot; r++)
+    if (cols > 0)
     {
-        for (int c = left; c < right; c++)
+        for (int r = top; r < bot; r++)
         {
-            cells_[r * cols_ + c].dirty = true;
+            for (int c = left; c < right - cols; c++)
+            {
+                cells_[r * cols_ + c] = cells_[r * cols_ + c + cols];
+                mark_dirty_index(r * cols_ + c);
+            }
+            for (int c = right - cols; c < right; c++)
+            {
+                cells_[r * cols_ + c] = make_blank_cell();
+                mark_dirty_index(r * cols_ + c);
+            }
+        }
+    }
+    else if (cols < 0)
+    {
+        int shift = -cols;
+        for (int r = top; r < bot; r++)
+        {
+            for (int c = right - 1; c >= left + shift; c--)
+            {
+                cells_[r * cols_ + c] = cells_[r * cols_ + c - shift];
+                mark_dirty_index(r * cols_ + c);
+            }
+            for (int c = left; c < left + shift; c++)
+            {
+                cells_[r * cols_ + c] = make_blank_cell();
+                mark_dirty_index(r * cols_ + c);
+            }
         }
     }
 }
@@ -148,35 +186,43 @@ void Grid::mark_dirty(int col, int row)
 {
     if (col < 0 || col >= cols_ || row < 0 || row >= rows_)
         return;
-    cells_[row * cols_ + col].dirty = true;
+    mark_dirty_index(row * cols_ + col);
 }
 
 void Grid::mark_all_dirty()
 {
-    for (auto& c : cells_)
-        c.dirty = true;
+    dirty_cells_.clear();
+    std::fill(dirty_marks_.begin(), dirty_marks_.end(), (uint8_t)0);
+    for (size_t i = 0; i < cells_.size(); i++)
+        mark_dirty_index((int)i);
 }
 
 void Grid::clear_dirty()
 {
     for (auto& c : cells_)
         c.dirty = false;
+    std::fill(dirty_marks_.begin(), dirty_marks_.end(), (uint8_t)0);
+    dirty_cells_.clear();
 }
 
 std::vector<Grid::DirtyCell> Grid::get_dirty_cells() const
 {
-    std::vector<DirtyCell> result;
-    for (int r = 0; r < rows_; r++)
-    {
-        for (int c = 0; c < cols_; c++)
-        {
-            if (cells_[r * cols_ + c].dirty)
-            {
-                result.push_back({ c, r });
-            }
-        }
-    }
-    return result;
+    return dirty_cells_;
+}
+
+void Grid::mark_dirty_index(int index)
+{
+    if (index < 0 || index >= (int)cells_.size())
+        return;
+
+    auto& cell = cells_[(size_t)index];
+    cell.dirty = true;
+
+    if (dirty_marks_[(size_t)index])
+        return;
+
+    dirty_marks_[(size_t)index] = 1;
+    dirty_cells_.push_back({ index % cols_, index / cols_ });
 }
 
 } // namespace spectre

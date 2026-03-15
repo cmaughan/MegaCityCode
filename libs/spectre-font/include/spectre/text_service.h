@@ -1,12 +1,27 @@
 #pragma once
 
-#include <spectre/font.h>
+#include <memory>
+#include <spectre/font_metrics.h>
+#include <spectre/types.h>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace spectre
 {
+
+struct AtlasDirtyRect
+{
+    int x = 0;
+    int y = 0;
+    int w = 0;
+    int h = 0;
+};
+
+struct TextServiceConfig
+{
+    std::string font_path;
+    std::vector<std::string> fallback_paths;
+};
 
 class TextService
 {
@@ -15,7 +30,15 @@ public:
     static constexpr int MIN_POINT_SIZE = 6;
     static constexpr int MAX_POINT_SIZE = 36;
 
+    TextService();
+    ~TextService();
+    TextService(const TextService&) = delete;
+    TextService& operator=(const TextService&) = delete;
+    TextService(TextService&& other) noexcept;
+    TextService& operator=(TextService&& other) noexcept;
+
     bool initialize(int point_size, float display_ppi);
+    bool initialize(const TextServiceConfig& config, int point_size, float display_ppi);
     void shutdown();
 
     bool set_point_size(int point_size);
@@ -30,26 +53,12 @@ public:
     const uint8_t* atlas_data() const;
     int atlas_width() const;
     int atlas_height() const;
-    const GlyphCache::DirtyRect& atlas_dirty_rect() const;
+    AtlasDirtyRect atlas_dirty_rect() const;
+    bool consume_atlas_reset();
 
 private:
-    struct FallbackFont
-    {
-        FontManager font;
-        TextShaper shaper;
-        std::string path;
-    };
-
-    void initialize_fallback_fonts();
-    std::pair<FT_Face, TextShaper*> resolve_font_for_text(const std::string& text);
-
-    std::string font_path_;
-    float display_ppi_ = 96.0f;
-    FontManager font_;
-    GlyphCache glyph_cache_;
-    TextShaper shaper_;
-    std::vector<FallbackFont> fallback_fonts_;
-    std::unordered_map<std::string, int> font_choice_cache_;
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
 };
 
 } // namespace spectre

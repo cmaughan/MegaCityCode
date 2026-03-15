@@ -1,4 +1,5 @@
 #include "vk_context.h"
+
 #include <SDL3/SDL_vulkan.h>
 #include <VkBootstrap.h>
 #include <spectre/log.h>
@@ -13,7 +14,6 @@ bool VkContext::initialize(SDL_Window* window)
 {
     window_ = window;
 
-    // Instance
     vkb::InstanceBuilder instance_builder;
     auto inst_ret = instance_builder
                         .set_app_name("spectre")
@@ -35,21 +35,18 @@ bool VkContext::initialize(SDL_Window* window)
     instance_ = vkb_inst.instance;
     debug_messenger_ = vkb_inst.debug_messenger;
 
-    // Surface
     if (!SDL_Vulkan_CreateSurface(window, instance_, nullptr, &surface_))
     {
         SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create Vulkan surface: %s", SDL_GetError());
         return false;
     }
 
-    // Physical device
     vkb::PhysicalDeviceSelector selector(vkb_inst);
     auto phys_ret = selector
                         .set_surface(surface_)
                         .set_minimum_version(1, 2)
                         .prefer_gpu_device_type(vkb::PreferredDeviceType::discrete)
                         .select();
-
     if (!phys_ret)
     {
         SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to select physical device: %s", phys_ret.error().message().c_str());
@@ -59,7 +56,6 @@ bool VkContext::initialize(SDL_Window* window)
     auto vkb_phys = phys_ret.value();
     physical_device_ = vkb_phys.physical_device;
 
-    // Logical device
     vkb::DeviceBuilder device_builder(vkb_phys);
     auto dev_ret = device_builder.build();
     if (!dev_ret)
@@ -80,7 +76,6 @@ bool VkContext::initialize(SDL_Window* window)
     graphics_queue_ = queue_ret.value();
     graphics_queue_family_ = vkb_dev.get_queue_index(vkb::QueueType::graphics).value();
 
-    // VMA allocator
     VmaAllocatorCreateInfo alloc_info = {};
     alloc_info.physicalDevice = physical_device_;
     alloc_info.device = device_;
@@ -92,23 +87,16 @@ bool VkContext::initialize(SDL_Window* window)
         return false;
     }
 
-    // Render pass
-    if (!create_render_pass())
-        return false;
-
-    // Swapchain
-    int w, h;
+    int w = 0;
+    int h = 0;
     SDL_GetWindowSizeInPixels(window, &w, &h);
-    if (!recreate_swapchain(w, h))
-        return false;
-
-    return true;
+    return recreate_swapchain(w, h);
 }
 
-bool VkContext::create_render_pass()
+bool VkContext::create_render_pass(VkFormat format)
 {
     VkAttachmentDescription color_attachment = {};
-    color_attachment.format = VK_FORMAT_B8G8R8A8_UNORM;
+    color_attachment.format = format;
     color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
     color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -130,7 +118,6 @@ bool VkContext::create_render_pass()
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
     dependency.dstSubpass = 0;
     dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependency.srcAccessMask = 0;
     dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
@@ -155,17 +142,12 @@ bool VkContext::recreate_swapchain(int width, int height)
 {
     vkDeviceWaitIdle(device_);
 
-    // Destroy old framebuffers and image views
     for (auto fb : swapchain_.framebuffers)
         vkDestroyFramebuffer(device_, fb, nullptr);
     swapchain_.framebuffers.clear();
     for (auto iv : swapchain_.image_views)
         vkDestroyImageView(device_, iv, nullptr);
     swapchain_.image_views.clear();
-
-    if (render_pass_ != VK_NULL_HANDLE && swapchain_.swapchain != VK_NULL_HANDLE)
-    {
-    }
 
     vkb::SwapchainBuilder sc_builder(physical_device_, device_, surface_);
     auto sc_ret = sc_builder
@@ -181,11 +163,8 @@ bool VkContext::recreate_swapchain(int width, int height)
         return false;
     }
 
-    // Destroy old swapchain after building new one
     if (swapchain_.swapchain != VK_NULL_HANDLE)
-    {
         vkDestroySwapchainKHR(device_, swapchain_.swapchain, nullptr);
-    }
 
     auto vkb_sc = sc_ret.value();
     swapchain_.swapchain = vkb_sc.swapchain;
@@ -199,44 +178,8 @@ bool VkContext::recreate_swapchain(int width, int height)
         vkDestroyRenderPass(device_, render_pass_, nullptr);
         render_pass_ = VK_NULL_HANDLE;
     }
-
-    VkAttachmentDescription color_attachment = {};
-    color_attachment.format = swapchain_.format;
-    color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-    VkAttachmentReference color_ref = { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
-    VkSubpassDescription subpass = {};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &color_ref;
-
-    VkSubpassDependency dependency = {};
-    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-    dependency.dstSubpass = 0;
-    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependency.srcAccessMask = 0;
-    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-    VkRenderPassCreateInfo rp_info = { VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO };
-    rp_info.attachmentCount = 1;
-    rp_info.pAttachments = &color_attachment;
-    rp_info.subpassCount = 1;
-    rp_info.pSubpasses = &subpass;
-    rp_info.dependencyCount = 1;
-    rp_info.pDependencies = &dependency;
-
-    if (vkCreateRenderPass(device_, &rp_info, nullptr, &render_pass_) != VK_SUCCESS)
-    {
-        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to recreate render pass");
+    if (!create_render_pass(swapchain_.format))
         return false;
-    }
 
     create_framebuffers();
     return true;
@@ -255,7 +198,11 @@ void VkContext::create_framebuffers()
         fb_info.height = swapchain_.extent.height;
         fb_info.layers = 1;
 
-        vkCreateFramebuffer(device_, &fb_info, nullptr, &swapchain_.framebuffers[i]);
+        if (vkCreateFramebuffer(device_, &fb_info, nullptr, &swapchain_.framebuffers[i]) != VK_SUCCESS)
+        {
+            SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create framebuffer");
+            swapchain_.framebuffers[i] = VK_NULL_HANDLE;
+        }
     }
 }
 
@@ -285,8 +232,10 @@ void VkContext::shutdown()
     if (surface_)
         vkDestroySurfaceKHR(instance_, surface_, nullptr);
 
-    vkb::destroy_debug_utils_messenger(instance_, debug_messenger_);
-    vkDestroyInstance(instance_, nullptr);
+    if (instance_ && debug_messenger_)
+        vkb::destroy_debug_utils_messenger(instance_, debug_messenger_);
+    if (instance_)
+        vkDestroyInstance(instance_, nullptr);
 }
 
 } // namespace spectre

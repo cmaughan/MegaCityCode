@@ -35,6 +35,7 @@ public:
         int left = 0;
         int right = 0;
         int rows = 0;
+        int cols = 0;
     };
 
     void resize(int cols, int rows) override
@@ -52,9 +53,9 @@ public:
         set_cell_calls.push_back({ col, row, text, hl_id, double_width });
     }
 
-    void scroll(int top, int bot, int left, int right, int rows) override
+    void scroll(int top, int bot, int left, int right, int rows, int cols) override
     {
-        scroll_calls.push_back({ top, bot, left, right, rows });
+        scroll_calls.push_back({ top, bot, left, right, rows, cols });
     }
 
     std::vector<SetCellCall> set_cell_calls;
@@ -181,10 +182,23 @@ void run_ui_events_tests()
         expect_eq(sink.set_cell_calls[0].hl_id, static_cast<uint16_t>(9), "grid sink receives highlight id");
         expect_eq(static_cast<int>(sink.scroll_calls.size()), 1, "grid sink receives scroll calls");
         expect_eq(sink.scroll_calls[0].bot, 4, "grid sink receives scroll bounds");
+        expect_eq(sink.scroll_calls[0].cols, 0, "grid sink receives horizontal scroll delta");
         expect_eq(sink.clear_count, 1, "grid sink receives clear calls");
         expect_eq(static_cast<int>(sink.resize_calls.size()), 1, "grid sink receives resize calls");
         expect_eq(sink.resize_calls[0].cols, 10, "grid sink receives resize columns");
         expect_eq(sink.resize_calls[0].rows, 6, "grid sink receives resize rows");
+    });
+
+    run_test("ui event handler forwards title updates", []() {
+        UiEventHandler handler;
+        std::string title;
+        handler.on_title = [&](const std::string& value) { title = value; };
+
+        handler.process_redraw({
+            redraw_event("set_title", { arr({ s("example.txt - Spectre") }) }),
+        });
+
+        expect_eq(title, std::string("example.txt - Spectre"), "title update is forwarded");
     });
 
     run_test("ui event handler applies grapheme widths like nvim", []() {

@@ -75,18 +75,20 @@ struct alignas(16) GpuCell
     float size_x, size_y; // Cell size in pixels
     float bg_r, bg_g, bg_b, bg_a;
     float fg_r, fg_g, fg_b, fg_a;
+    float sp_r, sp_g, sp_b, sp_a;
     float uv_x0, uv_y0, uv_x1, uv_y1; // Atlas UVs
     float glyph_offset_x, glyph_offset_y;
     float glyph_size_x, glyph_size_y;
     uint32_t style_flags; // bit 0: bold, bit 1: italic, bit 2: underline, bit 3: strikethrough
     uint32_t _pad[3];
 };
-static_assert(sizeof(GpuCell) == 96, "GpuCell must be 96 bytes for SSBO alignment");
+static_assert(sizeof(GpuCell) == 112, "GpuCell must be 112 bytes for SSBO alignment");
 
 struct CellUpdate
 {
     int col, row;
     Color bg, fg;
+    Color sp;
     AtlasRegion glyph;
     uint32_t style_flags = 0;
 };
