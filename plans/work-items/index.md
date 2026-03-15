@@ -1,22 +1,21 @@
 # Work Items
 
-Consensus batch status: implemented.
+This index tracks the current backlog extracted from [[../reviews/review-concensus]].
 
-Implemented items:
+Priority order:
 
-- [[00 atlas recovery -bug]]
-- [[01 vulkan robustness and upload path -bug]]
-- [[02 app lifecycle split and rollback -feature]]
-- [[03 ui path rpc decoupling -bug]]
-- [[04 redraw completeness and dirty tracking -bug]]
-- [[05 font and shared api boundary cleanup -feature]]
-- [[06 highlight fidelity -feature]]
-- [[07 user configuration and font selection -feature]]
-- [[08 clipboard ime and title integration -feature]]
-- [[09 lifecycle and rendering regressions -test]]
+1. [[00 rpc transport serialization and shutdown hardening -bug]]
+2. [[01 app loop and ui request decomposition -feature]]
+3. [[02 render test extraction and parser unification -feature]]
+4. [[03 public api boundary cleanup -feature]]
+5. [[04 grid wide-cell repair and redraw robustness -bug]]
+6. [[05 vulkan robustness and atlas upload rework -bug]]
+7. [[06 test seam cleanup and lifecycle coverage -test]]
+8. [[07 platform text and display integration -feature]]
+9. [[08 gui ergonomics and observability -feature]]
 
-Follow-up items:
+Execution rule:
 
-- [[10 clipboard provider integration -feature]]
-
-Remaining follow-up is normal polish and validation, not an open consensus-plan backlog.
+- finish the correctness items first
+- keep each item independently buildable and testable
+- prefer small, reviewable slices over another large cross-module refactor

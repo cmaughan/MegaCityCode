@@ -1,102 +1,94 @@
-**Scope**
-This review is based only on the attached `all_code.md` snapshot, which is the latest code visible in this run. No local inspection, build, or execution was performed.
+Based on the supplied `all_code.md` snapshot only, this is a static review of the latest exported tree. No local files, builds, binaries, or tests were used.
 
 **Findings**
-1. `High` Partial-initialization cleanup is unsafe. [`app/app.cpp`](D:/dev/spectre/app/app.cpp) returns early after creating the window, renderer, font service, `nvim` child, and RPC, while [`app/main.cpp`](D:/dev/spectre/app/main.cpp) only calls `shutdown()` after successful init. A failed `nvim_ui_attach` or renderer init can leak GPU state or leave a child process behind. This needs staged rollback or RAII ownership.
-2. `High` Glyph atlas exhaustion has no recovery path. [`libs/spectre-font/src/glyph_cache.cpp`](D:/dev/spectre/libs/spectre-font/src/glyph_cache.cpp) logs and returns failure when the atlas is full; [`app/grid_rendering_pipeline.cpp`](D:/dev/spectre/app/grid_rendering_pipeline.cpp) then silently renders empty glyphs. Long sessions with varied Unicode or icons will degrade permanently.
-3. `High` The UI thread performs blocking RPC round-trips during resize and font zoom. [`app/app.cpp`](D:/dev/spectre/app/app.cpp) calls `rpc_.request("nvim_ui_try_resize", ...)`; [`libs/spectre-nvim/src/rpc.cpp`](D:/dev/spectre/libs/spectre-nvim/src/rpc.cpp) can block for 5 seconds. That makes resize and zoom latency-dependent on Neovim responsiveness.
-4. `High` `grid_scroll` handling appears incomplete. [`libs/spectre-nvim/src/ui_events.cpp`](D:/dev/spectre/libs/spectre-nvim/src/ui_events.cpp) reads only the row delta, and [`libs/spectre-grid/include/spectre/grid.h`](D:/dev/spectre/libs/spectre-grid/include/spectre/grid.h) only models vertical scroll. Inference: if Neovim emits horizontal scroll data, this implementation will misrender.
-5. `High` Renderer error handling is too weak for low-level code. The Vulkan path in [`libs/spectre-renderer/src/vulkan/vk_context.cpp`](D:/dev/spectre/libs/spectre-renderer/src/vulkan/vk_context.cpp), [`vk_pipeline.cpp`](D:/dev/spectre/libs/spectre-renderer/src/vulkan/vk_pipeline.cpp), [`vk_renderer.cpp`](D:/dev/spectre/libs/spectre-renderer/src/vulkan/vk_renderer.cpp), and [`vk_buffers.cpp`](D:/dev/spectre/libs/spectre-renderer/src/vulkan/vk_buffers.cpp) ignores many `vkCreate*`, `vkAllocate*`, and resize-path allocation failures. Failures will be hard to diagnose and may corrupt later state.
-6. `Medium` `App` is no longer thin. [`app/app.cpp`](D:/dev/spectre/app/app.cpp) owns event-loop policy, cursor blinking, resize negotiation, font zoom policy, redraw flushing, wakeups, and process lifecycle. That is too much cross-cutting behavior in one file, and it will cause merge pressure for multiple agents.
-7. `Medium` Dirty tracking is conceptually incremental but operationally full-grid. [`libs/spectre-grid/src/grid.cpp`](D:/dev/spectre/libs/spectre-grid/src/grid.cpp) scans the entire grid to build a dirty list on every flush. That will scale poorly and makes render performance depend on terminal size, not just change volume.
-8. `Medium` `spectre-types` is drifting into a grab-bag module. It now contains POD types, logging, highlights, and Unicode width policy in [`libs/spectre-types/include/spectre/types.h`](D:/dev/spectre/libs/spectre-types/include/spectre/types.h), [`log.h`](D:/dev/spectre/libs/spectre-types/include/spectre/log.h), [`highlight.h`](D:/dev/spectre/libs/spectre-types/include/spectre/highlight.h), and [`unicode.h`](D:/dev/spectre/libs/spectre-types/include/spectre/unicode.h). That broadens the dependency root and makes future separations harder.
-9. `Medium` The font API exposes too much engine detail publicly. [`libs/spectre-font/include/spectre/font.h`](D:/dev/spectre/libs/spectre-font/include/spectre/font.h) leaks FreeType and HarfBuzz types into the public surface and mixes font loading, shaping, and atlas caching in one header. This is hostile to parallel refactors.
-10. `Medium` Shutdown ordering is implicit and fragile. [`app/app.cpp`](D:/dev/spectre/app/app.cpp) shuts the process before RPC; [`libs/spectre-nvim/src/rpc.cpp`](D:/dev/spectre/libs/spectre-nvim/src/rpc.cpp) joins a reader thread that otherwise blocks on pipe reads. The current sequence works by convention, not by a safe API contract.
-11. `Medium` Content-keyed caches are unbounded. [`libs/spectre-font/src/text_service.cpp`](D:/dev/spectre/libs/spectre-font/src/text_service.cpp) caches font choice by full cluster string, and [`glyph_cache.cpp`](D:/dev/spectre/libs/spectre-font/src/glyph_cache.cpp) caches clusters until atlas exhaustion. This is manageable now, but it is a long-session memory growth vector.
-12. `Medium` Backend implementations duplicate too much logic. [`libs/spectre-renderer/src/metal/metal_renderer.mm`](D:/dev/spectre/libs/spectre-renderer/src/metal/metal_renderer.mm) and [`libs/spectre-renderer/src/vulkan/vk_renderer.cpp`](D:/dev/spectre/libs/spectre-renderer/src/vulkan/vk_renderer.cpp) both own dirty uploads, atlas updates, two-pass draw behavior, resize recovery, and cursor overlay timing. That invites backend drift.
+1. `Critical`: RPC writes are not serialized. [`libs/spectre-nvim/src/rpc.cpp`](D:/dev/spectre/libs/spectre-nvim/src/rpc.cpp), [`app/ui_request_worker.cpp`](D:/dev/spectre/app/ui_request_worker.cpp), [`app/app.cpp`](D:/dev/spectre/app/app.cpp), and [`libs/spectre-nvim/src/input.cpp`](D:/dev/spectre/libs/spectre-nvim/src/input.cpp) all allow `request()`/`notify()` from different threads, but `NvimRpc` writes straight to the pipe with no write mutex. That can interleave msgpack frames and create rare protocol corruption.
+2. `High`: Exit is not robustly non-blocking. [`app/ui_request_worker.cpp`](D:/dev/spectre/app/ui_request_worker.cpp) joins a worker that may be stuck in a 5-second RPC call, [`libs/spectre-nvim/src/nvim_process.cpp`](D:/dev/spectre/libs/spectre-nvim/src/nvim_process.cpp) waits during shutdown, and [`libs/spectre-renderer/src/metal/metal_renderer.mm`](D:/dev/spectre/libs/spectre-renderer/src/metal/metal_renderer.mm) waits forever on the frame semaphore. A hung child or GPU can stall shutdown.
+3. `High`: The UI thread still does blocking RPC. [`app/app.cpp`](D:/dev/spectre/app/app.cpp) uses synchronous `nvim_eval` for copy, and [`libs/spectre-nvim/src/input.cpp`](D:/dev/spectre/libs/spectre-nvim/src/input.cpp) uses synchronous `nvim_paste`. Slow or wedged Neovim will freeze input and rendering.
+4. `High`: `app` is much thicker than the stated architecture. [`app/app.cpp`](D:/dev/spectre/app/app.cpp) owns lifecycle, event pump, cursor blink state machine, clipboard policy, font zoom, resize queuing, IME placement, render-test capture, and config persistence. That is one of the main merge hotspots for parallel work.
+5. `High`: The window abstraction is incomplete. [`app/app.h`](D:/dev/spectre/app/app.h) hard-depends on `SdlWindow` because [`libs/spectre-window/include/spectre/window.h`](D:/dev/spectre/libs/spectre-window/include/spectre/window.h) does not expose `wait_events()`, `wake()`, or `activate()`. The interface says “window abstraction”; the app still depends on SDL-specific behavior.
+6. `High`: Inference from [`libs/spectre-grid/src/grid.cpp`](D:/dev/spectre/libs/spectre-grid/src/grid.cpp): wide-cell repair is one-sided. `set_cell()` clears a continuation on the right when overwriting a wide leader, but does not repair the leader on the left when overwriting a former continuation cell. If redraw batches start inside a continuation column, stale wide-glyph state can survive.
+7. `Medium-High`: Tests cut through private boundaries. [`tests/CMakeLists.txt`](D:/dev/spectre/tests/CMakeLists.txt) pulls in `src` directories and compiles [`app/render_test.cpp`](D:/dev/spectre/app/render_test.cpp) directly. That makes refactors noisy and reduces the value of the public library surfaces.
+8. `Medium`: The Neovim surface is too broad and stringly typed. [`libs/spectre-nvim/include/spectre/nvim.h`](D:/dev/spectre/libs/spectre-nvim/include/spectre/nvim.h) exposes process management, msgpack value model, RPC, redraw parsing, and input translation in one public header. Small changes will force wide rebuilds and frequent merge conflicts.
+9. `Medium`: Parsing/reporting is hand-rolled and duplicated. [`app/app_config.cpp`](D:/dev/spectre/app/app_config.cpp) and [`app/render_test.cpp`](D:/dev/spectre/app/render_test.cpp) each implement partial TOML-like parsing; `render_test.cpp` also emits JSON by string concatenation without escaping. This is fragile around commas, quotes, and newlines.
+10. `Medium`: Vulkan recovery paths are weak. [`libs/spectre-renderer/src/vulkan/vk_buffers.cpp`](D:/dev/spectre/libs/spectre-renderer/src/vulkan/vk_buffers.cpp) destroys the old buffer before checking new allocation success and ignores one allocation return value; [`libs/spectre-renderer/src/vulkan/vk_context.cpp`](D:/dev/spectre/libs/spectre-renderer/src/vulkan/vk_context.cpp) can leave partial framebuffer creation failure unpropagated.
+11. `Medium`: macOS DPI handling is wrong for multi-monitor setups. [`libs/spectre-window/src/sdl_window.cpp`](D:/dev/spectre/libs/spectre-window/src/sdl_window.cpp) uses `CGMainDisplayID()` instead of the display actually hosting the window, so font metrics can be wrong after moving the window.
+12. `Low-Medium`: Repo hygiene will create review noise. [`.obsidian/workspace.json`](D:/dev/spectre/.obsidian/workspace.json) tracks user-local editor state and build detritus, which makes multi-agent review output less stable and less relevant.
 
-**Architecture**
-The top-level split is good: windowing, rendering, font, grid, RPC, and app orchestration are visibly separated, and [`libs/spectre-renderer/src/renderer_factory.cpp`](D:/dev/spectre/libs/spectre-renderer/src/renderer_factory.cpp) keeps backend-private headers out of `app`. The main structural problem is not the top-level layout, it is that some modules have become “gravity wells”: `App`, `spectre-types`, and the public font header each absorb too many responsibilities.
+**Separation And Layout**
+- The first-order split into `types`, `window`, `renderer`, `font`, `grid`, and `nvim` is good and easy to understand.
+- The cleanest separation is in shared renderer state: [`libs/spectre-renderer/src/renderer_state.cpp`](D:/dev/spectre/libs/spectre-renderer/src/renderer_state.cpp) keeps a large chunk of backend logic unified.
+- The weakest seams are `app`, `nvim`, and render-test support. Those are still coarse ownership areas rather than small modules.
+- Biggest merge hotspots for multiple agents are [`app/app.cpp`](D:/dev/spectre/app/app.cpp), [`libs/spectre-nvim/include/spectre/nvim.h`](D:/dev/spectre/libs/spectre-nvim/include/spectre/nvim.h), [`libs/spectre-types/include/spectre/unicode.h`](D:/dev/spectre/libs/spectre-types/include/spectre/unicode.h), and [`app/render_test.cpp`](D:/dev/spectre/app/render_test.cpp).
+- Tests currently validate internals as much as contracts, so ownership boundaries are weaker than the directory layout suggests.
 
-The cleanest next separations would be:
-- Move `GridRenderingPipeline` out of `app` into renderer or a new compositor layer.
-- Split process management, RPC transport, and redraw interpretation into smaller `spectre-nvim` components.
-- Narrow the public font API and hide FreeType/HarfBuzz behind internal headers or pimpls.
-- Split `spectre-types` into pure shared types vs utility policy modules.
-
-**Testing**
-The test suite is stronger than average for an early GUI codebase. The Unicode-width corpus, redraw replay fixture, fake RPC server, and renderer-state tests are all good decisions.
-
-The main holes are around lifecycle and failure behavior:
-- No test for init rollback after late-stage failure.
-- No test for atlas-full behavior.
-- No test for shutdown ordering and reader-thread termination.
-- No test for horizontal scroll semantics.
-- No test for double-width overwrite into a continuation column.
-- No test for font fallback selection in `TextService`.
-- No backend-specific resize/recreate regression test beyond a smoke test.
-- No coverage for DPI/display migration events.
-- No coverage for partial style fidelity such as underline/undercurl/special color.
-- No coverage for blocking RPC behavior on resize paths.
+**Testing Holes**
+- There is no stress test for concurrent RPC traffic from UI thread plus resize worker.
+- There is no shutdown-latency test for stuck RPC, stuck Neovim, or blocked renderer teardown.
+- There is no app-level test for font resize + relayout + deferred Neovim resize interaction.
+- There is no direct test for the suspected wide-cell continuation overwrite bug.
+- There is no config parser round-trip test for escaping, commas, or malformed arrays.
+- There is no malformed-redraw fuzz/passive robustness suite beyond the happy-path replay cases.
+- There is no backend-specific test for Vulkan resize/recreate failures.
+- There is no backend-specific test for Metal capture/shutdown edge cases.
+- There is no test proving macOS DPI math follows the active window display.
+- There is no contract test ensuring render-test report JSON stays valid when messages contain quotes or paths.
 
 **Top 10 Good**
-1. The repository has a real modular layout instead of one monolith.
-2. `app` depends on public renderer interfaces, not backend headers.
-3. The Unicode width tests compare against headless Neovim, which is exactly the right oracle.
-4. `tests/support/replay_fixture.h` is a strong foundation for future redraw bug reproduction.
-5. `RendererState` is a useful seam that makes GPU-facing state testable without a live renderer.
-6. The fake RPC server in [`tests/rpc_fake_server.cpp`](D:/dev/spectre/tests/rpc_fake_server.cpp) gives good transport-level coverage.
-7. Logging is centralized and testable instead of ad hoc `printf` use.
-8. CI covers both Windows and macOS builds.
-9. The public renderer/window interfaces are small and understandable.
-10. The code generally prefers simple data flow over template-heavy abstraction.
+- The repo has a clear architectural intent and mostly follows it.
+- The renderer abstraction is practical, and `RendererState` reduces backend duplication well.
+- Grid state is simple, testable, and cheap to reason about.
+- Unicode width handling is treated seriously and compared against Neovim.
+- `tests/support/replay_fixture.h` is exactly the right kind of redraw test helper.
+- The render snapshot harness is useful and realistic for a GUI project.
+- Logging is small, configurable, and testable without framework overhead.
+- Dependency versions are pinned instead of floating.
+- CI at least exercises Windows and macOS build/test paths.
+- Most code is direct and readable, with little unnecessary abstraction.
 
 **Top 10 Bad**
-1. Failure cleanup is inconsistent and unsafe.
-2. The text atlas has no eviction or recovery strategy.
-3. Synchronous RPC is used in latency-sensitive UI paths.
-4. Scroll handling looks narrower than Neovim’s redraw surface.
-5. Vulkan resource creation is too lightly checked.
-6. `App` is a merge hotspot.
-7. Dirty tracking does full-grid work too often.
-8. `spectre-types` is no longer just types.
-9. Public font headers leak engine internals.
-10. Tests depend on private source directories, which makes refactors expensive.
+- Unsynchronized RPC writes are the biggest correctness risk.
+- Shutdown paths are still blocking and brittle.
+- `app/app.cpp` is too large for safe parallel ownership.
+- `IWindow` is not strong enough to hide the SDL implementation.
+- Tests rely on private headers and compiled-in private sources.
+- Config and scenario parsing are bespoke and duplicated.
+- Error handling in Vulkan resource recreation is uneven.
+- macOS DPI logic is tied to the wrong display.
+- `nvim.h` is too wide a public surface.
+- Versioned editor workspace state adds churn unrelated to product behavior.
 
-**10 Quality-Of-Life Features To Add**
-1. Persistent settings for window size, font size, and last-used font.
-2. User-configurable font family, fallback list, and line spacing.
-3. Clipboard integration with explicit GUI copy/paste behavior.
-4. IME and dead-key composition support.
-5. Drag-and-drop file opening into the embedded Neovim session.
-6. A small runtime settings panel or command palette for GUI-only options.
-7. Better diagnostics UI for missing font, missing shader, or failed `nvim` launch.
-8. Per-monitor DPI reflow when the window moves across displays.
-9. Theme/background opacity options for GUI users.
-10. Session restore for window position and recent working directory.
+**Best 10 Quality-Of-Life Features To Add**
+- A GUI font picker with live preview and editable fallback chain.
+- Persistent window position and monitor restore, not just size.
+- Clickable URLs and file paths inside the grid.
+- Drag-and-drop file opening into the current or a new tab.
+- A small command palette for GUI-only actions like zoom, screenshots, logs, and config.
+- A settings UI for font size, padding, cursor blink, and renderer diagnostics.
+- A renderer/debug overlay showing DPI, cell size, atlas usage, and RPC latency.
+- Native file/folder open dialogs for non-terminal workflows.
+- Recent files and last-session restore.
+- Better clipboard UX with async operations and visible failure feedback.
 
-**10 Tests To Add**
-1. Init rollback test: fail `nvim_ui_attach` and assert all created subsystems are torn down.
-2. Atlas overflow test: fill the atlas and assert the behavior is explicit and recoverable.
-3. `grid_scroll` conformance test that includes horizontal scroll data.
-4. Double-width overwrite test where a later redraw writes into the continuation cell only.
-5. `TextService` fallback-selection test with primary-font miss and fallback hit.
-6. RPC shutdown-order test that proves `shutdown()` cannot deadlock regardless of call order.
-7. Resize-latency test that simulates a stalled RPC response and verifies the UI path stays non-blocking.
-8. Underline/undercurl/special-color propagation test from highlight table to renderer state.
-9. DPI migration test that simulates monitor-scale changes and verifies relayout.
-10. Backend recreate test for swapchain/drawable loss during resize and resume.
+**Best 10 Tests To Add**
+- A multi-threaded RPC stress test mixing `request()` and `notify()` from several threads.
+- A shutdown test where a resize RPC is in flight while the app exits.
+- A grid test that overwrites only the continuation half of a wide glyph.
+- An app config round-trip test with quotes, commas, and malformed arrays.
+- A redraw parser robustness suite with malformed or truncated event payloads.
+- A Vulkan resize/recreate test that simulates allocation or framebuffer failure.
+- A Metal shutdown test that proves teardown cannot block forever.
+- A DPI-provider test that verifies window-display-specific font metrics on macOS.
+- An atlas exhaustion test covering full-grid dirty replay after reset.
+- A render-test report test that verifies valid JSON escaping in failure messages.
 
-**Worst 10 Features**
-Interpreting this as the weakest current feature areas:
-
-1. Process lifecycle and shutdown robustness.
-2. Atlas-backed text rendering under long-session pressure.
-3. Resize behavior when Neovim is slow or unresponsive.
-4. Input translation completeness beyond the common keys.
-5. Scroll behavior completeness.
-6. Highlight/style fidelity beyond fg/bg/reverse/basic flags.
-7. DPI and display-change handling after launch.
-8. Runtime configuration and persistence.
-9. Error recovery and user-visible diagnostics.
-10. Backend parity and shared behavior between Vulkan and Metal.
+**Weakest Current Features / Behaviors**
+- Blocking quit/shutdown behavior.
+- Synchronous clipboard copy/paste through Neovim RPC.
+- Hard-coded and path-based font discovery/configuration.
+- Single-grid-only UI support with `ext_multigrid` disabled.
+- Split input policy between `App` and `NvimInput`.
+- Render-test infrastructure living inside the shipping app path.
+- Working-directory-dependent asset lookup.
+- Incomplete multi-monitor DPI handling.
+- Private-internals-heavy test strategy.
+- Versioned local editor workspace state in the main repo.

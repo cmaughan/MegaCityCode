@@ -2,114 +2,167 @@
 
 ## Scope
 
-This document combines the latest review outputs in `plans/reviews/review-latest.gpt.md` and `plans/reviews/review-latest.claude.md`.
+This document synthesizes:
 
-- The GPT review was based on the bundled `all_code.md` snapshot only and explicitly did not build or run the app.
-- The Claude review was also snapshot-based. Both reviews are useful, but runtime-sensitive claims should be treated as inferred unless already confirmed in the current tree.
+- [[review-latest.gpt]]
+- [[review-latest.claude]]
 
-## Where The Reviews Agree
+Both reviews were static snapshot reviews, not fresh runtime investigations. The consensus below reconciles those reviews against the current tree so already-landed work is not blindly re-opened.
 
-### 1. `App` is still a merge hotspot
+## What Is Already Done And Should Not Be Reopened
 
-Both reviews independently call out `app/app.cpp` as too central. The agreement is not about folder structure, which is mostly good, but about orchestration logic accumulating in one class.
+The current tree already has several areas that older review cycles used to flag:
 
-Shared conclusion:
-- keep the top-level module split
-- continue moving policy out of `App`
-- make lifecycle, resize policy, cursor policy, and redraw projection easier to change without forcing all agents into the same file
+- render snapshots and blessed UI regression images
+- startup smoke coverage in CTest/CI
+- logging infrastructure
+- user config persistence
+- Unicode width conformance checks against headless Neovim
+- title updates, clipboard shortcuts, and basic IME plumbing
+- shared CPU-side renderer state across Vulkan and Metal
 
-### 2. Atlas handling needs a real recovery story
+Those are not current backlog items unless a new concrete bug appears.
 
-Both reviews identify atlas exhaustion as a correctness problem, not just a polish item.
+## Where The Reviews Strongly Agree
 
-Shared conclusion:
-- silent empty glyphs are not acceptable
-- the font/render path needs either eviction, rebuild, paging, or another explicit recovery mechanism
-- atlas pressure needs direct regression coverage
+### 1. RPC is still the main correctness hotspot
 
-### 3. Vulkan needs hardening and a less stall-prone upload path
+GPT is strongest here, but Claude’s review supports the same direction indirectly through the blocking-UI and broad-surface observations.
 
-Both reviews highlight Vulkan-side fragility.
+Current verified issues:
 
-Shared conclusion:
-- check low-level API return paths consistently
-- collapse duplicated swapchain rebuild logic
-- reduce or remove synchronous GPU-idle waits in the glyph upload path
+- `NvimRpc` still writes to the pipe without a write mutex, even though requests and notifications can come from different threads.
+- the UI thread still performs blocking RPC for clipboard copy/paste paths
+- worker-thread shutdown can still wait on slow RPC activity
 
-### 4. Public boundaries are still wider than they should be
+Consensus:
 
-Both reviews call out broad or leaky interfaces:
-- `app/app.cpp` owns too much policy
-- `spectre-types` is absorbing utilities as well as shared types
-- the public font surface leaks engine internals and raw handles
+- harden the transport before adding more UI features on top of it
+- make request ownership and shutdown behavior explicit
+- remove avoidable blocking RPC from UI-facing paths
 
-Shared conclusion:
-- keep narrowing interfaces that multiple modules depend on
-- prefer hiding implementation detail over exporting more shared headers
+### 2. `App` is still too thick
 
-### 5. The test base is good, but the missing tests are mostly lifecycle and failure tests
+Both reviews independently land on the same conclusion: the repo-level architecture is good, but `app/app.cpp` is still the main merge hotspot.
 
-Both reviews are positive about the current test direction and both focus missing coverage on failure behavior:
-- atlas pressure
-- lifecycle rollback
-- font fallback and highlight fidelity
-- edge-case redraw semantics
+Current verified issues:
 
-Shared conclusion:
-- the next test work should concentrate on failure modes and regression seams, not more generic happy-path smoke tests
+- cursor blink state machine
+- startup and resize policy
+- clipboard policy
+- render-test/smoke-mode execution
+- config persistence hooks
+- top-level event routing
 
-## Where One Review Added Useful Detail
+Consensus:
 
-### GPT added useful emphasis on:
+- keep `App` as orchestration only
+- move policy-heavy subflows into smaller helpers
+- make the run loop, UI request handling, and test harness paths easier to evolve independently
 
-- blocking RPC round-trips on UI paths such as resize and font zoom
-- possible horizontal-scroll incompleteness in `grid_scroll`
-- long-session cache growth and dirty-tracking cost
-- shutdown ordering and request/read-thread robustness
+### 3. Test harness code is still too entangled with production code
 
-### Claude added useful emphasis on:
+Both reviews call this out from different angles.
 
-- duplicated swapchain rebuild code in Vulkan
-- synchronous `vkQueueWaitIdle` behavior on atlas uploads
-- raw-pointer/lifetime fragility in `GridRenderingPipeline`
-- concrete missing end-user features: clipboard, config, IME, title updates, underline fidelity
+Current verified issues:
 
-## Where Claims Need Verification Before Code Changes
+- `app/render_test.cpp` is compiled into `spectre.exe`
+- the test target also compiles `../app/render_test.cpp` directly
+- tests still include private `src` directories from multiple libraries
+- `app_config.cpp` and `render_test.cpp` still duplicate TOML-like parsing helpers
 
-These should not be treated as settled facts without a quick confirmation pass:
+Consensus:
 
-1. Horizontal `grid_scroll` handling
-The GPT review is likely directionally right, but this should be verified against current Neovim event semantics and actual traces before a refactor starts.
+- extract reusable parsing/reporting helpers into a small shared implementation layer
+- keep render-test mechanics available to tests and tools without making them part of the shipping app surface
+- shift tests toward public seams and narrower internal test utilities
 
-2. Dirty tracking cost in `Grid`
-The review may be right that the scan is coarse, but this should be measured before turning it into a high-priority performance rewrite.
+### 4. Public boundaries still leak implementation detail
 
-3. Shutdown-order fragility
-Recent RPC and wake-path work has already reduced some of the earlier shutdown risk. Re-check the current tree before assuming a large redesign is needed here.
+The reviews agree here even when they emphasize different examples.
 
-## Consensus Priority Order
+Current verified issues:
 
-The combined view is:
+- `IWindow` still exposes `SDL_Window*`
+- `font.h` is still only a passthrough to `text_service.h`
+- `GLYPH_ATLAS_SIZE` still lives in shared `spectre-types`
+- `nvim.h` still exports process, RPC, msgpack, redraw, and input concerns together
 
-1. Fix correctness risks in atlas handling and Vulkan robustness first.
-2. Reduce architecture friction in `App` and public API boundaries next.
-3. Remove obvious UI-path blocking and redraw completeness gaps.
-4. Finish missing rendering fidelity and core platform integration features.
-5. Add the focused regression coverage needed to keep these changes stable.
+Consensus:
+
+- reduce rebuild and merge blast radius by narrowing public surfaces
+- move implementation constants and raw backend handles downward
+- split broad headers when the split improves ownership, not just file count
+
+### 5. Vulkan and redraw edge cases still deserve targeted hardening
+
+GPT is stronger on lifecycle and grid correctness; Claude is stronger on specific Vulkan resource-management smells. Together they point at the same thing: the remaining risk is now in edge-path robustness, not the happy path.
+
+Current verified issues or likely hotspots:
+
+- unchecked or awkward Vulkan resource recreation paths
+- synchronous atlas upload stalls
+- wide-cell overwrite/repair edge behavior in `Grid`
+- redraw/parser fuzz coverage still focused more on valid traffic than hostile or malformed traffic
+
+Consensus:
+
+- do not start with broad rewrites
+- target the remaining correctness/perf hotspots surgically and back them with regression tests
+
+## Where The Reviews Differ
+
+### GPT review bias
+
+GPT is more useful on:
+
+- RPC correctness
+- shutdown and threading risk
+- blocking UI paths
+- concrete public-boundary leaks
+
+### Claude review bias
+
+Claude is more useful on:
+
+- refactoring seams
+- render-test and parser duplication
+- code smell cleanup
+- medium-priority GUI ergonomics ideas
+
+### Consensus resolution
+
+The codebase is no longer in “big missing architecture” territory. The right ordering now is:
+
+1. correctness and blocking-risk fixes
+2. interface and ownership cleanup
+3. test harness extraction and seam cleanup
+4. lower-priority GUI/platform polish
+
+That means the GPT concerns set the order, and the Claude concerns shape the extraction plan.
+
+## Current Recommended Work Order
+
+1. Serialize RPC writes and harden RPC shutdown semantics.
+2. Remove blocking UI-thread RPC where it still exists.
+3. Split `App` responsibilities so loop policy, request execution, and test harness logic stop colliding.
+4. Extract render-test/config parsing helpers and stop compiling ad hoc test plumbing directly into both production and tests.
+5. Narrow `IWindow`, `nvim.h`, and font/shared-type boundaries.
+6. Add targeted redraw/grid/Vulkan failure coverage while fixing the known edge cases.
+7. Only then spend time on QoL features like richer clipboard integration, IME composition UI, overlays, or tab/file chrome.
 
 ## Work Item Set
 
-The current work-item set derived from this consensus is:
+The current backlog extracted from this consensus is:
 
-1. `00 atlas recovery -bug`
-2. `01 vulkan robustness and upload path -bug`
-3. `02 app lifecycle split and rollback -feature`
-4. `03 ui path rpc decoupling -bug`
-5. `04 redraw completeness and dirty tracking -bug`
-6. `05 font and shared api boundary cleanup -feature`
-7. `06 highlight fidelity -feature`
-8. `07 user configuration and font selection -feature`
-9. `08 clipboard ime and title integration -feature`
-10. `09 lifecycle and rendering regressions -test`
+1. [[00 rpc transport serialization and shutdown hardening -bug]]
+2. [[01 app loop and ui request decomposition -feature]]
+3. [[02 render test extraction and parser unification -feature]]
+4. [[03 public api boundary cleanup -feature]]
+5. [[04 grid wide-cell repair and redraw robustness -bug]]
+6. [[05 vulkan robustness and atlas upload rework -bug]]
+7. [[06 test seam cleanup and lifecycle coverage -test]]
+8. [[07 platform text and display integration -feature]]
+9. [[08 gui ergonomics and observability -feature]]
 
-See `plans/work-items/index.md` for the per-item plans.
+See [[../work-items/index]] for the per-item execution notes.
