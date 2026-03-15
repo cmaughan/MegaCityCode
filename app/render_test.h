@@ -33,6 +33,7 @@ struct RenderTestScenario
 };
 
 std::optional<RenderTestScenario> load_render_test_scenario(const std::filesystem::path& path, std::string* error_message = nullptr);
+bool export_render_test_frame(const std::filesystem::path& path, const CapturedFrame& frame, std::string* error_message = nullptr);
 bool finalize_render_test_result(const RenderTestScenario& scenario, const CapturedFrame& frame, bool bless_reference, std::string* error_message = nullptr);
 void write_render_test_failure_report(const RenderTestScenario& scenario, std::string_view error_message);
 

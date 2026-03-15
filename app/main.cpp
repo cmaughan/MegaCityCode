@@ -58,6 +58,7 @@ struct ParsedArgs
     bool smoke_test = false;
     bool bless_render_test = false;
     std::filesystem::path render_test_path;
+    std::filesystem::path export_render_test_path;
 };
 
 ParsedArgs parse_args(const std::vector<std::string>& args)
@@ -73,6 +74,8 @@ ParsedArgs parse_args(const std::vector<std::string>& args)
             parsed.bless_render_test = true;
         else if (args[i] == "--render-test" && i + 1 < args.size())
             parsed.render_test_path = args[++i];
+        else if (args[i] == "--export-render-test" && i + 1 < args.size())
+            parsed.export_render_test_path = args[++i];
     }
     return parsed;
 }
@@ -150,7 +153,13 @@ int main(int argc, char* argv[])
         else
         {
             std::string finalize_error;
-            if (!spectre::finalize_render_test_result(*render_test, *frame, parsed.bless_render_test, &finalize_error))
+            bool ok = false;
+            if (!parsed.export_render_test_path.empty())
+                ok = spectre::export_render_test_frame(parsed.export_render_test_path, *frame, &finalize_error);
+            else
+                ok = spectre::finalize_render_test_result(*render_test, *frame, parsed.bless_render_test, &finalize_error);
+
+            if (!ok)
             {
                 spectre::write_render_test_failure_report(*render_test, finalize_error);
                 SPECTRE_LOG_ERROR(spectre::LogCategory::App, "%s", finalize_error.c_str());

@@ -11,6 +11,7 @@ void run_unicode_tests();
 void run_renderer_state_tests();
 void run_rpc_codec_tests();
 void run_rpc_integration_tests();
+void run_render_test_parser_tests();
 
 int main()
 {
@@ -26,6 +27,7 @@ int main()
         run_renderer_state_tests();
         run_rpc_codec_tests();
         run_rpc_integration_tests();
+        run_render_test_parser_tests();
         std::cout << "spectre-tests: ok\n";
         return 0;
     }

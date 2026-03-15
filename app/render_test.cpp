@@ -86,6 +86,50 @@ std::vector<std::string> parse_string_array(const std::string& value)
     return items;
 }
 
+bool is_complete_array_literal(const std::string& value)
+{
+    bool in_string = false;
+    bool escaping = false;
+    int depth = 0;
+    bool saw_open = false;
+
+    for (char ch : value)
+    {
+        if (escaping)
+        {
+            escaping = false;
+            continue;
+        }
+
+        if (ch == '\\' && in_string)
+        {
+            escaping = true;
+            continue;
+        }
+
+        if (ch == '"')
+        {
+            in_string = !in_string;
+            continue;
+        }
+
+        if (in_string)
+            continue;
+
+        if (ch == '[')
+        {
+            saw_open = true;
+            ++depth;
+        }
+        else if (ch == ']')
+        {
+            --depth;
+        }
+    }
+
+    return saw_open && depth == 0 && !in_string && !escaping;
+}
+
 std::string platform_suffix()
 {
 #ifdef _WIN32
@@ -441,7 +485,28 @@ std::optional<RenderTestScenario> load_render_test_scenario(const std::filesyste
             continue;
 
         const std::string key = trim(line.substr(0, eq));
-        const std::string value = trim(line.substr(eq + 1));
+        std::string value = trim(line.substr(eq + 1));
+
+        if (!value.empty() && value.front() == '[' && !is_complete_array_literal(value))
+        {
+            std::string continuation;
+            while (std::getline(in, continuation))
+            {
+                auto continuation_hash = continuation.find('#');
+                if (continuation_hash != std::string::npos)
+                    continuation.erase(continuation_hash);
+                continuation = trim(continuation);
+                if (continuation.empty())
+                    continue;
+
+                if (!value.empty())
+                    value.push_back(' ');
+                value += continuation;
+
+                if (is_complete_array_literal(value))
+                    break;
+            }
+        }
 
         if (key == "name")
             scenario.name = unquote(value);
@@ -564,6 +629,25 @@ bool finalize_render_test_result(const RenderTestScenario& scenario, const Captu
         *error_message = message.str();
     }
     return diff.passed;
+}
+
+bool export_render_test_frame(const std::filesystem::path& path, const CapturedFrame& frame, std::string* error_message)
+{
+    if (!frame.valid())
+    {
+        if (error_message)
+            *error_message = "Captured frame is empty";
+        return false;
+    }
+
+    if (!write_bmp_rgba(path, frame))
+    {
+        if (error_message)
+            *error_message = "Failed to write exported capture image";
+        return false;
+    }
+
+    return true;
 }
 
 void write_render_test_failure_report(const RenderTestScenario& scenario, std::string_view error_message)

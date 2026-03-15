@@ -7,7 +7,7 @@ Spectre is a cross-platform Neovim GUI frontend with native GPU rendering:
 - SDL3 windowing and input
 - embedded `nvim --embed` over msgpack-RPC
 
-![Spectre on Windows](screenshots/spectre.png)
+![Spectre on Windows](screenshots/spectre-pc.png)
 ![Spectre on macOS](screenshots/spectre-mac.png)
 
 ## Features
@@ -181,6 +181,17 @@ Bless a new reference image:
 ```powershell
 .\build\Debug\spectre.exe --console --render-test D:\dev\spectre\tests\render\basic-view.toml --bless-render-test
 ```
+
+Update the documentation screenshot for the current platform:
+
+```powershell
+python .\scripts\update_screenshot.py
+```
+
+Notes:
+
+- `update_screenshot.py` uses the presentation-oriented `tests/render/readme-hero.toml` scenario by default, so it captures your normal Neovim theme and statusline instead of the clean `-u NONE --noplugin` regression setup.
+- The deterministic render regression scenarios remain under `tests/render/` and continue to use fixed startup settings for stable compare/bless behavior.
 
 Behavior:
 
