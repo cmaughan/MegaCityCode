@@ -7,9 +7,13 @@ Spectre is a cross-platform Neovim GUI frontend with native GPU rendering:
 - SDL3 windowing and input
 - embedded `nvim --embed` over msgpack-RPC
 
-| Windows | macOS |
-| --- | --- |
-| ![Spectre on Windows](screenshots/spectre-pc.png) | ![Spectre on macOS](screenshots/spectre-mac.png) |
+### Windows
+
+![Spectre on Windows](screenshots/spectre-pc.png)
+
+### macOS
+
+![Spectre on macOS](screenshots/spectre-mac.png)
 
 ## Features
 
