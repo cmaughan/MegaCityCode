@@ -48,7 +48,7 @@ std::string quote_windows_arg(const std::string& value)
 
 } // namespace
 
-bool NvimProcess::spawn(const std::string& nvim_path, const std::vector<std::string>& extra_args)
+bool NvimProcess::spawn(const std::string& nvim_path, const std::vector<std::string>& extra_args, const std::string& working_dir)
 {
     SECURITY_ATTRIBUTES sa = {};
     sa.nLength = sizeof(sa);
@@ -89,13 +89,14 @@ bool NvimProcess::spawn(const std::string& nvim_path, const std::vector<std::str
         command << ' ' << quote_windows_arg(arg);
     std::string cmd = command.str();
 
+    const char* cwd = working_dir.empty() ? nullptr : working_dir.c_str();
     if (!CreateProcessA(
             nullptr,
             cmd.data(),
             nullptr, nullptr,
             TRUE,
             CREATE_NO_WINDOW,
-            nullptr, nullptr,
+            nullptr, cwd,
             &si, &proc_info_))
     {
         SPECTRE_LOG_ERROR(LogCategory::Nvim, "Failed to spawn nvim: error %lu", GetLastError());
@@ -173,7 +174,7 @@ bool NvimProcess::is_running() const
 
 #else // POSIX (macOS, Linux)
 
-bool NvimProcess::spawn(const std::string& nvim_path, const std::vector<std::string>& extra_args)
+bool NvimProcess::spawn(const std::string& nvim_path, const std::vector<std::string>& extra_args, const std::string& working_dir)
 {
     int stdin_pipe[2];
     int stdout_pipe[2];
@@ -219,6 +220,9 @@ bool NvimProcess::spawn(const std::string& nvim_path, const std::vector<std::str
 
         close(stdin_pipe[0]);
         close(stdout_pipe[1]);
+
+        if (!working_dir.empty())
+            chdir(working_dir.c_str());
 
         std::vector<char*> argv;
         argv.reserve(extra_args.size() + 3);

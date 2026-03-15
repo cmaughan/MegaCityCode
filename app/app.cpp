@@ -133,7 +133,7 @@ bool App::initialize_text_service()
 
 bool App::initialize_nvim()
 {
-    if (!nvim_process_.spawn("nvim", options_.nvim_args))
+    if (!nvim_process_.spawn("nvim", options_.nvim_args, options_.nvim_working_dir))
     {
         SPECTRE_LOG_ERROR(LogCategory::App, "Failed to spawn nvim");
         return false;

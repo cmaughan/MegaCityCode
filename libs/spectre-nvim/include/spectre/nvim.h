@@ -33,7 +33,7 @@ namespace spectre
 class NvimProcess
 {
 public:
-    bool spawn(const std::string& nvim_path = "nvim", const std::vector<std::string>& extra_args = {});
+    bool spawn(const std::string& nvim_path = "nvim", const std::vector<std::string>& extra_args = {}, const std::string& working_dir = {});
     void shutdown();
 
     bool write(const uint8_t* data, size_t len);

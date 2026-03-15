@@ -29,6 +29,7 @@ struct AppOptions
     AppConfig initial_config = {};
     std::vector<std::string> nvim_args;
     std::vector<std::string> startup_commands;
+    std::string nvim_working_dir;
 };
 
 class App
