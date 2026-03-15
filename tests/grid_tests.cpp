@@ -63,6 +63,19 @@ void run_grid_tests()
         expect_eq(grid.get_cell(2, 0).double_width_cont, false, "continuation marker is cleared");
     });
 
+    run_test("grid clears stale leaders when overwriting a continuation cell", []() {
+        Grid grid;
+        grid.resize(4, 1);
+
+        grid.set_cell(1, 0, "X", 3, true);
+        grid.set_cell(2, 0, "Y", 4, false);
+
+        expect_eq(grid.get_cell(1, 0).text, std::string(" "), "former leader is cleared when its continuation is overwritten");
+        expect_eq(grid.get_cell(1, 0).double_width, false, "former leader clears the double-width flag");
+        expect_eq(grid.get_cell(2, 0).text, std::string("Y"), "replacement text lands in the overwritten continuation column");
+        expect_eq(grid.get_cell(2, 0).double_width_cont, false, "replacement cell is no longer marked as a continuation");
+    });
+
     run_test("grid scroll preserves double-width cells and continuations together", []() {
         Grid grid;
         grid.resize(4, 2);
@@ -94,6 +107,42 @@ void run_grid_tests()
         expect_eq(grid.get_cell(2, 0).text, std::string("d"), "middle cells shift left");
         expect_eq(grid.get_cell(3, 0).text, std::string("e"), "tail cell shifts left");
         expect_eq(grid.get_cell(4, 0).text, std::string(" "), "newly uncovered cell is cleared");
+    });
+
+    run_test("grid scroll clears stale wide leaders when a region starts on a continuation", []() {
+        Grid grid;
+        grid.resize(5, 1);
+        grid.set_cell(0, 0, "W", 7, true);
+        grid.set_cell(2, 0, "a", 1);
+        grid.set_cell(3, 0, "b", 1);
+        grid.set_cell(4, 0, "c", 1);
+        grid.clear_dirty();
+
+        grid.scroll(0, 1, 1, 5, 0, 1);
+
+        expect_eq(grid.get_cell(0, 0).text, std::string(" "), "orphaned leader outside the scroll region is cleared");
+        expect_eq(grid.get_cell(0, 0).double_width, false, "orphaned leader clears the double-width flag");
+        expect_eq(grid.get_cell(1, 0).text, std::string("a"), "scrolled text stays aligned after boundary repair");
+        expect_eq(grid.get_cell(2, 0).text, std::string("b"), "middle cells continue to shift left");
+        expect_eq(grid.get_cell(3, 0).text, std::string("c"), "tail cells continue to shift left");
+    });
+
+    run_test("grid scroll clears stale wide pairs when a region ends on a leader", []() {
+        Grid grid;
+        grid.resize(5, 1);
+        grid.set_cell(0, 0, "a", 1);
+        grid.set_cell(1, 0, "b", 1);
+        grid.set_cell(2, 0, "c", 1);
+        grid.set_cell(3, 0, "W", 7, true);
+        grid.clear_dirty();
+
+        grid.scroll(0, 1, 0, 4, 0, 1);
+
+        expect_eq(grid.get_cell(0, 0).text, std::string("b"), "scrolled prefix still shifts left");
+        expect_eq(grid.get_cell(1, 0).text, std::string("c"), "middle cells keep their shifted value");
+        expect_eq(grid.get_cell(2, 0).text, std::string(" "), "orphaned leader is cleared after the shift");
+        expect_eq(grid.get_cell(2, 0).double_width, false, "cleared leader resets the double-width flag");
+        expect_eq(grid.get_cell(4, 0).double_width_cont, false, "orphaned continuation outside the scroll region is cleared");
     });
 
     run_test("grid ignores double-width continuation when placed at the right edge", []() {

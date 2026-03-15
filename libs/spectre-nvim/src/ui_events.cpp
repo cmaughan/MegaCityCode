@@ -5,63 +5,92 @@
 namespace spectre
 {
 
+namespace
+{
+
+const MpackValue::ArrayStorage* try_get_array(const MpackValue& value)
+{
+    if (value.type() != MpackValue::Array)
+        return nullptr;
+    return &value.as_array();
+}
+
+const std::string* try_get_string(const MpackValue& value)
+{
+    if (value.type() != MpackValue::String)
+        return nullptr;
+    return &value.as_str();
+}
+
+bool try_get_int(const MpackValue& value, int& out)
+{
+    if (value.type() != MpackValue::Int && value.type() != MpackValue::UInt)
+        return false;
+    out = (int)value.as_int();
+    return true;
+}
+
+} // namespace
+
 void UiEventHandler::process_redraw(const std::vector<MpackValue>& params)
 {
     for (size_t ei = 0; ei < params.size(); ei++)
     {
         auto& event = params[ei];
-        if (event.type() != MpackValue::Array || event.as_array().empty())
+        const auto* event_array = try_get_array(event);
+        if (!event_array || event_array->empty())
             continue;
 
-        const auto& event_array = event.as_array();
-        const std::string& name = event_array[0].as_str();
+        const auto* name = try_get_string((*event_array)[0]);
+        if (!name)
+            continue;
 
-        if (name == "flush")
+        if (*name == "flush")
         {
             if (on_flush)
                 on_flush();
             continue;
         }
 
-        if (name == "busy_start")
+        if (*name == "busy_start")
         {
             if (on_busy)
                 on_busy(true);
             continue;
         }
 
-        if (name == "busy_stop")
+        if (*name == "busy_stop")
         {
             if (on_busy)
                 on_busy(false);
             continue;
         }
 
-        for (size_t i = 1; i < event_array.size(); i++)
+        for (size_t i = 1; i < event_array->size(); i++)
         {
-            const auto& args = event_array[i];
+            const auto& args = (*event_array)[i];
 
-            if (name == "grid_line")
+            if (*name == "grid_line")
                 handle_grid_line(args);
-            else if (name == "grid_cursor_goto")
+            else if (*name == "grid_cursor_goto")
                 handle_grid_cursor_goto(args);
-            else if (name == "grid_scroll")
+            else if (*name == "grid_scroll")
                 handle_grid_scroll(args);
-            else if (name == "grid_clear")
+            else if (*name == "grid_clear")
                 handle_grid_clear(args);
-            else if (name == "grid_resize")
+            else if (*name == "grid_resize")
                 handle_grid_resize(args);
-            else if (name == "hl_attr_define")
+            else if (*name == "hl_attr_define")
                 handle_hl_attr_define(args);
-            else if (name == "default_colors_set")
+            else if (*name == "default_colors_set")
                 handle_default_colors_set(args);
-            else if (name == "mode_info_set")
+            else if (*name == "mode_info_set")
                 handle_mode_info_set(args);
-            else if (name == "mode_change")
+            else if (*name == "mode_change")
                 handle_mode_change(args);
-            else if (name == "option_set")
+            else if (*name == "option_set")
                 handle_option_set(args);
-            else if (name == "set_title")
+            else if (*name == "set_title")
                 handle_set_title(args);
         }
     }
@@ -69,40 +98,54 @@ void UiEventHandler::process_redraw(const std::vector<MpackValue>& params)
 
 void UiEventHandler::handle_grid_line(const MpackValue& args)
 {
-    if (!grid_ || args.type() != MpackValue::Array || args.as_array().size() < 4)
+    if (!grid_)
         return;
 
-    const auto& args_array = args.as_array();
-    int row = (int)args_array[1].as_int();
-    int col_start = (int)args_array[2].as_int();
+    const auto* args_array = try_get_array(args);
+    if (!args_array || args_array->size() < 4)
+        return;
+
+    int row = 0;
+    int col_start = 0;
+    if (!try_get_int((*args_array)[1], row) || !try_get_int((*args_array)[2], col_start))
+        return;
 
     int col = col_start;
     uint16_t current_hl = 0;
 
-    const auto& cells = args_array[3].as_array();
-    for (auto& cell : cells)
+    const auto* cells = try_get_array((*args_array)[3]);
+    if (!cells)
+        return;
+
+    for (const auto& cell : *cells)
     {
-        if (cell.type() != MpackValue::Array || cell.as_array().empty())
+        const auto* cell_array = try_get_array(cell);
+        if (!cell_array || cell_array->empty())
             continue;
 
-        const auto& cell_array = cell.as_array();
-        const std::string& text = cell_array[0].as_str();
+        const auto* text = try_get_string((*cell_array)[0]);
+        if (!text)
+            continue;
 
-        if (cell_array.size() >= 2 && !cell_array[1].is_nil())
+        if (cell_array->size() >= 2 && !(*cell_array)[1].is_nil())
         {
-            current_hl = (uint16_t)cell_array[1].as_int();
+            int hl_id = 0;
+            if (!try_get_int((*cell_array)[1], hl_id))
+                continue;
+            current_hl = (uint16_t)hl_id;
         }
 
         int repeat = 1;
-        if (cell_array.size() >= 3)
+        if (cell_array->size() >= 3)
         {
-            repeat = (int)cell_array[2].as_int();
+            if (!try_get_int((*cell_array)[2], repeat) || repeat < 1)
+                continue;
         }
 
-        bool dw = cluster_cell_width(text, options_ ? *options_ : UiOptions{}) == 2;
+        bool dw = cluster_cell_width(*text, options_ ? *options_ : UiOptions{}) == 2;
         for (int r = 0; r < repeat; r++)
         {
-            grid_->set_cell(col, row, text, current_hl, dw);
+            grid_->set_cell(col, row, *text, current_hl, dw);
             col++;
             if (dw)
                 col++;

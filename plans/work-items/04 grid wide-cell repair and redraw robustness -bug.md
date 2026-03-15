@@ -16,27 +16,27 @@ Make grid mutation rules and redraw parsing more hostile-input tolerant, especia
 
 ## Implementation Plan
 
-1. Verify and fix the wide-cell overwrite path.
-   - specifically test overwriting the continuation cell first
-   - repair both sides of the old wide-cell state
-2. Expand redraw robustness fixtures.
-   - malformed arrays
-   - truncated `grid_line`
-   - odd repeat/empty combinations
-3. Keep fixes local.
-   - prefer `Grid` or `UiEventHandler` fixes over broader pipeline churn
+- [x] Verify and fix the wide-cell overwrite path.
+  - [x] specifically test overwriting the continuation cell first
+  - [x] repair both sides of the old wide-cell state
+- [x] Expand redraw robustness fixtures.
+  - [x] malformed arrays
+  - [x] truncated `grid_line`
+  - [x] odd repeat/empty combinations
+- [x] Keep fixes local.
+  - [x] prefer `Grid` or `UiEventHandler` fixes over broader pipeline churn
 
 ## Tests
 
-- direct `Grid` tests for continuation overwrite and scroll boundaries
-- redraw replay cases for malformed/truncated line batches
-- keep render snapshots green to catch visible fallout
+- [x] direct `Grid` tests for continuation overwrite and scroll boundaries
+- [x] redraw replay cases for malformed/truncated line batches
+- [x] keep render snapshots green to catch visible fallout
 
 ## Suggested Slice Order
 
-1. reproduce/lock down the wide-cell bug
-2. patch `Grid`
-3. add malformed redraw fixtures
+- [x] reproduce/lock down the wide-cell bug
+- [x] patch `Grid`
+- [x] add malformed redraw fixtures
 
 ## Sub-Agent Split
 

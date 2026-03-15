@@ -50,14 +50,25 @@ void Grid::set_cell(int col, int row, const std::string& text, uint16_t hl_id, b
     if (col < 0 || col >= cols_ || row < 0 || row >= rows_)
         return;
 
-    auto& cell = cells_[row * cols_ + col];
+    const int index = row * cols_ + col;
+    auto& cell = cells_[index];
+    if (col > 0)
+    {
+        auto& prev = cells_[index - 1];
+        if (cell.double_width_cont || prev.double_width)
+        {
+            prev = make_blank_cell();
+            mark_dirty_index(index - 1);
+        }
+    }
+
     if (col + 1 < cols_)
     {
-        auto& next = cells_[row * cols_ + col + 1];
+        auto& next = cells_[index + 1];
         if (next.double_width_cont)
         {
             clear_continuation(next);
-            mark_dirty_index(row * cols_ + col + 1);
+            mark_dirty_index(index + 1);
         }
     }
 
@@ -67,18 +78,18 @@ void Grid::set_cell(int col, int row, const std::string& text, uint16_t hl_id, b
     cell.dirty = false;
     cell.double_width = double_width;
     cell.double_width_cont = false;
-    mark_dirty_index(row * cols_ + col);
+    mark_dirty_index(index);
 
     if (double_width && col + 1 < cols_)
     {
-        auto& next = cells_[row * cols_ + col + 1];
+        auto& next = cells_[index + 1];
         next.text.clear();
         next.codepoint = ' ';
         next.hl_attr_id = hl_id;
         next.dirty = false;
         next.double_width = false;
         next.double_width_cont = true;
-        mark_dirty_index(row * cols_ + col + 1);
+        mark_dirty_index(index + 1);
     }
 }
 
@@ -170,6 +181,28 @@ void Grid::scroll(int top, int bot, int left, int right, int rows, int cols)
             {
                 cells_[r * cols_ + c] = make_blank_cell();
                 mark_dirty_index(r * cols_ + c);
+            }
+        }
+    }
+
+    for (int r = top; r < bot; ++r)
+    {
+        for (int c = 0; c < cols_; ++c)
+        {
+            const int index = r * cols_ + c;
+            auto& cell = cells_[(size_t)index];
+
+            if (cell.double_width && c + 1 < cols_ && !cells_[(size_t)index + 1].double_width_cont)
+            {
+                cell = make_blank_cell();
+                mark_dirty_index(index);
+                continue;
+            }
+
+            if (cell.double_width_cont && (c == 0 || !cells_[(size_t)index - 1].double_width))
+            {
+                clear_continuation(cell);
+                mark_dirty_index(index);
             }
         }
     }

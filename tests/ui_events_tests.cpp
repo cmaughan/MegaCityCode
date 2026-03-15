@@ -293,6 +293,77 @@ void run_ui_events_tests()
         expect_eq(grid.get_cell(4, 0).text, std::string("B"), "subsequent cells stay aligned after repeats");
     });
 
+    run_test("ui event handler keeps alignment across odd repeat and empty cell combinations", []() {
+        Grid grid;
+        grid.resize(8, 1);
+        for (int col = 0; col < 8; ++col)
+            grid.set_cell(col, 0, std::string(1, static_cast<char>('a' + col)), 1);
+        grid.clear_dirty();
+
+        HighlightTable highlights;
+        UiEventHandler handler;
+        handler.set_grid(&grid);
+        handler.set_highlights(&highlights);
+
+        handler.process_redraw({
+            redraw_event("grid_line", { grid_line_batch(1, 0, 0, {
+                                                                     cell("", 2, 2),
+                                                                     cell("skip-zero", 3, 0),
+                                                                     cell("A", 4),
+                                                                     cell("", 5, -2),
+                                                                     cell("B", 6, 2),
+                                                                     cell("", 7),
+                                                                     cell("C", 8),
+                                                                 }) }),
+        });
+
+        expect_eq(grid.get_cell(0, 0).text, std::string(), "empty repeats clear the first target column");
+        expect_eq(grid.get_cell(1, 0).text, std::string(), "empty repeats clear the second target column");
+        expect_eq(grid.get_cell(0, 0).hl_attr_id, static_cast<uint16_t>(2), "empty repeats keep their highlight");
+        expect_eq(grid.get_cell(1, 0).hl_attr_id, static_cast<uint16_t>(2), "empty repeats keep their highlight across repeats");
+        expect_eq(grid.get_cell(2, 0).text, std::string("A"), "zero repeats do not advance the column before later cells");
+        expect_eq(grid.get_cell(2, 0).hl_attr_id, static_cast<uint16_t>(4), "later cells keep their own highlight after skipped repeats");
+        expect_eq(grid.get_cell(3, 0).text, std::string("B"), "subsequent text stays aligned after skipped negative repeats");
+        expect_eq(grid.get_cell(4, 0).text, std::string("B"), "valid repeats still expand after skipped repeats");
+        expect_eq(grid.get_cell(5, 0).text, std::string(), "single empty cells still clear one column");
+        expect_eq(grid.get_cell(5, 0).hl_attr_id, static_cast<uint16_t>(7), "single empty cells keep their highlight");
+        expect_eq(grid.get_cell(6, 0).text, std::string("C"), "later cells stay aligned after mixed repeat and empty cases");
+        expect_eq(grid.get_cell(7, 0).text, std::string("h"), "cells beyond the batch stay untouched");
+    });
+
+    run_test("ui event handler ignores malformed grid_line payloads", []() {
+        Grid grid;
+        grid.resize(4, 1);
+        grid.set_cell(0, 0, "x", 1);
+        grid.set_cell(1, 0, "y", 1);
+        grid.set_cell(2, 0, "z", 1);
+        grid.set_cell(3, 0, "w", 1);
+        grid.clear_dirty();
+
+        HighlightTable highlights;
+        UiEventHandler handler;
+        handler.set_grid(&grid);
+        handler.set_highlights(&highlights);
+
+        handler.process_redraw({
+            arr({ i(42), arr({}) }),
+            redraw_event("grid_line", { arr({ i(1), i(0), i(0) }) }),
+            redraw_event("grid_line", { arr({ i(1), i(0), i(0), s("not-a-cell-array") }) }),
+            redraw_event("grid_line", { arr({ i(1), i(0), i(0), arr({
+                                                                    i(7),
+                                                                    arr({ i(9) }),
+                                                                    arr({ s("A"), s("bad-hl") }),
+                                                                    arr({ s("B"), i(2), s("bad-repeat") }),
+                                                                    cell("C", 5),
+                                                                }) }) }),
+        });
+
+        expect_eq(grid.get_cell(0, 0).text, std::string("C"), "the first valid cell still lands");
+        expect_eq(grid.get_cell(1, 0).text, std::string("y"), "malformed cells do not advance the column");
+        expect_eq(grid.get_cell(2, 0).text, std::string("z"), "later cells remain untouched");
+        expect_eq(grid.get_cell(3, 0).text, std::string("w"), "truncated batches are ignored");
+    });
+
     run_test("ui event handler consults option state for ambiwidth", []() {
         Grid grid;
         grid.resize(4, 1);
