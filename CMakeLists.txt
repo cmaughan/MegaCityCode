@@ -70,6 +70,8 @@ target_link_libraries(spectre PRIVATE
 )
 
 if(APPLE)
+    find_library(COREGRAPHICS_FRAMEWORK CoreGraphics REQUIRED)
+    target_link_libraries(spectre PRIVATE ${COREGRAPHICS_FRAMEWORK})
     add_dependencies(spectre compile_metal_shaders)
 
     # Copy metallib to build dir next to executable

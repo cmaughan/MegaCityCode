@@ -10,6 +10,9 @@
 #include <numeric>
 #include <sstream>
 #include <string_view>
+#ifdef __APPLE__
+#include <CoreGraphics/CoreGraphics.h>
+#endif
 
 namespace spectre
 {
@@ -441,12 +444,31 @@ std::filesystem::path RenderTestScenario::report_path() const
 
 AppOptions RenderTestScenario::make_app_options() const
 {
+    // Scenario dimensions are physical pixels (consistent at 96 DPI / scale 1.0 on Windows).
+    // On HiDPI displays SDL_CreateWindow takes logical pixels, so divide by the backing
+    // scale so SDL_WINDOW_HIGH_PIXEL_DENSITY produces the intended physical resolution.
+    float display_scale = 1.0f;
+#ifdef __APPLE__
+    {
+        CGDirectDisplayID display_id = CGMainDisplayID();
+        size_t logical_w = CGDisplayPixelsWide(display_id);
+        CGDisplayModeRef mode = CGDisplayCopyDisplayMode(display_id);
+        if (mode)
+        {
+            size_t physical_w = CGDisplayModeGetPixelWidth(mode);
+            CGDisplayModeRelease(mode);
+            if (logical_w > 0)
+                display_scale = static_cast<float>(physical_w) / static_cast<float>(logical_w);
+        }
+    }
+#endif
+
     AppOptions options;
     options.load_user_config = false;
     options.save_user_config = false;
     options.activate_window_on_startup = false;
-    options.initial_config.window_width = width;
-    options.initial_config.window_height = height;
+    options.initial_config.window_width = static_cast<int>(std::round(width / display_scale));
+    options.initial_config.window_height = static_cast<int>(std::round(height / display_scale));
     options.initial_config.font_size = font_size;
     options.initial_config.font_path = font_path.empty() ? std::string{} : normalized_path_string(font_path);
     options.initial_config.fallback_paths = fallback_paths;
