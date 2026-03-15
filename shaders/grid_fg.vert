@@ -26,6 +26,7 @@ layout(set = 0, binding = 0) readonly buffer CellBuffer {
 
 layout(location = 0) out vec2 frag_uv;
 layout(location = 1) out vec4 frag_fg;
+layout(location = 2) flat out uint frag_style_flags;
 
 void main() {
     Cell cell = cells[gl_InstanceIndex];
@@ -53,4 +54,5 @@ void main() {
     // Interpolate UVs
     frag_uv = mix(vec2(cell.uv_x0, cell.uv_y0), vec2(cell.uv_x1, cell.uv_y1), offset);
     frag_fg = vec4(cell.fg_r, cell.fg_g, cell.fg_b, cell.fg_a);
+    frag_style_flags = cell.style_flags;
 }

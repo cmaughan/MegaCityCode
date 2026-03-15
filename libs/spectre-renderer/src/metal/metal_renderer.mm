@@ -188,10 +188,10 @@ bool MetalRenderer::initialize(IWindow& window)
         fg_pipeline_ = (__bridge_retained void*)pipeline;
     }
 
-    // Create atlas texture (R8 -> we use .r component in shader)
+    // Create atlas texture (RGBA so color glyphs can bypass fg tinting)
     {
         MTLTextureDescriptor* texDesc = [MTLTextureDescriptor
-            texture2DDescriptorWithPixelFormat:MTLPixelFormatR8Unorm
+            texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
                                          width:ATLAS_SIZE
                                         height:ATLAS_SIZE
                                      mipmapped:NO];
@@ -294,14 +294,14 @@ void MetalRenderer::set_atlas_texture(const uint8_t* data, int w, int h)
 {
     id<MTLTexture> tex = (__bridge id<MTLTexture>)atlas_texture_;
     MTLRegion region = MTLRegionMake2D(0, 0, w, h);
-    [tex replaceRegion:region mipmapLevel:0 withBytes:data bytesPerRow:w];
+    [tex replaceRegion:region mipmapLevel:0 withBytes:data bytesPerRow:w * 4];
 }
 
 void MetalRenderer::update_atlas_region(int x, int y, int w, int h, const uint8_t* data)
 {
     id<MTLTexture> tex = (__bridge id<MTLTexture>)atlas_texture_;
     MTLRegion region = MTLRegionMake2D(x, y, w, h);
-    [tex replaceRegion:region mipmapLevel:0 withBytes:data bytesPerRow:w];
+    [tex replaceRegion:region mipmapLevel:0 withBytes:data bytesPerRow:w * 4];
 }
 
 void MetalRenderer::set_cursor(int col, int row, const CursorStyle& style)

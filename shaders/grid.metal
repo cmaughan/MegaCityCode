@@ -99,6 +99,7 @@ struct FgVertexOut
     float4 position [[position]];
     float2 uv;
     float4 fg_color;
+    uint style_flags;
 };
 
 vertex FgVertexOut fg_vertex(
@@ -131,6 +132,7 @@ vertex FgVertexOut fg_vertex(
     out.position = float4(ndc, 0.0, 1.0);
     out.uv = mix(float2(cell.uv_x0, cell.uv_y0), float2(cell.uv_x1, cell.uv_y1), offset);
     out.fg_color = float4(cell.fg_r, cell.fg_g, cell.fg_b, cell.fg_a);
+    out.style_flags = cell.style_flags;
     return out;
 }
 
@@ -139,8 +141,10 @@ fragment float4 fg_fragment(
     texture2d<float> atlas [[texture(0)]],
     sampler atlas_sampler [[sampler(0)]])
 {
-    float alpha = atlas.sample(atlas_sampler, in.uv).r;
+    float4 atlas_sample = atlas.sample(atlas_sampler, in.uv);
+    float alpha = atlas_sample.a;
     if (alpha < 0.01)
         discard_fragment();
-    return float4(in.fg_color.rgb, in.fg_color.a * alpha);
+    bool color_glyph = (in.style_flags & (1u << 5)) != 0u;
+    return color_glyph ? atlas_sample : float4(in.fg_color.rgb, in.fg_color.a * alpha);
 }

@@ -7,6 +7,14 @@
 namespace spectre
 {
 
+namespace
+{
+
+constexpr VkFormat kAtlasFormat = VK_FORMAT_R8G8B8A8_UNORM;
+constexpr size_t kAtlasPixelSize = 4;
+
+} // namespace
+
 bool VkAtlas::initialize(VkContext& ctx)
 {
     VkDevice device = ctx.device();
@@ -22,7 +30,7 @@ bool VkAtlas::initialize(VkContext& ctx)
 
     VkImageCreateInfo img_ci = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
     img_ci.imageType = VK_IMAGE_TYPE_2D;
-    img_ci.format = VK_FORMAT_R8_UNORM;
+    img_ci.format = kAtlasFormat;
     img_ci.extent = { ATLAS_SIZE, ATLAS_SIZE, 1 };
     img_ci.mipLevels = 1;
     img_ci.arrayLayers = 1;
@@ -44,14 +52,10 @@ bool VkAtlas::initialize(VkContext& ctx)
     VkImageViewCreateInfo view_ci = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
     view_ci.image = image_;
     view_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    view_ci.format = VK_FORMAT_R8_UNORM;
+    view_ci.format = kAtlasFormat;
     view_ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     view_ci.subresourceRange.levelCount = 1;
     view_ci.subresourceRange.layerCount = 1;
-    view_ci.components.r = VK_COMPONENT_SWIZZLE_R;
-    view_ci.components.g = VK_COMPONENT_SWIZZLE_R;
-    view_ci.components.b = VK_COMPONENT_SWIZZLE_R;
-    view_ci.components.a = VK_COMPONENT_SWIZZLE_R;
     if (vkCreateImageView(device, &view_ci, nullptr, &image_view_) != VK_SUCCESS)
     {
         SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create atlas image view");
@@ -71,7 +75,7 @@ bool VkAtlas::initialize(VkContext& ctx)
     }
 
     VkBufferCreateInfo buf_ci = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-    buf_ci.size = ATLAS_SIZE * ATLAS_SIZE;
+    buf_ci.size = static_cast<VkDeviceSize>(ATLAS_SIZE) * ATLAS_SIZE * kAtlasPixelSize;
     buf_ci.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 
     VmaAllocationCreateInfo staging_ci = {};
@@ -175,7 +179,8 @@ bool VkAtlas::upload_internal(VkContext& ctx, int x, int y, int w, int h, const 
     {
         uint8_t* dst = static_cast<uint8_t*>(staging_mapped_);
         for (int row = 0; row < h; row++)
-            memcpy(dst + row * w, data + row * w, w);
+            memcpy(dst + (size_t)row * w * kAtlasPixelSize, data + (size_t)row * w * kAtlasPixelSize,
+                (size_t)w * kAtlasPixelSize);
     }
 
     VkImageMemoryBarrier barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };

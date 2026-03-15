@@ -18,8 +18,11 @@ struct RasterizedGlyph
     int height = 0;
     int left = 0;
     int top = 0;
+    bool is_color = false;
     std::vector<uint8_t> pixels;
 };
+
+constexpr int ATLAS_PIXEL_SIZE = 4;
 
 const uint8_t* bitmap_row_ptr(const FT_Bitmap& bmp, int row)
 {
@@ -28,17 +31,28 @@ const uint8_t* bitmap_row_ptr(const FT_Bitmap& bmp, int row)
     return bmp.buffer + (bmp.rows - 1 - row) * (-bmp.pitch);
 }
 
-bool bitmap_to_grayscale(const FT_Bitmap& bmp, std::vector<uint8_t>& out)
+uint8_t unpremultiply_channel(uint8_t value, uint8_t alpha)
+{
+    if (alpha == 0)
+        return 0;
+
+    int result = (static_cast<int>(value) * 255 + alpha / 2) / alpha;
+    return static_cast<uint8_t>(std::clamp(result, 0, 255));
+}
+
+bool bitmap_to_rgba(const FT_Bitmap& bmp, std::vector<uint8_t>& out, bool& is_color)
 {
     int width = (int)bmp.width;
     int height = (int)bmp.rows;
     if (width <= 0 || height <= 0)
     {
         out.clear();
+        is_color = false;
         return true;
     }
 
-    out.assign((size_t)width * height, 0);
+    out.assign((size_t)width * height * ATLAS_PIXEL_SIZE, 0);
+    is_color = false;
 
     switch (bmp.pixel_mode)
     {
@@ -46,7 +60,14 @@ bool bitmap_to_grayscale(const FT_Bitmap& bmp, std::vector<uint8_t>& out)
         for (int row = 0; row < height; row++)
         {
             const uint8_t* src = bitmap_row_ptr(bmp, row);
-            memcpy(out.data() + (size_t)row * width, src, width);
+            uint8_t* dst = out.data() + (size_t)row * width * ATLAS_PIXEL_SIZE;
+            for (int col = 0; col < width; col++)
+            {
+                dst[col * 4 + 0] = 255;
+                dst[col * 4 + 1] = 255;
+                dst[col * 4 + 2] = 255;
+                dst[col * 4 + 3] = src[col];
+            }
         }
         return true;
 
@@ -54,21 +75,35 @@ bool bitmap_to_grayscale(const FT_Bitmap& bmp, std::vector<uint8_t>& out)
         for (int row = 0; row < height; row++)
         {
             const uint8_t* src = bitmap_row_ptr(bmp, row);
+            uint8_t* dst = out.data() + (size_t)row * width * ATLAS_PIXEL_SIZE;
             for (int col = 0; col < width; col++)
             {
                 uint8_t mask = (uint8_t)(0x80 >> (col & 7));
-                out[(size_t)row * width + col] = (src[col >> 3] & mask) ? 255 : 0;
+                uint8_t alpha = (src[col >> 3] & mask) ? 255 : 0;
+                dst[col * 4 + 0] = 255;
+                dst[col * 4 + 1] = 255;
+                dst[col * 4 + 2] = 255;
+                dst[col * 4 + 3] = alpha;
             }
         }
         return true;
 
     case FT_PIXEL_MODE_BGRA:
+        is_color = true;
         for (int row = 0; row < height; row++)
         {
             const uint8_t* src = bitmap_row_ptr(bmp, row);
+            uint8_t* dst = out.data() + (size_t)row * width * ATLAS_PIXEL_SIZE;
             for (int col = 0; col < width; col++)
             {
-                out[(size_t)row * width + col] = src[col * 4 + 3];
+                const uint8_t b = src[col * 4 + 0];
+                const uint8_t g = src[col * 4 + 1];
+                const uint8_t r = src[col * 4 + 2];
+                const uint8_t a = src[col * 4 + 3];
+                dst[col * 4 + 0] = unpremultiply_channel(r, a);
+                dst[col * 4 + 1] = unpremultiply_channel(g, a);
+                dst[col * 4 + 2] = unpremultiply_channel(b, a);
+                dst[col * 4 + 3] = a;
             }
         }
         return true;
@@ -100,7 +135,7 @@ bool GlyphCache::initialize(FT_Face face, int pixel_size, int atlas_size)
     face_ = face;
     pixel_size_ = pixel_size;
     atlas_size_ = std::max(1, atlas_size);
-    atlas_.assign((size_t)atlas_size_ * atlas_size_, 0);
+    atlas_.assign((size_t)atlas_size_ * atlas_size_ * ATLAS_PIXEL_SIZE, 0);
     dirty_ = false;
     dirty_rect_ = {};
     overflowed_ = false;
@@ -212,7 +247,7 @@ bool GlyphCache::rasterize_cluster(const std::string& text, FT_Face face, TextSh
             glyph.height = (int)bmp.rows;
             glyph.left = pen_x + shaped_glyph.x_offset + face->glyph->bitmap_left;
             glyph.top = shaped_glyph.y_offset + face->glyph->bitmap_top;
-            if (!bitmap_to_grayscale(bmp, glyph.pixels))
+            if (!bitmap_to_rgba(bmp, glyph.pixels, glyph.is_color))
                 return false;
 
             bbox_left = std::min(bbox_left, glyph.left);
@@ -239,26 +274,49 @@ bool GlyphCache::rasterize_cluster(const std::string& text, FT_Face face, TextSh
     if (!reserve_region(cluster_width, cluster_height, atlas_x, atlas_y, "cluster"))
         return false;
 
-    std::vector<uint8_t> composite(cluster_width * cluster_height, 0);
+    std::vector<uint8_t> composite((size_t)cluster_width * cluster_height * ATLAS_PIXEL_SIZE, 0);
+    bool cluster_is_color = false;
     for (const auto& glyph : glyphs)
     {
+        cluster_is_color = cluster_is_color || glyph.is_color;
         int dst_x = glyph.left - bbox_left;
         int dst_y = bbox_top - glyph.top;
         for (int row = 0; row < glyph.height; row++)
         {
             for (int col = 0; col < glyph.width; col++)
             {
-                auto& dst = composite[(dst_y + row) * cluster_width + dst_x + col];
-                dst = std::max(dst, glyph.pixels[row * glyph.width + col]);
+                uint8_t* dst = composite.data()
+                    + (((size_t)(dst_y + row) * cluster_width) + dst_x + col) * ATLAS_PIXEL_SIZE;
+                const uint8_t* src = glyph.pixels.data() + (((size_t)row * glyph.width) + col) * ATLAS_PIXEL_SIZE;
+
+                const float src_alpha = src[3] / 255.0f;
+                const float dst_alpha = dst[3] / 255.0f;
+                const float out_alpha = src_alpha + dst_alpha * (1.0f - src_alpha);
+
+                if (out_alpha <= 0.0f)
+                {
+                    dst[0] = dst[1] = dst[2] = dst[3] = 0;
+                    continue;
+                }
+
+                for (int channel = 0; channel < 3; channel++)
+                {
+                    float src_value = src[channel] / 255.0f;
+                    float dst_value = dst[channel] / 255.0f;
+                    float out_value = (src_value * src_alpha + dst_value * dst_alpha * (1.0f - src_alpha))
+                        / out_alpha;
+                    dst[channel] = static_cast<uint8_t>(std::clamp((int)(out_value * 255.0f + 0.5f), 0, 255));
+                }
+                dst[3] = static_cast<uint8_t>(std::clamp((int)(out_alpha * 255.0f + 0.5f), 0, 255));
             }
         }
     }
 
     for (int row = 0; row < cluster_height; row++)
     {
-        memcpy(atlas_.data() + (size_t)(atlas_y + row) * atlas_size_ + atlas_x,
-            composite.data() + row * cluster_width,
-            cluster_width);
+        memcpy(atlas_.data() + (((size_t)(atlas_y + row) * atlas_size_) + atlas_x) * ATLAS_PIXEL_SIZE,
+            composite.data() + (size_t)row * cluster_width * ATLAS_PIXEL_SIZE,
+            (size_t)cluster_width * ATLAS_PIXEL_SIZE);
     }
 
     float inv_size = 1.0f / atlas_size_;
@@ -270,6 +328,7 @@ bool GlyphCache::rasterize_cluster(const std::string& text, FT_Face face, TextSh
     region.bearing_y = bbox_top;
     region.width = cluster_width;
     region.height = cluster_height;
+    region.is_color = cluster_is_color;
 
     expand_dirty_rect(dirty_rect_, dirty_, atlas_x, atlas_y, cluster_width, cluster_height);
     dirty_ = true;

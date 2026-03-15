@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <spectre/log.h>
+#include <spectre/unicode.h>
 #include <unordered_map>
 #include <utility>
 
@@ -21,8 +22,8 @@ std::vector<std::string> default_fallback_font_candidates()
     const char* windir = std::getenv("WINDIR");
     std::string windows_dir = windir ? windir : "C:\\Windows";
     return {
-        windows_dir + "\\Fonts\\seguisym.ttf",
         windows_dir + "\\Fonts\\seguiemj.ttf",
+        windows_dir + "\\Fonts\\seguisym.ttf",
     };
 #elif defined(__APPLE__)
     return {
@@ -95,6 +96,58 @@ bool can_render_cluster(FT_Face face, TextShaper& shaper, const std::string& tex
     }
 
     return has_glyph;
+}
+
+bool cluster_prefers_color_font(std::string_view text)
+{
+    size_t offset = 0;
+    uint32_t base = 0;
+    bool have_base = false;
+    bool has_vs16 = false;
+    bool has_zwj = false;
+    bool has_emoji_modifier = false;
+    bool has_keycap = false;
+
+    while (offset < text.size())
+    {
+        uint32_t cp = 0;
+        if (!utf8_decode_next(text, offset, cp))
+            break;
+
+        if (cp == 0xFE0F)
+            has_vs16 = true;
+        else if (cp == 0x200D)
+            has_zwj = true;
+        else if (cp == 0x20E3)
+            has_keycap = true;
+        else if (is_emoji_modifier(cp))
+            has_emoji_modifier = true;
+
+        if (!have_base && !is_width_ignorable(cp) && !is_emoji_modifier(cp))
+        {
+            base = cp;
+            have_base = true;
+        }
+    }
+
+    if (!have_base)
+        return false;
+
+    if (is_default_emoji_presentation(base) || is_regional_indicator(base))
+        return true;
+
+    if ((has_vs16 || has_zwj || has_emoji_modifier) && is_emoji_text_presentation_candidate(base))
+        return true;
+
+    if (has_keycap && is_ascii_keycap_base(base))
+        return true;
+
+    return false;
+}
+
+bool font_has_color(FT_Face face)
+{
+    return face && FT_HAS_COLOR(face);
 }
 
 } // namespace
@@ -232,6 +285,26 @@ struct TextService::Impl
             int idx = cached->second;
             if (idx >= 0 && idx < (int)fallback_fonts.size())
                 return { fallback_fonts[(size_t)idx].font.face(), &fallback_fonts[(size_t)idx].shaper };
+        }
+
+        if (cluster_prefers_color_font(text))
+        {
+            if (font_has_color(font.face()) && can_render_cluster(font.face(), shaper, text))
+            {
+                font_choice_cache[text] = -1;
+                return { font.face(), &shaper };
+            }
+
+            for (int i = 0; i < (int)fallback_fonts.size(); i++)
+            {
+                auto& fallback = fallback_fonts[(size_t)i];
+                if (font_has_color(fallback.font.face())
+                    && can_render_cluster(fallback.font.face(), fallback.shaper, text))
+                {
+                    font_choice_cache[text] = i;
+                    return { fallback.font.face(), &fallback.shaper };
+                }
+            }
         }
 
         if (can_render_cluster(font.face(), shaper, text))
