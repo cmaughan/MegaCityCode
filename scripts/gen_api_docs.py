@@ -66,6 +66,28 @@ def run(cmd: list[str], *, cwd: Path | None = None, dry_run: bool) -> None:
         subprocess.run(cmd, cwd=cwd, check=True)
 
 
+def copy_tree(src: Path, dst: Path, *, dry_run: bool) -> None:
+    if not src.exists():
+        return
+    print(f"> copy {src} -> {dst}")
+    if dry_run:
+        return
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.copytree(src, dst)
+
+
+def copy_generated_assets(repo_root: Path, output_dir: Path, *, dry_run: bool) -> None:
+    asset_dirs = [
+        ("screenshots", "screenshots"),
+        ("docs/deps", "docs/deps"),
+        ("docs/uml", "docs/uml"),
+        ("tests/render/reference", "tests/render/reference"),
+    ]
+    for src_rel, dst_rel in asset_dirs:
+        copy_tree(repo_root / src_rel, output_dir / dst_rel, dry_run=dry_run)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--output", default="docs/api", help="Output directory (default: docs/api)")
@@ -100,6 +122,7 @@ def main() -> int:
         config_path = Path(temp_dir) / "Doxyfile"
         config_path.write_text(rendered_config, encoding="utf-8")
         run([str(doxygen), str(config_path)], cwd=repo_root, dry_run=args.dry_run)
+        copy_generated_assets(repo_root, output_dir, dry_run=args.dry_run)
 
     if not args.dry_run:
         index = output_dir / "index.html"

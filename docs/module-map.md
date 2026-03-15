@@ -22,7 +22,7 @@ If you only want the shortest path to orientation:
 
 ## Main Libraries
 
-### `app/`
+### app/
 
 Top-level orchestration only.
 
@@ -41,7 +41,7 @@ Bad place for:
 - low-level font logic
 - grid mutation rules
 
-### `libs/spectre-types/`
+### libs/spectre-types/
 
 Shared low-level data types and cross-module contracts.
 
@@ -54,7 +54,7 @@ Good place for:
 - narrow shared contracts
 - POD-like data passed between modules
 
-### `libs/spectre-window/`
+### libs/spectre-window/
 
 SDL windowing and platform-facing input/display behavior.
 
@@ -68,7 +68,7 @@ Good place for:
 - platform window behavior
 - SDL event translation
 
-### `libs/spectre-renderer/`
+### libs/spectre-renderer/
 
 Public renderer API plus Vulkan/Metal backends.
 
@@ -83,7 +83,7 @@ Good place for:
 - backend-specific GPU work
 - readback/capture paths
 
-### `libs/spectre-font/`
+### libs/spectre-font/
 
 Text pipeline and atlas management.
 
@@ -98,7 +98,7 @@ Good place for:
 - glyph rasterization
 - color emoji support
 
-### `libs/spectre-grid/`
+### libs/spectre-grid/
 
 The terminal cell model.
 
@@ -111,7 +111,7 @@ Good place for:
 - redraw correctness
 - cell mutation rules
 
-### `libs/spectre-nvim/`
+### libs/spectre-nvim/
 
 Embedded Neovim process, RPC, redraw parsing, and input encoding.
 
