@@ -1,8 +1,6 @@
 # Spectre
 
-API docs: [Local generated reference](docs/api/index.html)
-
-Build them locally with `python .\do.py api` or `python .\scripts\build_docs.py --api-only`.
+API docs: generate locally with `python .\do.py api` or `python .\scripts\build_docs.py --api-only`.
 
 Spectre is a cross-platform Neovim GUI frontend with native GPU rendering:
 
@@ -10,10 +8,6 @@ Spectre is a cross-platform Neovim GUI frontend with native GPU rendering:
 - Metal on macOS
 - SDL3 windowing and input
 - embedded `nvim --embed` over msgpack-RPC
-
-API docs:
-- GitHub Pages project site: `https://cmaughan.github.io/spectre/`
-- If your account uses a custom Pages domain, use that same domain with `/spectre/` appended
 
 ### Windows
 
@@ -298,11 +292,6 @@ python .\scripts\build_docs.py --api-only
 ```
 
 This writes a local Doxygen site to `docs/api/index.html`. It is generated locally and ignored in Git.
-
-The latest `main` branch API docs are also published from GitHub Actions at the repo's Pages URL:
-
-- `https://cmaughan.github.io/spectre/`
-- or the equivalent `/<repo>` path under your custom Pages domain, if one is configured for the account
 
 ## Unicode Snapshot Example
 

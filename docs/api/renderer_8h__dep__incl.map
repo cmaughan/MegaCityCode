@@ -1,9 +1,0 @@
-<map id="libs/spectre&#45;renderer/include/spectre/renderer.h" name="libs/spectre&#45;renderer/include/spectre/renderer.h">
-<area shape="rect" id="node1" title=" " alt="" coords="152,5,328,48"/>
-<area shape="rect" id="node2" href="$app_8h.html" title=" " alt="" coords="27,195,106,221"/>
-<area shape="rect" id="node4" href="$grid__rendering__pipeline_8h.html" title=" " alt="" coords="75,96,202,139"/>
-<area shape="rect" id="node5" href="$metal__renderer_8h.html" title=" " alt="" coords="154,187,334,229"/>
-<area shape="rect" id="node6" href="$renderer__state_8h.html" title=" " alt="" coords="277,96,418,139"/>
-<area shape="rect" id="node7" href="$vk__renderer_8h.html" title=" " alt="" coords="366,187,535,229"/>
-<area shape="rect" id="node3" href="$render__test_8h.html" title=" " alt="" coords="5,277,128,304"/>
-</map>

@@ -1,9 +1,0 @@
-var searchData=
-[
-  ['take_5fcaptured_5fframe_0',['take_captured_frame',['../classspectre_1_1_i_renderer.html#a83d11f3b6c5f8b018cb02d888cb2db19',1,'spectre::IRenderer::take_captured_frame()'],['../classspectre_1_1_metal_renderer.html#adb4cab3393956bbd38431461b315b658',1,'spectre::MetalRenderer::take_captured_frame()'],['../classspectre_1_1_vk_renderer.html#a96aa18d3d2d37b2f4e31972b64c54b0c',1,'spectre::VkRenderer::take_captured_frame()']]],
-  ['textservice_1',['TextService',['../classspectre_1_1_text_service.html#a55f1a8427cefa7de4d42a35af0fee15e',1,'spectre::TextService::TextService()'],['../classspectre_1_1_text_service.html#a09a4beb219e07c35707e9cfd76c9d432',1,'spectre::TextService::TextService(const TextService &amp;)=delete'],['../classspectre_1_1_text_service.html#a2ce21b1b7b342eed6f222c4e0d9cd9c8',1,'spectre::TextService::TextService(TextService &amp;&amp;other) noexcept']]],
-  ['textshaper_2',['TextShaper',['../classspectre_1_1_text_shaper.html#a8aaa440e3283ddcb8614309d50bf8bcd',1,'spectre::TextShaper::TextShaper()=default'],['../classspectre_1_1_text_shaper.html#a22f0cb6823444fd33c6e8cb867655b9a',1,'spectre::TextShaper::TextShaper(const TextShaper &amp;)=delete'],['../classspectre_1_1_text_shaper.html#a85c2e04c91b3626b3484968c36fc89e4',1,'spectre::TextShaper::TextShaper(TextShaper &amp;&amp;other) noexcept']]],
-  ['to_5fstring_3',['to_string',['../namespacespectre.html#a8d16f2991ae7406a6526d6d551b3f8a4',1,'spectre::to_string(LogLevel level)'],['../namespacespectre.html#ac3861271a32824f294e55e3445678428',1,'spectre::to_string(LogCategory category)']]],
-  ['total_5fcells_4',['total_cells',['../classspectre_1_1_renderer_state.html#a7a4cc49a818660bc5922a240635453d7',1,'spectre::RendererState']]],
-  ['type_5',['type',['../structspectre_1_1_mpack_value.html#aa0f04babec5ac6631acc9b16aa50d017',1,'spectre::MpackValue']]]
-];
