@@ -36,6 +36,21 @@ if(NOT APPLE)
     FetchContent_MakeAvailable(VulkanMemoryAllocator)
 endif()
 
+# libpng (macOS only — required for FreeType to decode sbix/PNG color emoji)
+if(APPLE)
+    FetchContent_Declare(
+        libpng
+        GIT_REPOSITORY https://github.com/pnggroup/libpng.git
+        GIT_TAG v1.6.43
+        GIT_SHALLOW TRUE
+    )
+    set(PNG_TESTS OFF CACHE BOOL "" FORCE)
+    set(PNG_TOOLS OFF CACHE BOOL "" FORCE)
+    set(PNG_SHARED OFF CACHE BOOL "" FORCE)
+    set(PNG_STATIC ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(libpng)
+endif()
+
 # FreeType
 FetchContent_Declare(
     freetype
@@ -45,10 +60,22 @@ FetchContent_Declare(
 )
 set(FT_DISABLE_ZLIB ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_BZIP2 ON CACHE BOOL "" FORCE)
-set(FT_DISABLE_PNG ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
+# Always disable PNG discovery — on Apple we wire it in manually below
+set(FT_DISABLE_PNG ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(freetype)
+# On Apple: manually enable PNG in FreeType using our fetched libpng.
+# We bypass find_package(PNG) entirely to avoid raw-path link issues.
+if(APPLE)
+    target_compile_definitions(freetype PRIVATE FT_CONFIG_OPTION_USE_PNG)
+    target_link_libraries(freetype PRIVATE png_static)
+    target_include_directories(freetype PRIVATE
+        "${libpng_SOURCE_DIR}"
+        "${libpng_BINARY_DIR}")
+    # pnglibconf.h is generated at build time; ensure it exists before FreeType compiles
+    add_dependencies(freetype pnglibconf_h)
+endif()
 
 # HarfBuzz
 FetchContent_Declare(
