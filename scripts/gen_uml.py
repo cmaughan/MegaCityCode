@@ -4,7 +4,7 @@
 Requirements: clang-uml, plantuml (optional — for rendering to PNG/SVG)
 Usage:
     python scripts/gen_uml.py                         # generate + render all diagrams
-    python scripts/gen_uml.py --diagram spectre_classes
+    python scripts/gen_uml.py --diagram megacitycode_classes
     python scripts/gen_uml.py --puml-only             # skip render, just emit .puml
     python scripts/gen_uml.py --format svg            # render to SVG (default: png)
     python scripts/gen_uml.py --dry-run               # print commands without running

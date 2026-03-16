@@ -1,10 +1,10 @@
-# Spectre Codebase Review
+# MegaCityCode Codebase Review
 
 ---
 
 ## Module Architecture and Separation
 
-The codebase is split into six static libraries plus an app orchestrator. The declared dependency direction (`spectre-types → window/renderer/font/grid → nvim → app`) is largely respected in headers. `spectre-renderer` exposes `RendererState` as an internal shared type between Vulkan and Metal backends, which is correct. The `IGridSink` interface in `spectre-types` gives `UiEventHandler` a clean seam to test against without the concrete `Grid`.
+The codebase is split into six static libraries plus an app orchestrator. The declared dependency direction (`megacitycode-types → window/renderer/font/grid → nvim → app`) is largely respected in headers. `megacitycode-renderer` exposes `RendererState` as an internal shared type between Vulkan and Metal backends, which is correct. The `IGridSink` interface in `megacitycode-types` gives `UiEventHandler` a clean seam to test against without the concrete `Grid`.
 
 ---
 
@@ -62,10 +62,10 @@ Both `Wait` and `On` transition to `Phase::Off` with `blinkoff` duration. The `W
 
 ## Top 10 Good Things
 
-1. **Clean layered library architecture** — The six-library split with declared dependency direction (`spectre-types` as the base) is enforced by CMake and respected in code. Circular dependencies are absent.
+1. **Clean layered library architecture** — The six-library split with declared dependency direction (`megacitycode-types` as the base) is enforced by CMake and respected in code. Circular dependencies are absent.
 2. **`IRenderer` / `IWindow` abstraction** — Platform backends are completely hidden behind thin interfaces. The app never touches Vulkan or Metal headers. `renderer_factory.cpp` is the single platform dispatch point.
 3. **`IGridSink` seam for testing** — `UiEventHandler` depends on an interface, not `Grid`. `RecordingGridSink` in the tests demonstrates the payoff: UI parsing is tested without a real grid.
-4. **RPC integration tests with a real subprocess** — `rpc_integration_tests.cpp` spawns `spectre-rpc-fake` as a real child process over real pipes. This tests the actual process-spawn and transport stack, not a mock, and catches real shutdown edge cases.
+4. **RPC integration tests with a real subprocess** — `rpc_integration_tests.cpp` spawns `megacitycode-rpc-fake` as a real child process over real pipes. This tests the actual process-spawn and transport stack, not a mock, and catches real shutdown edge cases.
 5. **Render snapshot suite** — BMP pixel comparison with configurable tolerance and a `do.py` blessing workflow. Cross-platform reference images are checked in. The scenario TOML format is readable and easily extensible.
 6. **`RendererState` shared between backends** — GPU cell layout, dirty tracking, cursor overlay, and overlay cell math live in one place. Both Vulkan and Metal call the same `copy_dirty_cells_to`, eliminating divergence in the hottest path.
 7. **Atlas overflow recovery** — The `consume_overflowed()` / `atlas_reset_pending` loop in `TextService::resolve_cluster` gracefully handles a full atlas without crashing. The two-attempt loop in `GridRenderingPipeline::flush` ensures the reset is transparent to the caller.
@@ -129,6 +129,6 @@ Both `Wait` and `On` transition to `Phase::Off` with `blinkoff` duration. The `W
 5. **F12 debug overlay not discoverable** — The only way to trigger the debug overlay is to press F12 and notice the counter in the corner. There is no mention of this in any documentation, `--help` output, or startup message.
 6. **`render_test.cpp` BMP I/O is hand-rolled** — The BMP reader/writer is ~150 lines of manual byte manipulation. This works, but the pixel swap (BGRA→RGBA) is duplicated between `write_bmp_rgba` and `read_bmp_rgba` in opposing directions, making it error-prone to maintain.
 7. **Startup commands are sequential blocking RPC requests** — Each command in `options_.startup_commands` is a synchronous `rpc_.request("nvim_command", ...)`. For scenarios with 10+ commands, startup latency is measurable. These could be batched with `nvim_exec2` or pipelined.
-8. **No user-facing `--help` or version flags** — Running `spectre.exe --unknown-flag` silently ignores unknown flags and starts normally. There is no `--help` output, no `--version`, and the only documented flags are in `parse_args`.
-9. **`SPECTRE_LOG_CATEGORIES` env var silently drops unknown category names** — `parse_category_list` discards unrecognized tokens without warning. A typo like `SPECTRE_LOG_CATEGORIES=rpc,nvim,rendrer` gives no feedback that `rendrer` was ignored.
-10. **Window title update race on startup** — The window title defaults to "Spectre" and is only updated when Neovim sends a `set_title` event. If the user opens a file via startup command, the title stays "Spectre" until the first `flush` cycle. The title should be updated eagerly from the startup command filename if available.
+8. **No user-facing `--help` or version flags** — Running `megacitycode.exe --unknown-flag` silently ignores unknown flags and starts normally. There is no `--help` output, no `--version`, and the only documented flags are in `parse_args`.
+9. **`MEGACITYCODE_LOG_CATEGORIES` env var silently drops unknown category names** — `parse_category_list` discards unrecognized tokens without warning. A typo like `MEGACITYCODE_LOG_CATEGORIES=rpc,nvim,rendrer` gives no feedback that `rendrer` was ignored.
+10. **Window title update race on startup** — The window title defaults to "MegaCityCode" and is only updated when Neovim sends a `set_title` event. If the user opens a file via startup command, the title stays "MegaCityCode" until the first `flush` cycle. The title should be updated eagerly from the startup command filename if available.

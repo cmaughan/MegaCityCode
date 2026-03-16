@@ -84,11 +84,11 @@ else
 fi
 run cmake --build build --parallel
 
-if [ ! -x ./build/spectre ]; then
-  echo "Missing executable: ./build/spectre" >&2
+if [ ! -x ./build/megacitycode ]; then
+  echo "Missing executable: ./build/megacitycode" >&2
   exit 1
 fi
 
 echo
-echo "> ./build/spectre $*"
-exec ./build/spectre "$@"
+echo "> ./build/megacitycode $*"
+exec ./build/megacitycode "$@"

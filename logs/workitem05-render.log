@@ -2,7 +2,7 @@
 [info][app] Window created
 [info][app] Renderer initialized
 [info][app] Display PPI: 168
-[info][font] Primary font path: D:/dev/spectre/fonts/JetBrainsMonoNerdFont-Regular.ttf
+[info][font] Primary font path: D:/dev/megacitycode/fonts/JetBrainsMonoNerdFont-Regular.ttf
 [info][font] Font loaded: JetBrainsMono Nerd Font 11pt @ 168 PPI (26 device px), cell=15x34, asc=27, desc=8
 [info][font] Font loaded: Segoe UI Emoji 11pt @ 168 PPI (26 device px), cell=35x27, asc=19, desc=6
 [info][font] Fallback font loaded: C:\WINDOWS\Fonts\seguiemj.ttf

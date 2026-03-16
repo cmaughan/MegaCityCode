@@ -1,11 +1,11 @@
 #pragma once
 
-#include <spectre/text_service.h>
+#include <megacitycode/text_service.h>
 #include <string>
 #include <string_view>
 #include <vector>
 
-namespace spectre
+namespace megacitycode
 {
 
 struct AppConfig
@@ -30,12 +30,8 @@ struct AppOptions
     bool load_user_config = true;
     bool save_user_config = true;
     bool activate_window_on_startup = true;
-    bool show_debug_overlay_on_startup = false;
     bool clamp_window_to_display = true;
     AppConfig initial_config = {};
-    std::vector<std::string> nvim_args;
-    std::vector<std::string> startup_commands;
-    std::string nvim_working_dir;
 };
 
-} // namespace spectre
+} // namespace megacitycode

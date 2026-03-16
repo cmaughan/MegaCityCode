@@ -6,7 +6,7 @@ The current render-test path works, but the ownership is wrong.
 
 Current verified issues:
 
-- `app/render_test.cpp` is compiled into `spectre.exe`
+- `app/render_test.cpp` is compiled into `megacitycode.exe`
 - the tests compile that same file directly
 - `app_config.cpp` and `render_test.cpp` each carry their own partial TOML-like parser helpers
 - render-test reporting still uses hand-built JSON text
@@ -20,11 +20,11 @@ Keep render-test tooling available without making it a production-orchestration 
 1. [x] Extract shared parsing helpers.
    - created `app/toml_util.h` with inline `trim`, `unquote`, `is_complete_array_literal`,
      `parse_string_array` (escape-aware), `parse_int`, `parse_double`, `parse_bool`,
-     and `json_escape_string` — all in `namespace spectre::toml`
+     and `json_escape_string` — all in `namespace megacitycode::toml`
    - removed duplicated copies from `app_config.cpp` and `render_test.cpp`
 2. [x] Move render-test logic behind a narrower library seam.
    - `render_test.h` no longer includes `app.h`; replaced with targeted includes:
-     `app_config.h` (which also now owns `AppOptions`) + `<spectre/renderer.h>`
+     `app_config.h` (which also now owns `AppOptions`) + `<megacitycode/renderer.h>`
    - `AppOptions` moved from `app.h` to `app_config.h` (natural pairing with `AppConfig`)
 3. [x] Keep the CLI mode thin.
    - `main.cpp` already only dispatches to the render-test service

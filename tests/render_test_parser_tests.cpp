@@ -6,10 +6,10 @@
 #include <fstream>
 #include <string>
 
-using spectre::tests::expect;
-using spectre::tests::expect_eq;
-using spectre::tests::run_test;
-using namespace spectre::toml;
+using megacitycode::tests::expect;
+using megacitycode::tests::expect_eq;
+using megacitycode::tests::run_test;
+using namespace megacitycode::toml;
 
 namespace
 {
@@ -27,66 +27,66 @@ void run_render_test_parser_tests()
 {
     // --- Scenario loading ---
 
-    run_test("multiline commands array parses", [] {
-        const auto dir = std::filesystem::temp_directory_path() / "spectre-render-test-parser-multi";
+    run_test("multiline fallback_paths array parses", [] {
+        const auto dir = std::filesystem::temp_directory_path() / "megacitycode-render-test-parser-multi";
         const auto path = dir / "multiline.toml";
         write_text_file(path,
             "name = \"multiline\"\n"
             "width = 900\n"
             "height = 700\n"
-            "debug_overlay = true\n"
-            "commands = [\n"
-            "  \"edit ${PROJECT_ROOT}/README.md\",\n"
-            "  \"set nowrap\",\n"
-            "  \"lua vim.cmd([[normal! ggzt]])\",\n"
+            "font_path = \"${PROJECT_ROOT}/fonts/JetBrainsMonoNerdFont-Regular.ttf\"\n"
+            "fallback_paths = [\n"
+            "  \"${SCENARIO_DIR}/fallback-a.ttf\",\n"
+            "  \"${PROJECT_ROOT}/fonts/JetBrainsMonoNerdFont-Regular.ttf\",\n"
             "]\n");
 
         std::string err;
-        auto scenario = spectre::load_render_test_scenario(path, &err);
+        auto scenario = megacitycode::load_render_test_scenario(path, &err);
         expect(scenario.has_value(), "multiline render scenario should load");
         expect_eq(scenario->name, std::string("multiline"), "name");
         expect_eq(scenario->width, 900, "width");
         expect_eq(scenario->height, 700, "height");
-        expect(scenario->debug_overlay, "debug_overlay flag");
-        expect_eq(static_cast<int>(scenario->commands.size()), 3, "command count");
-        expect_eq(scenario->commands[0],
-            std::string("edit " + (dir.parent_path().parent_path() / "README.md").lexically_normal().generic_string()),
-            "project root placeholder expands");
-        expect_eq(scenario->commands[1], std::string("set nowrap"), "second command");
-        expect_eq(scenario->commands[2], std::string("lua vim.cmd([[normal! ggzt]])"), "third command");
+        expect_eq(scenario->font_path.lexically_normal().generic_string(),
+            (dir.parent_path().parent_path() / "fonts" / "JetBrainsMonoNerdFont-Regular.ttf").lexically_normal().generic_string(),
+            "project root placeholder expands in font_path");
+        expect_eq(static_cast<int>(scenario->fallback_paths.size()), 2, "fallback count");
+        expect_eq(scenario->fallback_paths[0],
+            (dir / "fallback-a.ttf").lexically_normal().generic_string(),
+            "scenario dir placeholder expands");
 
         std::error_code ec;
         std::filesystem::remove_all(dir, ec);
     });
 
-    run_test("missing commands field returns error", [] {
-        const auto dir = std::filesystem::temp_directory_path() / "spectre-render-test-parser-nocmd";
-        const auto path = dir / "nocmd.toml";
-        write_text_file(path, "name = \"no-commands\"\nwidth = 800\n");
+    run_test("scenario without scene extras still loads", [] {
+        const auto dir = std::filesystem::temp_directory_path() / "megacitycode-render-test-parser-minimal";
+        const auto path = dir / "minimal.toml";
+        write_text_file(path, "name = \"minimal\"\nwidth = 800\n");
 
         std::string err;
-        auto scenario = spectre::load_render_test_scenario(path, &err);
-        expect(!scenario.has_value(), "missing commands should fail");
-        expect(!err.empty(), "error message should be set");
+        auto scenario = megacitycode::load_render_test_scenario(path, &err);
+        expect(scenario.has_value(), "minimal scenario should load");
+        expect_eq(scenario->width, 800, "width");
 
         std::error_code ec;
         std::filesystem::remove_all(dir, ec);
     });
 
     run_test("hash comments are stripped in scenario files", [] {
-        const auto dir = std::filesystem::temp_directory_path() / "spectre-render-test-parser-comment";
+        const auto dir = std::filesystem::temp_directory_path() / "megacitycode-render-test-parser-comment";
         const auto path = dir / "commented.toml";
         write_text_file(path,
             "# This is a comment\n"
             "width = 640 # inline comment\n"
             "height = 480\n"
-            "commands = [\"echo\"]\n");
+            "pixel_tolerance = 12\n");
 
         std::string err;
-        auto scenario = spectre::load_render_test_scenario(path, &err);
+        auto scenario = megacitycode::load_render_test_scenario(path, &err);
         expect(scenario.has_value(), "scenario with comments should load");
         expect_eq(scenario->width, 640, "width after stripping inline comment");
         expect_eq(scenario->height, 480, "height");
+        expect_eq(scenario->pixel_tolerance, 12, "pixel tolerance survives");
 
         std::error_code ec;
         std::filesystem::remove_all(dir, ec);

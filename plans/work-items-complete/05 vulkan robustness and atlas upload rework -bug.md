@@ -26,13 +26,13 @@ Make the Vulkan backend less fragile under resize/resource pressure and reduce u
   - [x] move away from fully synchronous per-upload waits by batching atlas uploads into the frame path
   - [x] keep pending full-atlas snapshots coherent when later dirty-region uploads arrive before the next frame
 - [x] Add focused regression coverage for safe buffer replacement and atlas upload queue behavior.
-- [x] Reconcile the remaining local render snapshot drift in `spectre-render-basic-view`, `spectre-render-cmdline-view`, and `spectre-render-unicode-view`.
+- [x] Reconcile the remaining local render snapshot drift in `megacitycode-render-basic-view`, `megacitycode-render-cmdline-view`, and `megacitycode-render-unicode-view`.
 
 ## Tests
 
 - [x] add regression tests around safe failure returns
-- [x] `spectre-app-smoke`
-- [x] `spectre-tests` after building `spectre-rpc-fake`
+- [x] `megacitycode-app-smoke`
+- [x] `megacitycode-tests` after building `megacitycode-rpc-fake`
 - [x] `ctest --test-dir build --build-config Release --output-on-failure` passes after blessing the updated render references
 
 ## Suggested Slice Order

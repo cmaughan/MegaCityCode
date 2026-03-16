@@ -43,40 +43,40 @@ python scripts/gen_deps.py --prune SDL3-static --prune freetype --prune harfbuzz
 For deeper than CMake target graphs, `clang-uml` generates UML class diagrams directly from C++ source using `compile_commands.json` (already emitted by the CMake config via `CMAKE_EXPORT_COMPILE_COMMANDS ON`).
 
 Setup:
-- `.clang-uml` YAML config in the repo root defines the `spectre_classes` diagram
+- `.clang-uml` YAML config in the repo root defines the `megacitycode_classes` diagram
 - `scripts/gen_uml.py` runs `clang-uml` then `plantuml` to render to SVG
 - Install: `brew install clang-uml plantuml` (Mac) / `winget install bkryza.clang-uml` + `choco install plantuml` (Windows)
 - `compile_commands.json` requires a **Ninja** build (`cmake --preset clang-tools` → `build-tools/`); the default VS generator does not emit it
 
 ```sh
 python scripts/gen_uml.py                        # all diagrams → docs/uml/
-python scripts/gen_uml.py --diagram spectre_classes
+python scripts/gen_uml.py --diagram megacitycode_classes
 python scripts/gen_uml.py --puml-only            # emit .puml without rendering
 ```
 
 Key config fields in `.clang-uml`:
 - `compilation_database_dir`: points at `./build-tools` (Ninja build, has `compile_commands.json`)
 - `glob`: must match **`.cpp` translation units**, not headers — clang-uml follows includes from there
-- `using_namespace`: strips `spectre::` prefix from all type names in the diagram
+- `using_namespace`: strips `megacitycode::` prefix from all type names in the diagram
 - `generate_method_arguments: none`: keeps the diagram readable (no parameter lists)
 - `exclude: namespaces: [std, mpack, ...]`: essential — without this the diagram is swamped with STL and third-party types
 - **SVG not PNG**: PlantUML's PNG output is pixel-limited and clips large diagrams; always use `-tsvg`
 
 #### clang-uml 0.6.2 known crashes (Windows)
 Two source files trigger `STATUS_ILLEGAL_INSTRUCTION` (exit 3221225725) in clang-uml 0.6.2 on Windows:
-- `libs/spectre-grid/src/grid.cpp`
-- `libs/spectre-nvim/src/ui_events.cpp`
+- `libs/megacitycode-grid/src/grid.cpp`
+- `libs/megacitycode-nvim/src/ui_events.cpp`
 
 Workaround: exclude them from `glob`. Their classes still appear in the diagram via headers included by other translation units. Running diagrams in parallel (default) also triggers a crash — run each with `-n <name>` sequentially.
 
 #### Package diagrams don't work for single-namespace codebases
-`type: package` requires sub-namespaces to group. Since all spectre code is in one `spectre` namespace, the package diagram is always empty. Use the CMake graphviz graph (`docs/deps/deps.svg`) for library-level dependency visualisation instead.
+`type: package` requires sub-namespaces to group. Since all megacitycode code is in one `megacitycode` namespace, the package diagram is always empty. Use the CMake graphviz graph (`docs/deps/deps.svg`) for library-level dependency visualisation instead.
 
 ---
 
 ### Visual regression tests should capture renderer output, not the desktop
 
-For deterministic screenshot-style testing in Spectre, capture pixels directly from the renderer output instead of taking a desktop screenshot.
+For deterministic screenshot-style testing in MegaCityCode, capture pixels directly from the renderer output instead of taking a desktop screenshot.
 
 What worked well:
 - Read back the actual presented frame from the swapchain/drawable
@@ -107,7 +107,7 @@ What we learned:
   - `scripts/update_screenshot.py` defaults to the hero scenario
 
 Important operational detail:
-- `update_screenshot.py` does **not** launch a normal visible desktop window. It runs Spectre in render-test/export mode and grabs pixels from the renderer backbuffer. That is why "the app is not popping up" during screenshot generation is expected behavior, not a startup failure.
+- `update_screenshot.py` does **not** launch a normal visible desktop window. It runs MegaCityCode in render-test/export mode and grabs pixels from the renderer backbuffer. That is why "the app is not popping up" during screenshot generation is expected behavior, not a startup failure.
 
 Another practical upside:
 - being able to generate a fresh screenshot directly from the app and drop it straight into the README is extremely useful during UI work
@@ -127,7 +127,7 @@ commands = ["set number", "edit file.txt"]
 That broke the hero screenshot scenario because `readme-hero.toml` used a multi-line `commands = [ ... ]` block. The failure mode was confusing:
 - the screenshot updater appeared to run
 - the output PNG did not change
-- Spectre's render-test export path was actually failing before capture because it loaded zero startup commands
+- MegaCityCode's render-test export path was actually failing before capture because it loaded zero startup commands
 
 Fix:
 - teach `load_render_test_scenario()` in `app/render_test.cpp` to accumulate multi-line array literals

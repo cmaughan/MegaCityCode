@@ -1,6 +1,6 @@
 # Module Map
 
-This page is the human-friendly entry point for understanding how Spectre is put together.
+This page is the human-friendly entry point for understanding how MegaCityCode is put together.
 
 Use it when you want to answer:
 
@@ -15,10 +15,10 @@ If you only want the shortest path to orientation:
 
 1. Read the top-level layout in [README.md](../README.md).
 2. Look at the target dependency graph in [deps.svg](deps/deps.svg).
-3. Look at the class diagram in [spectre_classes.svg](uml/spectre_classes.svg).
+3. Look at the class diagram in [megacitycode_classes.svg](uml/megacitycode_classes.svg).
 4. Generate local API docs with `python scripts/build_docs.py --api-only`, then open `docs/api/index.html`.
 5. Check active follow-up items in [index.md](../plans/work-items/index.md).
-6. Use the snapshot and smoke flows through [do.py](../do.py) when touching UI or rendering.
+6. Use the smoke and snapshot flows through [do.py](../do.py) when touching rendering.
 
 ## Main Libraries
 
@@ -27,8 +27,8 @@ If you only want the shortest path to orientation:
 Top-level orchestration only.
 
 Owns:
-- process startup/shutdown
-- wiring between window, renderer, text service, grid, and Neovim RPC
+- app startup/shutdown
+- wiring between window, renderer, text service, and retained grid state
 - smoke/render-test entry points
 
 Good place for:
@@ -39,22 +39,22 @@ Good place for:
 Bad place for:
 - backend-specific renderer logic
 - low-level font logic
-- grid mutation rules
+- grid storage details
 
-### libs/spectre-types/
+### libs/megacitycode-types/
 
 Shared low-level data types and cross-module contracts.
 
 Owns:
 - shared structs
 - event types
-- highlight/logging/support types
+- logging/support types
 
 Good place for:
 - narrow shared contracts
 - POD-like data passed between modules
 
-### libs/spectre-window/
+### libs/megacitycode-window/
 
 SDL windowing and platform-facing input/display behavior.
 
@@ -68,22 +68,22 @@ Good place for:
 - platform window behavior
 - SDL event translation
 
-### libs/spectre-renderer/
+### libs/megacitycode-renderer/
 
 Public renderer API plus Vulkan/Metal backends.
 
 Owns:
 - renderer interface
-- shared renderer CPU-side state
 - GPU upload/submission code
+- scene drawing
 - frame capture for render snapshots
 
 Good place for:
-- draw/update behavior
+- camera/material behavior
 - backend-specific GPU work
 - readback/capture paths
 
-### libs/spectre-font/
+### libs/megacitycode-font/
 
 Text pipeline and atlas management.
 
@@ -98,33 +98,17 @@ Good place for:
 - glyph rasterization
 - color emoji support
 
-### libs/spectre-grid/
+### libs/megacitycode-grid/
 
-The terminal cell model.
+Thin retained cell storage reserved for later scene/text integration.
 
 Owns:
 - cell storage
-- dirty tracking
-- scroll/copy/clear behavior
+- basic resize/clear/set/get behavior
 
 Good place for:
-- redraw correctness
-- cell mutation rules
-
-### libs/spectre-nvim/
-
-Embedded Neovim process, RPC, redraw parsing, and input encoding.
-
-Owns:
-- child process lifecycle
-- msgpack-RPC transport
-- UI event parsing
-- keyboard/mouse/text input encoding
-
-Good place for:
-- Neovim API/event handling
-- transport behavior
-- input fidelity
+- retained cell semantics
+- future cell-backed scene/text integration points
 
 ## Generated Views
 
@@ -139,7 +123,7 @@ Use this when:
 
 ### Class diagram
 
-[spectre_classes.svg](uml/spectre_classes.svg)
+[megacitycode_classes.svg](uml/megacitycode_classes.svg)
 
 Use this when:
 - exploring object relationships inside a subsystem
@@ -161,11 +145,10 @@ Use this when:
 - `python do.py smoke`
 - `python do.py test`
 
-### Deterministic UI confidence
+### Deterministic render confidence
 
-- `python do.py basic`
-- `python do.py cmdline`
-- `python do.py unicode`
+- `python do.py plane`
+- `python do.py blessplane`
 - `python do.py blessall`
 
 ### Documentation / hero image
@@ -181,11 +164,10 @@ Use this when:
 
 ## Practical Heuristics
 
-- If the issue is about what Neovim sent or how input is encoded, start in `spectre-nvim`.
-- If the issue is about what the screen should contain, start in `spectre-grid`.
-- If the issue is about how the screen is drawn, start in `spectre-renderer`.
-- If the issue is about glyph choice, shaping, emoji, tofu, or atlas behavior, start in `spectre-font`.
-- If the issue is about DPI, focus, clipboard, IME, or visible window behavior, start in `spectre-window`.
+- If the issue is about retained cell contents or future text-state scaffolding, start in `megacitycode-grid`.
+- If the issue is about how the scene is drawn, start in `megacitycode-renderer`.
+- If the issue is about glyph choice, shaping, emoji, tofu, or atlas behavior, start in `megacitycode-font`.
+- If the issue is about DPI, focus, clipboard, IME, or visible window behavior, start in `megacitycode-window`.
 - If the issue crosses several modules, start in `app/` and work downward.
 
 ## Why This Exists

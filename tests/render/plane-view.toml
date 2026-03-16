@@ -1,0 +1,7 @@
+name = "plane-view"
+width = 1280
+height = 800
+timeout_ms = 5000
+settle_ms = 50
+pixel_tolerance = 6
+changed_pixels_threshold_pct = 0.01

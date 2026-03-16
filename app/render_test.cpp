@@ -1,8 +1,8 @@
 #include "render_test.h"
 #include "toml_util.h"
 
-#include <spectre/bmp.h>
-#include <spectre/log.h>
+#include <megacitycode/bmp.h>
+#include <megacitycode/log.h>
 
 #include <array>
 #include <cmath>
@@ -15,7 +15,7 @@
 #include <CoreGraphics/CoreGraphics.h>
 #endif
 
-namespace spectre
+namespace megacitycode
 {
 
 namespace
@@ -152,7 +152,7 @@ void write_failure_report(const std::filesystem::path& path, const RenderTestSce
     out << "  \"error\": \"" << json_escape_string(error_message) << "\"\n";
     out << "}\n";
 
-    SPECTRE_LOG_ERROR(spectre::LogCategory::Test, "[%s] %.*s", scenario.name.c_str(),
+    MEGACITYCODE_LOG_ERROR(megacitycode::LogCategory::Test, "[%s] %.*s", scenario.name.c_str(),
         static_cast<int>(error_message.size()), error_message.data());
 }
 
@@ -210,15 +210,12 @@ AppOptions RenderTestScenario::make_app_options() const
     options.load_user_config = false;
     options.save_user_config = false;
     options.activate_window_on_startup = false;
-    options.show_debug_overlay_on_startup = debug_overlay;
     options.clamp_window_to_display = false;
     options.initial_config.window_width = static_cast<int>(std::round(width / display_scale));
     options.initial_config.window_height = static_cast<int>(std::round(height / display_scale));
     options.initial_config.font_size = font_size;
     options.initial_config.font_path = font_path.empty() ? std::string{} : normalized_path_string(font_path);
     options.initial_config.fallback_paths = fallback_paths;
-    options.nvim_args = nvim_args;
-    options.startup_commands = commands;
     return options;
 }
 
@@ -291,8 +288,6 @@ std::optional<RenderTestScenario> load_render_test_scenario(const std::filesyste
             scenario.pixel_tolerance = parse_int(value, scenario.pixel_tolerance);
         else if (key == "changed_pixels_threshold_pct")
             scenario.changed_pixels_threshold_pct = parse_double(value, scenario.changed_pixels_threshold_pct);
-        else if (key == "debug_overlay")
-            scenario.debug_overlay = parse_bool(value, scenario.debug_overlay);
         else if (key == "font_path")
         {
             const auto expanded = expand_placeholders(unquote(value), scenario_dir);
@@ -305,18 +300,6 @@ std::optional<RenderTestScenario> load_render_test_scenario(const std::filesyste
             for (auto& entry : parsed)
                 scenario.fallback_paths.push_back(expand_placeholders(entry, scenario_dir));
         }
-        else if (key == "nvim_args")
-        {
-            scenario.nvim_args.clear();
-            for (auto& entry : parse_string_array(value))
-                scenario.nvim_args.push_back(expand_placeholders(entry, scenario_dir));
-        }
-        else if (key == "commands")
-        {
-            scenario.commands.clear();
-            for (auto& entry : parse_string_array(value))
-                scenario.commands.push_back(expand_placeholders(entry, scenario_dir));
-        }
     }
 
     scenario.width = std::clamp(scenario.width, 320, 3840);
@@ -326,13 +309,6 @@ std::optional<RenderTestScenario> load_render_test_scenario(const std::filesyste
     scenario.settle_ms = std::clamp(scenario.settle_ms, 10, 5000);
     scenario.pixel_tolerance = std::clamp(scenario.pixel_tolerance, 0, 255);
     scenario.changed_pixels_threshold_pct = std::max(0.0, scenario.changed_pixels_threshold_pct);
-
-    if (scenario.commands.empty())
-    {
-        if (error_message)
-            *error_message = "Render test scenario requires at least one startup command";
-        return std::nullopt;
-    }
 
     return scenario;
 }
@@ -424,4 +400,4 @@ void write_render_test_failure_report(const RenderTestScenario& scenario, std::s
     write_failure_report(scenario.report_path(), scenario, error_message);
 }
 
-} // namespace spectre
+} // namespace megacitycode

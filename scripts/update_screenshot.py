@@ -18,10 +18,10 @@ def repo_root() -> pathlib.Path:
 
 def platform_output_path(root: pathlib.Path) -> pathlib.Path:
     if sys.platform.startswith("win"):
-        return root / "screenshots" / "spectre-pc.png"
+        return root / "screenshots" / "megacitycode-pc.png"
     if sys.platform == "darwin":
-        return root / "screenshots" / "spectre-mac.png"
-    return root / "screenshots" / "spectre-linux.png"
+        return root / "screenshots" / "megacitycode-mac.png"
+    return root / "screenshots" / "megacitycode-linux.png"
 
 
 def default_scenario_path(root: pathlib.Path) -> pathlib.Path:
@@ -34,10 +34,10 @@ def build_command(root: pathlib.Path) -> list[str]:
     return ["cmake", "--build", str(root / "build"), "--parallel"]
 
 
-def spectre_path(root: pathlib.Path) -> pathlib.Path:
+def megacitycode_path(root: pathlib.Path) -> pathlib.Path:
     if sys.platform.startswith("win"):
-        return root / "build" / "Debug" / "spectre.exe"
-    return root / "build" / "spectre"
+        return root / "build" / "Debug" / "megacitycode.exe"
+    return root / "build" / "megacitycode"
 
 
 def run_command(command: list[str], cwd: pathlib.Path) -> None:
@@ -114,7 +114,7 @@ def write_png(path: pathlib.Path, width: int, height: int, rgba: bytes) -> None:
 def main() -> int:
     root = repo_root()
 
-    parser = argparse.ArgumentParser(description="Update the platform screenshot using Spectre's render-test capture path.")
+    parser = argparse.ArgumentParser(description="Update the platform screenshot using MegaCityCode's render-test capture path.")
     parser.add_argument("--scenario", type=pathlib.Path, default=default_scenario_path(root))
     parser.add_argument("--output", type=pathlib.Path, default=platform_output_path(root))
     parser.add_argument("--skip-build", action="store_true")
@@ -130,15 +130,15 @@ def main() -> int:
     if not args.skip_build:
         run_command(build_command(root), root)
 
-    spectre = spectre_path(root)
-    if not spectre.exists():
-        print(f"Built app not found: {spectre}", file=sys.stderr)
+    megacitycode = megacitycode_path(root)
+    if not megacitycode.exists():
+        print(f"Built app not found: {megacitycode}", file=sys.stderr)
         return 1
 
-    with tempfile.TemporaryDirectory(prefix="spectre-shot-") as temp_dir:
+    with tempfile.TemporaryDirectory(prefix="megacitycode-shot-") as temp_dir:
         temp_bmp = pathlib.Path(temp_dir) / "capture.bmp"
         command = [
-            str(spectre),
+            str(megacitycode),
             "--console",
             "--render-test",
             str(scenario),

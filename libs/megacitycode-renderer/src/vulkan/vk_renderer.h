@@ -1,0 +1,74 @@
+#pragma once
+
+#include "vk_context.h"
+#include "vk_pipeline.h"
+#include <megacitycode/renderer.h>
+#include <optional>
+
+namespace megacitycode
+{
+
+class VkRenderer : public IRenderer
+{
+public:
+    static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+
+    bool initialize(IWindow& window) override;
+    void shutdown() override;
+    bool begin_frame() override;
+    void end_frame() override;
+    void set_grid_size(int cols, int rows) override;
+    void update_cells(std::span<const CellUpdate> updates) override;
+    void set_overlay_cells(std::span<const CellUpdate> updates) override;
+    void set_atlas_texture(const uint8_t* data, int w, int h) override;
+    void update_atlas_region(int x, int y, int w, int h, const uint8_t* data) override;
+    void set_cursor(int col, int row, const CursorStyle& style) override;
+    void resize(int pixel_w, int pixel_h) override;
+    std::pair<int, int> cell_size_pixels() const override;
+    void set_cell_size(int w, int h) override;
+    void set_ascender(int a) override;
+    void request_frame_capture() override;
+    std::optional<CapturedFrame> take_captured_frame() override;
+    int padding() const override
+    {
+        return padding_;
+    }
+
+private:
+    bool create_sync_objects();
+    bool create_command_buffers();
+    bool recreate_frame_resources();
+    void record_command_buffer(VkCommandBuffer cmd, uint32_t image_index);
+    bool ensure_capture_buffer(size_t required_size);
+    void destroy_capture_buffer();
+    void finish_capture_readback();
+
+    VkContext ctx_;
+    VkPipelineManager pipeline_;
+
+    VkCommandPool cmd_pool_ = VK_NULL_HANDLE;
+    std::vector<VkCommandBuffer> cmd_buffers_;
+    std::vector<VkSemaphore> image_available_sem_;
+    std::vector<VkSemaphore> render_finished_sem_;
+    std::vector<VkFence> in_flight_fences_;
+
+    uint32_t current_frame_ = 0;
+    uint32_t current_image_ = 0;
+    bool framebuffer_resized_ = false;
+
+    int cell_w_ = 10;
+    int cell_h_ = 20;
+    int ascender_ = 16;
+    int padding_ = 0;
+    int pixel_w_ = 0;
+    int pixel_h_ = 0;
+
+    bool capture_requested_ = false;
+    std::optional<CapturedFrame> captured_frame_;
+    VkBuffer capture_buffer_ = VK_NULL_HANDLE;
+    VmaAllocation capture_allocation_ = VK_NULL_HANDLE;
+    void* capture_mapped_ = nullptr;
+    size_t capture_buffer_size_ = 0;
+};
+
+} // namespace megacitycode

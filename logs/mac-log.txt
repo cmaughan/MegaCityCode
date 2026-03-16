@@ -1,4 +1,4 @@
-[spectre] Initializing...
+[megacitycode] Initializing...
 
 === Display / DPI Diagnostics ===
   SDL logical size       : 1280 x 800
@@ -11,12 +11,12 @@
   SDL content scale      : 1.000
 =================================
 
-[spectre] Window created
+[megacitycode] Window created
 [metal] Renderer initialized (Apple M4 Pro)
-[spectre] Renderer initialized
-[spectre] Display PPI: 82
-[spectre] Font loaded
-[spectre] nvim spawned (PID 95932)
-[spectre] UI attached: 213x59
+[megacitycode] Renderer initialized
+[megacitycode] Display PPI: 82
+[megacitycode] Font loaded
+[megacitycode] nvim spawned (PID 95932)
+[megacitycode] UI attached: 213x59
 nvim pipe read error
 Font loaded: JetBrainsMono NFM 18pt @ 82 PPI (20 device px), cell=12x27, asc=21, desc=7

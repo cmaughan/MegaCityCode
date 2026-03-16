@@ -5,7 +5,7 @@
 # Usage:
 #   clang-uml                              # generate all diagrams
 #   python scripts/gen_uml.py              # generate + render to PNG/SVG
-#   python scripts/gen_uml.py --diagram spectre_classes
+#   python scripts/gen_uml.py --diagram megacitycode_classes
 #
 # Diagrams are written to docs/uml/ as PlantUML (.puml) files.
 # Render them with PlantUML or via scripts/gen_uml.py (which calls plantuml).
@@ -16,31 +16,26 @@ output_directory: ./docs/uml
 diagrams:
 
   # ── Class diagram ────────────────────────────────────────────────────────
-  # Shows all classes, interfaces, and structs in the spectre namespace with
+  # Shows all classes, interfaces, and structs in the megacitycode namespace with
   # their inheritance and composition relationships.
-  spectre_classes:
+  megacitycode_classes:
     type: class
-    title: "Spectre — Class Diagram"
-    using_namespace: spectre
+    title: "MegaCityCode — Class Diagram"
+    using_namespace: megacitycode
     glob:
-      - libs/spectre-types/src/*.cpp
-      - libs/spectre-window/src/*.cpp
-      - libs/spectre-renderer/src/*.cpp
-      - libs/spectre-renderer/src/vulkan/*.cpp
-      - libs/spectre-font/src/font_manager.cpp
-      - libs/spectre-font/src/glyph_cache.cpp
+      - libs/megacitycode-types/src/*.cpp
+      - libs/megacitycode-window/src/*.cpp
+      - libs/megacitycode-renderer/src/*.cpp
+      - libs/megacitycode-renderer/src/vulkan/*.cpp
+      - libs/megacitycode-font/src/font_manager.cpp
+      - libs/megacitycode-font/src/glyph_cache.cpp
       # text_service.cpp excluded: clang-uml 0.6.2 on Windows hits STATUS_STACK_OVERFLOW,
       # but TextService still appears in the diagram through included headers.
-      # grid.cpp excluded: triggers a clang-uml 0.6.2 crash (STATUS_ILLEGAL_INSTRUCTION)
-      - libs/spectre-nvim/src/nvim_process.cpp
-      - libs/spectre-nvim/src/rpc.cpp
-      - libs/spectre-nvim/src/input.cpp
-      - libs/spectre-nvim/src/mpack_codec.cpp
-      # ui_events.cpp excluded: triggers a clang-uml 0.6.2 crash (STATUS_ILLEGAL_INSTRUCTION)
+      - libs/megacitycode-grid/src/grid.cpp
       - app/app.cpp
     include:
       namespaces:
-        - spectre
+        - megacitycode
     exclude:
       namespaces:
         - std
@@ -49,12 +44,12 @@ diagrams:
         - freetype
         - harfbuzz
       elements:
-        - spectre::MpackValue::ArrayStorage
-        - spectre::MpackValue::MapStorage
-        - spectre::MpackValue::Storage
+        - megacitycode::MpackValue::ArrayStorage
+        - megacitycode::MpackValue::MapStorage
+        - megacitycode::MpackValue::Storage
     generate_method_arguments: none
     generate_packages: false
 
-  # Package diagram omitted: all code lives in one 'spectre' namespace so
+  # Package diagram omitted: all code lives in one 'megacitycode' namespace so
   # there are no sub-namespaces to group. Library-level dependencies are
   # better visualised by the CMake graphviz graph (docs/deps/deps.svg).

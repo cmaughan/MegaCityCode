@@ -8,12 +8,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Requires CMake 3.25+, Visual Studio 2022, and Vulkan SDK (with glslc).
 
 ```bash
-cmake --preset default                              # Configure (Debug, VS 2022 x64)
+cmake --preset default                               # Configure (Debug, VS 2022 x64)
 cmake --preset release                               # Configure (Release)
-cmake --build build --config Release --target spectre # Build
+cmake --build build --config Release --target megacitycode # Build
 ```
 
-Run: `.\build\Release\spectre.exe` (requires `nvim` on PATH). Pass `--console` to allocate a debug console window.
+Run: `.\build\Release\megacitycode.exe`. Pass `--console` to allocate a debug console window.
 
 ### macOS
 Requires CMake 3.25+, Xcode Command Line Tools (for Metal compiler).
@@ -21,147 +21,97 @@ Requires CMake 3.25+, Xcode Command Line Tools (for Metal compiler).
 ```bash
 cmake --preset mac-debug                             # Configure (Debug)
 cmake --preset mac-release                           # Configure (Release)
-cmake --build build --target spectre                 # Build
+cmake --build build --target megacitycode           # Build
 ```
 
-Run: `./build/spectre` (requires `nvim` on PATH).
+Run: `./build/megacitycode`.
 
 ## Project Structure
 
-```
-spectre/
+```text
+megacitycode/
 ├── CMakeLists.txt                  # Top-level: wires libraries + app
 ├── CLAUDE.md
 ├── libs/
-│   ├── spectre-types/              # Shared POD types (header-only)
-│   │   ├── include/spectre/
-│   │   │   ├── types.h             # GpuCell, CellUpdate, Color, AtlasRegion, CursorShape
-│   │   │   ├── font_metrics.h      # FontMetrics struct
-│   │   │   └── events.h            # WindowResizeEvent, KeyEvent, etc.
-│   │   └── CMakeLists.txt
-│   ├── spectre-window/             # Window abstraction + SDL implementation
-│   │   ├── include/spectre/
-│   │   │   ├── window.h            # IWindow interface
-│   │   │   └── sdl_window.h        # SdlWindow implementation
-│   │   ├── src/sdl_window.cpp
-│   │   └── CMakeLists.txt
-│   ├── spectre-renderer/           # Renderer interface + backends
-│   │   ├── include/spectre/
-│   │   │   └── renderer.h          # IRenderer interface
-│   │   ├── src/vulkan/             # Vulkan backend (Windows)
-│   │   ├── src/metal/              # Metal backend (macOS)
-│   │   └── CMakeLists.txt
-│   ├── spectre-font/               # Font loading, shaping, glyph cache
-│   │   ├── include/spectre/
-│   │   │   └── font.h              # FontManager, GlyphCache, TextShaper
-│   │   ├── src/
-│   │   └── CMakeLists.txt
-│   ├── spectre-grid/               # 2D cell grid + highlight table
-│   │   ├── include/spectre/
-│   │   │   └── grid.h              # Grid, Cell, HlAttr, HighlightTable
-│   │   ├── src/grid.cpp
-│   │   └── CMakeLists.txt
-│   └── spectre-nvim/               # Neovim process, RPC, UI events, input
-│       ├── include/spectre/
-│       │   └── nvim.h              # NvimProcess, NvimRpc, UiEventHandler, NvimInput
-│       ├── src/
-│       └── CMakeLists.txt
-├── app/                            # The executable — just wiring
-│   ├── app.h/cpp
-│   ├── main.cpp
-│   └── renderer_factory.cpp
-├── shaders/
+│   ├── megacitycode-types/         # Shared POD types, events, logging
+│   ├── megacitycode-window/        # Window abstraction + SDL implementation
+│   ├── megacitycode-renderer/      # Renderer interface + Vulkan/Metal backends
+│   ├── megacitycode-font/          # Font loading, shaping, glyph cache
+│   └── megacitycode-grid/          # Thin retained cell storage for future text work
+├── app/                            # Startup, scene loop, test entry points
+├── shaders/                        # Vulkan and Metal shader assets
 └── fonts/
 ```
 
 ## Architecture
 
-Spectre is a Neovim GUI frontend. It spawns `nvim --embed`, communicates via msgpack-RPC over stdin/stdout pipes, and renders the terminal grid using the platform's GPU API (Vulkan on Windows, Metal on macOS).
+MegaCityCode is a cross-platform native viewer. The current runtime centers on a fixed-camera 3D plane scene in Vulkan, while the font stack and a simple retained grid remain in place for later text-driven work.
 
-### Dependency Graph (libraries only link downward)
+### Dependency Graph
 
-```
-                    spectre-types (header-only)
-                   /      |       |       \
-          window   renderer   font    grid
-            |         |        |       |
-            └────┬────┘        └───┬───┘
-                 |                 |
-              spectre-nvim --------┘
-                 |
-                app (executable)
+```text
+                 megacitycode-types
+              /      |       |      \
+        window   renderer   font    grid
+              \      |       |      /
+                     app (executable)
 ```
 
-### Data flow
+### Data Flow
 
-```
-nvim --embed (child process)
-  → [msgpack-RPC over pipes, reader thread]
-  → NvimRpc notification queue
-  → App::run() drains queue each frame
-  → UiEventHandler parses ext_linegrid "redraw" events → Grid (2D cell array with dirty tracking)
-  → App::update_grid_to_renderer() resolves highlights, shapes text, rasterizes glyphs
-  → Renderer buffer write (GpuCell array, 96 bytes/cell)
-  → Two-pass instanced draw: background quads, then alpha-blended foreground glyphs
+```text
+SDL events
+  -> App::run() / App::pump_once()
+  -> window resize or font-size changes update retained grid dimensions
+  -> renderer scene draw
+  -> optional frame capture for smoke/snapshot testing
 ```
 
-### Key abstractions
+### Key Abstractions
 
-- **IRenderer** (`libs/spectre-renderer/include/spectre/renderer.h`) and **IWindow** (`libs/spectre-window/include/spectre/window.h`) are abstract interfaces. The renderer knows nothing about fonts, neovim, or text — only colored rectangles and textured quads at grid positions.
-- **App** (`app/app.h/cpp`) is the orchestrator that owns all subsystems and runs the main loop.
-- Platform-specific renderer implementations live in `libs/spectre-renderer/src/vulkan/` (Windows) and `libs/spectre-renderer/src/metal/` (macOS).
+- `IRenderer` (`libs/megacitycode-renderer/include/megacitycode/renderer.h`) and `IWindow` (`libs/megacitycode-window/include/megacitycode/window.h`) are the main platform seams.
+- `App` (`app/app.h/cpp`) owns startup, the main loop, retained state sizing, and render/smoke test paths.
+- `Grid` (`libs/megacitycode-grid/include/megacitycode/grid.h`) is now a simple array-backed cell store. It does not currently affect rendering.
 
 ### Rendering
 
-- Buffer indexed by instance index — no vertex buffers, quads generated procedurally in vertex shaders
-- Two passes per frame: BG (opaque colored quads) then FG (alpha-blended glyph quads from atlas)
-- Host-visible/shared buffer — direct writes, no staging (grid is small)
-- Glyph atlas: 2048x2048 R8 texture, shelf-packed, incremental upload
-- 2 frames in flight with synchronization primitives
-- Pixel format: BGRA8 Unorm (not SRGB — neovim sends colors already in sRGB)
+- Vulkan currently renders a single plane with shader-generated geometry and a simple material.
+- The default camera looks toward the origin from an elevated 45-degree view.
+- Render snapshots capture pixels directly from the renderer output.
+- The text stack remains initialized so font metrics and atlas code stay available for later scene/text integration.
 
 #### Vulkan-specific (Windows)
-- SSBO with host-visible coherent memory via VMA
-- Descriptor sets, render passes, swapchain management via vk-bootstrap
-- Shaders: GLSL 4.50 compiled to SPIR-V via glslc
+- Descriptor sets, render passes, and swapchain management via vk-bootstrap
+- Plane shaders compiled from GLSL to SPIR-V via glslc
 
 #### Metal-specific (macOS)
-- MTLBuffer with shared storage mode (CPU+GPU visible)
-- CAMetalLayer for drawable management
-- Shaders: Metal Shading Language compiled to .metallib via xcrun
+- Metal backend remains behind the same renderer interface
+- Shader assets compile with `xcrun metal` and `xcrun metallib`
 
 ### Threading
 
-- **Main thread**: SDL events, nvim message processing, grid mutation, GPU rendering
-- **Reader thread**: blocking reads from nvim stdout, MPack decode, push to thread-safe queue
+- The current viewer runs its window events, retained state updates, and GPU submission on the main thread.
 
-All grid and GPU state is only touched by the main thread.
+### Font Pipeline
 
-### Neovim RPC
-
-- MPack library with `MPACK_EXTENSIONS=1` (required for neovim's ext types: Buffer/Window/Tabpage)
-- Handles `grid_line` run-length encoding, double-width chars, multi-byte UTF-8
-- Only renders on `flush` events
-
-### Font pipeline
-
-- FreeType loads face → HarfBuzz shapes codepoints to glyph IDs → GlyphCache rasterizes on-demand with shelf-packing → atlas uploaded to renderer
+- FreeType loads faces
+- HarfBuzz shapes codepoints to glyph IDs
+- `GlyphCache` rasterizes on demand and maintains the atlas
 
 ## Dependencies
 
-All fetched automatically via CMake FetchContent (in `cmake/FetchDependencies.cmake`): SDL3, FreeType, HarfBuzz, MPack. On Windows: vk-bootstrap, VMA. Shaders compiled from GLSL to SPIR-V via glslc (Windows, `cmake/CompileShaders.cmake`) or from Metal to metallib via xcrun (macOS, `cmake/CompileShaders_Metal.cmake`).
+All fetched automatically via CMake FetchContent (in `cmake/FetchDependencies.cmake`): SDL3, FreeType, HarfBuzz. On Windows: vk-bootstrap, VMA. Shaders compile from GLSL to SPIR-V via glslc (Windows, `cmake/CompileShaders.cmake`) or from Metal to metallib via xcrun (macOS, `cmake/CompileShaders_Metal.cmake`).
 
 ## Validation Expectations
 
-- If you touch RPC, redraw handling, or input translation, run `ctest`.
 - If you touch renderer code, build the platform-specific app target and verify startup at least once.
-- After implementing a user-facing feature or rendering-affecting change, run the render smoke/snapshot suite with `t.bat` or `ctest` and confirm the relevant `spectre-render-*` scenario still passes.
-- When blessing render references, use `py do.py blessbasic`, `py do.py blesscmdline`, `py do.py blessunicode`, or `py do.py blessall` from the repo root instead of calling `spectre.exe --render-test` manually.
+- After implementing a rendering-affecting change, run the render smoke/snapshot suite with `t.bat` or `ctest` and confirm the relevant `megacitycode-render-*` scenario still passes.
+- When blessing render references, use `py do.py blessplane` or `py do.py blessall` from the repo root instead of calling `megacitycode.exe --render-test` manually.
 - If you change build wiring, keep both Windows and macOS paths valid in CI.
 - After every completed work item, run one final `clang-format` pass across all touched source files in a single shot instead of formatting piecemeal during the work.
 - When you complete a work item or a concrete subtask from `plans/work-items/*.md`, update that markdown file in the same turn and mark completed entries with Markdown task ticks (`- [x]`).
 
 ## Platform
 
-- **Windows**: MSVC/Visual Studio 2022. Process spawning uses `CreateProcess` with piped stdin/stdout. Built as a Windows GUI app (`WIN32_EXECUTABLE`).
-- **macOS**: Clang/Xcode. Process spawning uses `fork()`/`exec()` with `pipe()`. Rendering via Metal.
+- Windows: MSVC/Visual Studio 2022, built as a Windows GUI app (`WIN32_EXECUTABLE`) with the active Vulkan scene path
+- macOS: Clang/Xcode, rendering via Metal

@@ -1,5 +1,5 @@
-PROJECT_NAME           = Spectre
-PROJECT_BRIEF          = Cross-platform Neovim GUI frontend with native GPU rendering
+PROJECT_NAME           = MegaCityCode
+PROJECT_BRIEF          = Cross-platform native 3D viewer with retained font and grid foundations
 OUTPUT_LANGUAGE        = English
 MARKDOWN_SUPPORT       = YES
 AUTOLINK_SUPPORT       = YES

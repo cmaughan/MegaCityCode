@@ -2,38 +2,22 @@
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <chrono>
-#include <spectre/log.h>
+#include <megacitycode/log.h>
 #include <utility>
-#include <vector>
 
-namespace spectre
+namespace megacitycode
 {
-
-namespace
-{
-
-void apply_ui_option(UiOptions& options, const std::string& name, const MpackValue& value)
-{
-    if (name == "ambiwidth" && value.type() == MpackValue::String)
-    {
-        options.ambiwidth = (value.as_str() == "double") ? AmbiWidth::Double : AmbiWidth::Single;
-    }
-}
-
-} // namespace
 
 App::App(AppOptions options)
     : options_(std::move(options))
     , config_(options_.initial_config)
-    , grid_pipeline_(grid_, highlights_, text_service_)
 {
     pending_window_activation_ = options_.activate_window_on_startup;
-    debug_overlay_enabled_ = options_.show_debug_overlay_on_startup;
 }
 
 bool App::initialize()
 {
-    SPECTRE_LOG_INFO(LogCategory::App, "Initializing");
+    MEGACITYCODE_LOG_INFO(LogCategory::App, "Initializing");
     if (options_.load_user_config)
         config_ = AppConfig::load();
 
@@ -52,26 +36,16 @@ bool App::initialize()
         return false;
     if (!initialize_text_service())
         return false;
-    if (!initialize_nvim())
-        return false;
 
     wire_ui_callbacks();
     wire_window_callbacks();
 
-    saw_flush_ = false;
     saw_frame_ = false;
     frame_requested_ = false;
-    cursor_busy_ = false;
-    cursor_blinker_ = {};
     last_activity_time_ = std::chrono::steady_clock::now();
-
-    if (!attach_ui())
-        return false;
-    if (!execute_startup_commands())
-        return false;
-
-    SPECTRE_LOG_INFO(LogCategory::App, "UI attached: %dx%d", grid_cols_, grid_rows_);
     running_ = true;
+    request_frame();
+    MEGACITYCODE_LOG_INFO(LogCategory::App, "Viewer ready: %dx%d cells reserved for future use", grid_cols_, grid_rows_);
     rollback.armed = false;
     return true;
 }
@@ -79,160 +53,64 @@ bool App::initialize()
 bool App::initialize_window_and_renderer()
 {
     window_.set_clamp_to_display(options_.clamp_window_to_display);
-    if (!window_.initialize("Spectre", config_.window_width, config_.window_height))
+    if (!window_.initialize("MegaCityCode Viewer", config_.window_width, config_.window_height))
     {
-        SPECTRE_LOG_ERROR(LogCategory::App, "Failed to create window");
+        MEGACITYCODE_LOG_ERROR(LogCategory::App, "Failed to create window");
         return false;
     }
-    SPECTRE_LOG_INFO(LogCategory::App, "Window created");
+    MEGACITYCODE_LOG_INFO(LogCategory::App, "Window created");
 
     renderer_ = create_renderer();
     if (!renderer_ || !renderer_->initialize(window_))
     {
-        SPECTRE_LOG_ERROR(LogCategory::App, "Failed to init renderer");
+        MEGACITYCODE_LOG_ERROR(LogCategory::App, "Failed to init renderer");
         return false;
     }
-    SPECTRE_LOG_INFO(LogCategory::App, "Renderer initialized");
+    MEGACITYCODE_LOG_INFO(LogCategory::App, "Renderer initialized");
     return true;
 }
 
 bool App::initialize_text_service()
 {
     display_ppi_ = window_.display_ppi();
-    SPECTRE_LOG_INFO(LogCategory::App, "Display PPI: %.0f", display_ppi_);
+    MEGACITYCODE_LOG_INFO(LogCategory::App, "Display PPI: %.0f", display_ppi_);
 
     TextServiceConfig text_config;
     text_config.font_path = config_.font_path;
     text_config.fallback_paths = config_.fallback_paths;
     if (!text_service_.initialize(text_config, config_.font_size, display_ppi_))
     {
-        SPECTRE_LOG_ERROR(LogCategory::App, "Failed to load font");
+        MEGACITYCODE_LOG_ERROR(LogCategory::App, "Failed to load font");
         return false;
     }
-    SPECTRE_LOG_INFO(LogCategory::App, "Font loaded");
+    MEGACITYCODE_LOG_INFO(LogCategory::App, "Font loaded");
 
     const auto& metrics = text_service_.metrics();
     renderer_->set_cell_size(metrics.cell_width, metrics.cell_height);
     renderer_->set_ascender(metrics.ascender);
 
     auto [pw, ph] = window_.size_pixels();
-    int pad = renderer_->padding();
-    grid_cols_ = (pw - pad * 2) / metrics.cell_width;
-    grid_rows_ = (ph - pad * 2) / metrics.cell_height;
-    if (grid_cols_ < 1)
-        grid_cols_ = 80;
-    if (grid_rows_ < 1)
-        grid_rows_ = 24;
-
-    grid_.resize(grid_cols_, grid_rows_);
-    renderer_->set_grid_size(grid_cols_, grid_rows_);
-    grid_pipeline_.set_renderer(renderer_.get());
-    input_.initialize(&rpc_, metrics.cell_width, metrics.cell_height);
-    update_text_input_area();
-    return true;
-}
-
-bool App::initialize_nvim()
-{
-    if (!nvim_process_.spawn("nvim", options_.nvim_args, options_.nvim_working_dir))
-    {
-        SPECTRE_LOG_ERROR(LogCategory::App, "Failed to spawn nvim");
-        return false;
-    }
-
-    if (!rpc_.initialize(nvim_process_))
-    {
-        SPECTRE_LOG_ERROR(LogCategory::App, "Failed to init RPC");
-        return false;
-    }
-
-    rpc_.on_notification_available = [this]() { window_.wake(); };
-    ui_request_worker_.start(&rpc_);
-    return true;
-}
-
-bool App::attach_ui()
-{
-    auto attach = rpc_.request("nvim_ui_attach", { NvimRpc::make_int(grid_cols_), NvimRpc::make_int(grid_rows_), NvimRpc::make_map({
-                                                                                                                     { NvimRpc::make_str("rgb"), NvimRpc::make_bool(true) },
-                                                                                                                     { NvimRpc::make_str("ext_linegrid"), NvimRpc::make_bool(true) },
-                                                                                                                     { NvimRpc::make_str("ext_multigrid"), NvimRpc::make_bool(false) },
-                                                                                                                 }) });
-    if (!attach.ok())
-    {
-        SPECTRE_LOG_ERROR(LogCategory::App, "nvim_ui_attach failed");
-        return false;
-    }
-    return true;
-}
-
-bool App::execute_startup_commands()
-{
-    for (const auto& command : options_.startup_commands)
-    {
-        auto response = rpc_.request("nvim_command", { NvimRpc::make_str(command) });
-        if (!response.ok())
-        {
-            SPECTRE_LOG_ERROR(LogCategory::App, "Startup command failed: %s", command.c_str());
-            return false;
-        }
-    }
+    refresh_grid_dimensions(pw, ph);
     return true;
 }
 
 void App::wire_ui_callbacks()
 {
-    ui_events_.set_grid(&grid_);
-    ui_events_.set_highlights(&highlights_);
-    ui_events_.set_options(&ui_options_);
-    ui_events_.on_flush = [this]() { on_flush(); };
-    ui_events_.on_grid_resize = [this](int cols, int rows) {
-        grid_cols_ = cols;
-        grid_rows_ = rows;
-        renderer_->set_grid_size(cols, rows);
-        grid_pipeline_.force_full_atlas_upload();
-        update_text_input_area();
-    };
-    ui_events_.on_cursor_goto = [this](int, int) {
-        restart_cursor_blink(std::chrono::steady_clock::now());
-        update_text_input_area();
-    };
-    ui_events_.on_mode_change = [this](int) { refresh_cursor_style(true); };
-    ui_events_.on_option_set = [this](const std::string& name, const MpackValue& value) {
-        apply_ui_option(ui_options_, name, value);
-    };
-    ui_events_.on_busy = [this](bool busy) { on_busy(busy); };
-    ui_events_.on_title = [this](const std::string& title) {
-        window_.set_title(title.empty() ? "Spectre" : title);
-    };
 }
 
 void App::wire_window_callbacks()
 {
     window_.on_key = [this](const KeyEvent& e) {
-        if (e.pressed && e.keycode == SDLK_F12)
+        if (!e.pressed)
+            return;
+
+        if (e.keycode == SDLK_ESCAPE)
         {
-            toggle_debug_overlay();
+            request_quit();
             return;
         }
 
-        if (e.pressed && (e.mod & SDL_KMOD_CTRL) && (e.mod & SDL_KMOD_SHIFT))
-        {
-            if (e.keycode == SDLK_C)
-            {
-                auto copied = rpc_.request("nvim_eval", { NvimRpc::make_str("getreg('\"')") });
-                if (copied.ok() && copied.result.type() == MpackValue::String)
-                    window_.set_clipboard_text(copied.result.as_str());
-                return;
-            }
-            if (e.keycode == SDLK_V)
-            {
-                input_.paste_text(window_.clipboard_text());
-                return;
-            }
-        }
-
-        if (e.pressed && (e.mod & SDL_KMOD_CTRL))
+        if ((e.mod & SDL_KMOD_CTRL))
         {
             if (e.keycode == SDLK_EQUALS || e.keycode == SDLK_PLUS)
             {
@@ -250,13 +128,7 @@ void App::wire_window_callbacks()
                 return;
             }
         }
-        input_.on_key(e);
     };
-    window_.on_text_input = [this](const TextInputEvent& e) { input_.on_text_input(e); };
-    window_.on_text_editing = [this](const TextEditingEvent& e) { input_.on_text_editing(e); };
-    window_.on_mouse_button = [this](const MouseButtonEvent& e) { input_.on_mouse_button(e); };
-    window_.on_mouse_move = [this](const MouseMoveEvent& e) { input_.on_mouse_move(e); };
-    window_.on_mouse_wheel = [this](const MouseWheelEvent& e) { input_.on_mouse_wheel(e); };
     window_.on_resize = [this](const WindowResizeEvent& e) { on_resize(e.width, e.height); };
 }
 
@@ -274,22 +146,21 @@ bool App::run_smoke_test(std::chrono::milliseconds timeout)
     while (running_ && std::chrono::steady_clock::now() < deadline)
     {
         pump_once(deadline);
-        if (saw_flush_ && saw_frame_)
+        if (saw_frame_)
         {
-            SPECTRE_LOG_INFO(LogCategory::App, "Smoke test passed");
+            MEGACITYCODE_LOG_INFO(LogCategory::App, "Smoke test passed");
             return true;
         }
     }
 
-    SPECTRE_LOG_ERROR(LogCategory::App, "Smoke test timed out (flush=%d frame=%d)",
-        saw_flush_ ? 1 : 0, saw_frame_ ? 1 : 0);
+    MEGACITYCODE_LOG_ERROR(LogCategory::App, "Smoke test timed out before the first frame");
     return false;
 }
 
 std::optional<CapturedFrame> App::run_render_test(std::chrono::milliseconds timeout, std::chrono::milliseconds settle)
 {
     auto deadline = std::chrono::steady_clock::now() + timeout;
-    bool capture_started = false;
+    bool capture_requested = false;
     last_render_test_error_.clear();
 
     while (running_ && std::chrono::steady_clock::now() < deadline)
@@ -300,38 +171,30 @@ std::optional<CapturedFrame> App::run_render_test(std::chrono::milliseconds time
             return captured;
 
         auto now = std::chrono::steady_clock::now();
-        if (saw_flush_ && saw_frame_ && !frame_requested_ && now - last_activity_time_ >= settle)
+        if (saw_frame_ && !capture_requested && now - last_activity_time_ >= settle)
         {
-            if (!capture_started)
-            {
-                SPECTRE_LOG_INFO(LogCategory::App, "Render test requesting capture frame");
-                capture_started = true;
-            }
             renderer_->request_frame_capture();
+            capture_requested = true;
             if (renderer_->begin_frame())
             {
-                saw_frame_ = true;
                 renderer_->end_frame();
                 if (auto captured = renderer_->take_captured_frame())
                     return captured;
             }
             else
             {
-                SPECTRE_LOG_WARN(LogCategory::App, "Renderer begin_frame() returned false during synchronous render-test capture");
+                MEGACITYCODE_LOG_WARN(LogCategory::App, "Renderer begin_frame() returned false during synchronous render capture");
             }
         }
     }
 
-    auto quiet_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - last_activity_time_).count();
-    last_render_test_error_ = "Timed out waiting for a stable render capture"
-                              " (flush="
-        + std::to_string(saw_flush_ ? 1 : 0)
-        + " frame=" + std::to_string(saw_frame_ ? 1 : 0)
+    last_render_test_error_ = "Timed out waiting for a render capture"
+                              " (frame="
+        + std::to_string(saw_frame_ ? 1 : 0)
         + " frame_requested=" + std::to_string(frame_requested_ ? 1 : 0)
-        + " quiet_ms=" + std::to_string(quiet_ms)
         + " settle_ms=" + std::to_string(settle.count())
-        + " capture_started=" + std::to_string(capture_started ? 1 : 0) + ")";
-    SPECTRE_LOG_ERROR(LogCategory::App, "%s", last_render_test_error_.c_str());
+        + " capture_requested=" + std::to_string(capture_requested ? 1 : 0) + ")";
+    MEGACITYCODE_LOG_ERROR(LogCategory::App, "%s", last_render_test_error_.c_str());
     return std::nullopt;
 }
 
@@ -351,41 +214,17 @@ bool App::pump_once(std::optional<std::chrono::steady_clock::time_point> wait_de
             return false;
         }
 
-        if (!nvim_process_.is_running())
-        {
-            running_ = false;
-            return false;
-        }
-
-        auto notifications = rpc_.drain_notifications();
-        for (auto& notif : notifications)
-        {
-            if (notif.method == "redraw")
-            {
-                ui_events_.process_redraw(notif.params);
-            }
-        }
-
-        if (cursor_blinker_.advance(std::chrono::steady_clock::now()))
-            apply_cursor_visibility();
-
         if (frame_requested_)
         {
-            update_debug_overlay();
-            auto frame_start = std::chrono::steady_clock::now();
             if (renderer_->begin_frame())
             {
                 saw_frame_ = true;
                 renderer_->end_frame();
                 frame_requested_ = false;
-                last_frame_ms_ = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - frame_start).count();
-                recent_frame_ms_[recent_frame_ms_index_] = last_frame_ms_;
-                recent_frame_ms_index_ = (recent_frame_ms_index_ + 1) % recent_frame_ms_.size();
-                recent_frame_ms_count_ = std::min(recent_frame_ms_count_ + 1, recent_frame_ms_.size());
             }
             else
             {
-                SPECTRE_LOG_WARN(LogCategory::App, "Renderer begin_frame() returned false while a frame was requested");
+                MEGACITYCODE_LOG_WARN(LogCategory::App, "Renderer begin_frame() returned false while a frame was requested");
             }
             return running_;
         }
@@ -404,58 +243,12 @@ bool App::pump_once(std::optional<std::chrono::steady_clock::time_point> wait_de
     return false;
 }
 
-void App::on_flush()
-{
-    bool first_flush = !saw_flush_;
-    saw_flush_ = true;
-    last_flush_dirty_cells_ = grid_.dirty_cell_count();
-    last_activity_time_ = std::chrono::steady_clock::now();
-    grid_pipeline_.flush();
-    if (first_flush && startup_resize_pending_)
-    {
-        startup_resize_pending_ = false;
-        if (pending_startup_resize_cols_ != grid_cols_ || pending_startup_resize_rows_ != grid_rows_)
-            queue_resize_request(pending_startup_resize_cols_, pending_startup_resize_rows_, "startup resize");
-    }
-    refresh_cursor_style(true);
-}
-
-void App::on_busy(bool busy)
-{
-    cursor_busy_ = busy;
-    last_activity_time_ = std::chrono::steady_clock::now();
-    restart_cursor_blink(std::chrono::steady_clock::now());
-}
-
 void App::on_resize(int pixel_w, int pixel_h)
 {
     renderer_->resize(pixel_w, pixel_h);
+    refresh_grid_dimensions(pixel_w, pixel_h);
     last_activity_time_ = std::chrono::steady_clock::now();
     request_frame();
-    update_text_input_area();
-
-    auto [cell_w, cell_h] = renderer_->cell_size_pixels();
-    int pad = renderer_->padding();
-    int new_cols = (pixel_w - pad * 2) / cell_w;
-    int new_rows = (pixel_h - pad * 2) / cell_h;
-
-    if (new_cols < 1)
-        new_cols = 1;
-    if (new_rows < 1)
-        new_rows = 1;
-
-    if (new_cols == grid_cols_ && new_rows == grid_rows_)
-        return;
-
-    if (!saw_flush_)
-    {
-        startup_resize_pending_ = true;
-        pending_startup_resize_cols_ = new_cols;
-        pending_startup_resize_rows_ = new_rows;
-        return;
-    }
-
-    queue_resize_request(new_cols, new_rows, "window resize");
 }
 
 void App::change_font_size(int new_size)
@@ -470,29 +263,14 @@ void App::change_font_size(int new_size)
 
     renderer_->set_cell_size(metrics.cell_width, metrics.cell_height);
     renderer_->set_ascender(metrics.ascender);
-    renderer_->set_grid_size(grid_cols_, grid_rows_);
-    input_.set_cell_size(metrics.cell_width, metrics.cell_height);
-    grid_.mark_all_dirty();
-    grid_pipeline_.force_full_atlas_upload();
-    update_text_input_area();
 
     auto [pw, ph] = window_.size_pixels();
-    int pad = renderer_->padding();
-    int new_cols = (pw - pad * 2) / metrics.cell_width;
-    int new_rows = (ph - pad * 2) / metrics.cell_height;
-    if (new_cols < 1)
-        new_cols = 1;
-    if (new_rows < 1)
-        new_rows = 1;
-
-    grid_pipeline_.flush();
-    refresh_cursor_style(true);
-
-    if (new_cols != grid_cols_ || new_rows != grid_rows_)
-        queue_resize_request(new_cols, new_rows, "font resize");
+    refresh_grid_dimensions(pw, ph);
 
     config_.font_size = new_size;
     config_.save();
+    last_activity_time_ = std::chrono::steady_clock::now();
+    request_frame();
 }
 
 void App::request_frame()
@@ -503,135 +281,33 @@ void App::request_frame()
 
 void App::request_quit()
 {
-    if (nvim_process_.is_running())
-    {
-        rpc_.notify("nvim_input", { NvimRpc::make_str("<C-\\><C-n>:qa!<CR>") });
-    }
     running_ = false;
+    window_.wake();
 }
 
-void App::refresh_cursor_style(bool restart_blink)
+void App::refresh_grid_dimensions(int pixel_w, int pixel_h)
 {
-    cursor_style_ = {};
-    cursor_style_.bg = highlights_.default_fg();
-    cursor_style_.fg = highlights_.default_bg();
+    const auto& metrics = text_service_.metrics();
+    const int cell_w = std::max(1, metrics.cell_width);
+    const int cell_h = std::max(1, metrics.cell_height);
+    const int pad = std::max(0, renderer_->padding());
 
-    int mode = ui_events_.current_mode();
-    if (mode >= 0 && mode < (int)ui_events_.modes().size())
-    {
-        const auto& mode_info = ui_events_.modes()[mode];
-        cursor_style_.shape = mode_info.cursor_shape;
-        cursor_style_.cell_percentage = mode_info.cell_percentage;
-        if (mode_info.attr_id != 0)
-        {
-            Color fg;
-            Color bg;
-            highlights_.resolve(highlights_.get((uint16_t)mode_info.attr_id), fg, bg);
-            cursor_style_.fg = fg;
-            cursor_style_.bg = bg;
-            cursor_style_.use_explicit_colors = true;
-        }
-    }
-
-    if (restart_blink)
-    {
-        restart_cursor_blink(std::chrono::steady_clock::now());
-    }
-    else
-    {
-        apply_cursor_visibility();
-    }
-}
-
-BlinkTiming App::current_blink_timing() const
-{
-    int mode = ui_events_.current_mode();
-    if (mode < 0 || mode >= (int)ui_events_.modes().size())
-        return {};
-    const auto& m = ui_events_.modes()[mode];
-    return { m.blinkwait, m.blinkon, m.blinkoff };
-}
-
-void App::restart_cursor_blink(std::chrono::steady_clock::time_point now)
-{
-    cursor_blinker_.restart(now, cursor_busy_, current_blink_timing());
-    apply_cursor_visibility();
-}
-
-void App::apply_cursor_visibility()
-{
-    int cursor_col = cursor_blinker_.visible() ? ui_events_.cursor_col() : -1;
-    int cursor_row = cursor_blinker_.visible() ? ui_events_.cursor_row() : -1;
-    renderer_->set_cursor(cursor_col, cursor_row, cursor_style_);
-    update_text_input_area();
-    request_frame();
-}
-
-void App::toggle_debug_overlay()
-{
-    debug_overlay_enabled_ = !debug_overlay_enabled_;
-    update_debug_overlay();
-    request_frame();
-}
-
-double App::average_frame_ms() const
-{
-    if (recent_frame_ms_count_ == 0)
-        return 0.0;
-
-    double total = 0.0;
-    for (size_t i = 0; i < recent_frame_ms_count_; ++i)
-        total += recent_frame_ms_[i];
-    return total / static_cast<double>(recent_frame_ms_count_);
-}
-
-void App::update_debug_overlay()
-{
-    auto [cell_w, cell_h] = renderer_->cell_size_pixels();
-
-    DebugOverlayState overlay;
-    overlay.enabled = debug_overlay_enabled_;
-    overlay.display_ppi = display_ppi_;
-    overlay.cell_width = cell_w;
-    overlay.cell_height = cell_h;
-    overlay.grid_cols = grid_cols_;
-    overlay.grid_rows = grid_rows_;
-    overlay.dirty_cells = last_flush_dirty_cells_;
-    overlay.frame_ms = last_frame_ms_;
-    overlay.average_frame_ms = average_frame_ms();
-    overlay.atlas_usage_ratio = text_service_.atlas_usage_ratio();
-    overlay.atlas_glyph_count = text_service_.atlas_glyph_count();
-    overlay.atlas_reset_count = text_service_.atlas_reset_count();
-    grid_pipeline_.set_debug_overlay(overlay);
-}
-
-void App::update_text_input_area()
-{
-    auto [cell_w, cell_h] = renderer_->cell_size_pixels();
-    int x = renderer_->padding() + ui_events_.cursor_col() * cell_w;
-    int y = renderer_->padding() + ui_events_.cursor_row() * cell_h;
-    window_.set_text_input_area(x, y, cell_w, cell_h);
-}
-
-void App::queue_resize_request(int cols, int rows, const char* reason)
-{
-    ui_request_worker_.request_resize(cols, rows, reason);
+    grid_cols_ = std::max(1, (pixel_w - pad * 2) / cell_w);
+    grid_rows_ = std::max(1, (pixel_h - pad * 2) / cell_h);
+    grid_.resize(grid_cols_, grid_rows_);
+    renderer_->set_grid_size(grid_cols_, grid_rows_);
 }
 
 int App::wait_timeout_ms(std::optional<std::chrono::steady_clock::time_point> wait_deadline) const
 {
-    auto deadline = cursor_blinker_.next_deadline();
-    if (wait_deadline && (!deadline || *wait_deadline < *deadline))
-        deadline = wait_deadline;
-
-    if (!deadline)
+    if (!wait_deadline)
         return -1;
 
     auto now = std::chrono::steady_clock::now();
-    if (now >= *deadline)
+    if (now >= *wait_deadline)
         return 0;
 
-    auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(*deadline - now);
+    auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(*wait_deadline - now);
     return std::max(1, (int)delta.count());
 }
 
@@ -650,24 +326,10 @@ void App::shutdown()
         config_.save();
     }
 
-    // Send quit while transport is still open
-    if (nvim_process_.is_running())
-    {
-        rpc_.notify("nvim_input", { NvimRpc::make_str("<C-\\><C-n>:qa!<CR>") });
-    }
-
-    // Close transport to unblock any pending requests (e.g. resize worker)
-    rpc_.close();
-    ui_request_worker_.stop();
-
-    // Kill/wait for nvim process (closes pipes, unblocks reader thread)
-    nvim_process_.shutdown();
-    rpc_.shutdown();
-
     text_service_.shutdown();
     if (renderer_)
         renderer_->shutdown();
     window_.shutdown();
 }
 
-} // namespace spectre
+} // namespace megacitycode

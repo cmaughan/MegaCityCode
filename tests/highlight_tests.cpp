@@ -1,9 +1,9 @@
 #include "support/test_support.h"
 
-#include <spectre/highlight.h>
+#include <megacitycode/highlight.h>
 
-using namespace spectre;
-using namespace spectre::tests;
+using namespace megacitycode;
+using namespace megacitycode::tests;
 
 void run_highlight_tests()
 {

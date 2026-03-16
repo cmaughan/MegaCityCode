@@ -5,10 +5,10 @@
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
-#include <spectre/text_service.h>
+#include <megacitycode/text_service.h>
 
-using namespace spectre;
-using namespace spectre::tests;
+using namespace megacitycode;
+using namespace megacitycode::tests;
 
 namespace
 {

@@ -1,18 +1,18 @@
 #pragma once
 // Internal helpers shared by app_config.cpp and render_test.cpp.
-// All functions are in namespace spectre::toml.
+// All functions are in namespace megacitycode::toml.
 
-#include <spectre/string_util.h>
+#include <megacitycode/string_util.h>
 
 #include <algorithm>
 #include <cctype>
 #include <string>
 #include <vector>
 
-namespace spectre::toml
+namespace megacitycode::toml
 {
 
-using spectre::trim;
+using megacitycode::trim;
 
 inline std::string unquote(std::string value)
 {
@@ -181,4 +181,4 @@ inline std::string json_escape_string(std::string_view s)
     return out;
 }
 
-} // namespace spectre::toml
+} // namespace megacitycode::toml

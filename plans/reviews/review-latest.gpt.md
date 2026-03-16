@@ -1,4 +1,4 @@
-# Spectre Review Report
+# MegaCityCode Review Report
 
 ## Scope and Method
 This review is based only on the supplied `all_code.md` snapshot from `plans/reviews/all_code.md`. I did not inspect local files, build, run, or test anything. Findings below are from static review of the provided code and project layout.
@@ -16,19 +16,19 @@ The code is workable for multiple agents, but not yet optimised for parallel cha
 - The high-level library split is good: `types`, `window`, `renderer`, `font`, `grid`, `nvim`, and thin-ish `app` is a sensible decomposition.
 - Public interfaces are mostly small and understandable: `IRenderer`, `IWindow`, `IGridSink`, `IRpcChannel`.
 - Renderer backends are properly hidden behind `create_renderer()`, which protects the app from backend-private headers.
-- `spectre-grid` is independent and pure enough to test well.
-- `spectre-nvim` contains the right kinds of concerns: process control, RPC, redraw parsing, input translation.
-- `spectre-font` isolates shaping/raster/atlas responsibilities reasonably well.
+- `megacitycode-grid` is independent and pure enough to test well.
+- `megacitycode-nvim` contains the right kinds of concerns: process control, RPC, redraw parsing, input translation.
+- `megacitycode-font` isolates shaping/raster/atlas responsibilities reasonably well.
 - `RendererState` is a good seam between app-level cell updates and GPU upload details.
 - Tests already target several pure subsystems instead of only app-level smoke tests.
 - Render scenarios are expressed declaratively in `.toml`, which is good for reproducibility.
 - The repo has clear automation scripts for docs, review export, snapshot runs, and cross-agent workflows.
 
 ### Structural weaknesses
-- `app` is still too stateful and central. [`app/app.cpp`](D:/dev/spectre/app/app.cpp) is both lifecycle coordinator and policy engine for resize, capture, cursor, overlay, config persistence, startup commands, and UI interaction.
+- `app` is still too stateful and central. [`app/app.cpp`](D:/dev/megacitycode/app/app.cpp) is both lifecycle coordinator and policy engine for resize, capture, cursor, overlay, config persistence, startup commands, and UI interaction.
 - `GridRenderingPipeline` lives in `app/` even though it is a reusable subsystem boundary between grid/highlights/text and renderer; that makes `app` less “thin orchestration only” than intended.
 - Render-test parsing/output logic also lives in `app/`, but it behaves like an infrastructure/test-support module.
-- `spectre-nvim` mixes transport, redraw protocol interpretation, and input translation in one library. That is okay at current size, but it will become a hotspot for multi-agent conflicts.
+- `megacitycode-nvim` mixes transport, redraw protocol interpretation, and input translation in one library. That is okay at current size, but it will become a hotspot for multi-agent conflicts.
 - Renderer backends duplicate frame lifecycle, capture handling, atlas upload plumbing, and dirty-state upload patterns that should be partially shared.
 - Public type surfaces such as `MpackValue` and `GpuCell` are low-level enough that they encourage cross-layer coupling.
 - `HighlightTable`, `UiOptions`, and cursor policy are split across `types`, `nvim`, and `app` in a way that makes ownership less obvious.
@@ -47,7 +47,7 @@ The code is workable for multiple agents, but not yet optimised for parallel cha
 | High | Cross-backend maintainability | Vulkan and Metal duplicate similar frame/upload/capture logic. | Bug fixes will drift and backend parity will get harder over time. |
 | High | RPC robustness | `NvimRpc::reader_thread_func()` does O(n) `vector::erase` from the front for accumulated input. | Fine now, but poor scaling and fragile under heavy redraw throughput. |
 | High | Protocol typing | `UiEventHandler` is stringly typed and loosely validated. | Easy to regress redraw parsing; hard to extend safely. |
-| Medium | Config parsing | Hand-rolled TOML-like parsing in [`app/app_config.cpp`](D:/dev/spectre/app/app_config.cpp) and [`app/render_test.cpp`](D:/dev/spectre/app/render_test.cpp). | Small scope today, but brittle and duplicative. |
+| Medium | Config parsing | Hand-rolled TOML-like parsing in [`app/app_config.cpp`](D:/dev/megacitycode/app/app_config.cpp) and [`app/render_test.cpp`](D:/dev/megacitycode/app/render_test.cpp). | Small scope today, but brittle and duplicative. |
 | Medium | Font subsystem | Fallback font selection, color-font preference, atlas reset, and glyph raster policy are all bundled into `TextService::Impl`. | Powerful but dense; hard for parallel contributors to modify confidently. |
 | Medium | Concurrency | `UiRequestWorker` is tiny but lifecycle-sensitive and RPC-close-sensitive. | Needs stronger contract tests because shutdown ordering is subtle. |
 | Medium | Test gap | No direct tests for `App`, `GridRenderingPipeline`, `SdlWindow`, or renderer backend lifecycle beyond smoke/snapshot. | Highest-risk orchestration code has the weakest direct coverage. |
@@ -70,7 +70,7 @@ The code is workable for multiple agents, but not yet optimised for parallel cha
 ---
 
 ## Multi-Agent Collaboration Risks
-- The most likely conflict files are [`app/app.cpp`](D:/dev/spectre/app/app.cpp), [`libs/spectre-font/src/text_service.cpp`](D:/dev/spectre/libs/spectre-font/src/text_service.cpp), [`libs/spectre-nvim/src/ui_events.cpp`](D:/dev/spectre/libs/spectre-nvim/src/ui_events.cpp), and [`libs/spectre-renderer/src/vulkan/vk_renderer.cpp`](D:/dev/spectre/libs/spectre-renderer/src/vulkan/vk_renderer.cpp).
+- The most likely conflict files are [`app/app.cpp`](D:/dev/megacitycode/app/app.cpp), [`libs/megacitycode-font/src/text_service.cpp`](D:/dev/megacitycode/libs/megacitycode-font/src/text_service.cpp), [`libs/megacitycode-nvim/src/ui_events.cpp`](D:/dev/megacitycode/libs/megacitycode-nvim/src/ui_events.cpp), and [`libs/megacitycode-renderer/src/vulkan/vk_renderer.cpp`](D:/dev/megacitycode/libs/megacitycode-renderer/src/vulkan/vk_renderer.cpp).
 - Ownership lines are not always sharp enough: resize behavior spans window, app, nvim, renderer, and text.
 - Shared mutable state is passed around as direct object references instead of via narrower commands/results.
 - The current structure is good for one strong maintainer, less good for many parallel contributors changing adjacent behavior.
@@ -92,9 +92,9 @@ The code is workable for multiple agents, but not yet optimised for parallel cha
 ---
 
 ## Separation and Modularity Opportunities
-1. Move `GridRenderingPipeline` into `libs/spectre-renderer` or a new `libs/spectre-presentation`.
+1. Move `GridRenderingPipeline` into `libs/megacitycode-renderer` or a new `libs/megacitycode-presentation`.
 2. Split `App` into lifecycle/bootstrap, UI session state, and runtime controller objects.
-3. Split `spectre-nvim` into transport/protocol/input submodules, even if still one library target.
+3. Split `megacitycode-nvim` into transport/protocol/input submodules, even if still one library target.
 4. Extract a typed redraw-event decoder layer before `UiEventHandler`.
 5. Extract shared renderer frame/upload/capture utilities used by both Vulkan and Metal.
 6. Move render-test scenario parsing and file IO into `tests/support` or a dedicated testing utility library.

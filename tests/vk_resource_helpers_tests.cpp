@@ -2,8 +2,8 @@
 
 #include "vulkan/vk_resource_helpers.h"
 
-using namespace spectre;
-using namespace spectre::tests;
+using namespace megacitycode;
+using namespace megacitycode::tests;
 
 void run_vk_resource_helpers_tests()
 {

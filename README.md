@@ -1,32 +1,32 @@
-# Spectre
+# MegaCityCode
 
-API docs: **[chrismaughan.com/spectre](http://chrismaughan.com/spectre/)** — or generate locally with `python scripts/gen_api_docs.py`.
+API docs: **[chrismaughan.com/megacitycode](http://chrismaughan.com/megacitycode/)** — or generate locally with `python scripts/gen_api_docs.py`.
 
-Spectre is a cross-platform Neovim GUI frontend with native GPU rendering:
+MegaCityCode is a cross-platform native 3D viewer with retained font and grid foundations:
 
 - Vulkan on Windows
 - Metal on macOS
 - SDL3 windowing and input
-- embedded `nvim --embed` over msgpack-RPC
+- a fixed-camera scene path for visualization work
 
 ### Windows
 
-![Spectre on Windows](screenshots/spectre-pc.png)
+![MegaCityCode on Windows](screenshots/megacitycode-pc.png)
 
 ### macOS
 
-![Spectre on macOS](screenshots/spectre-mac.png)
+![MegaCityCode on macOS](screenshots/megacitycode-mac.png)
 
 ## Features
 
-- Ext_linegrid-based UI rendering
+- Fixed-camera 3D plane rendering in the Vulkan backend
 - FreeType + HarfBuzz text pipeline with a dynamic glyph atlas
 - Font fallback for newer Nerd Font and emoji/plugin glyph coverage
 - Runtime font size changes with `Ctrl+=`, `Ctrl+-`, and `Ctrl+0`
 - Mouse input support for click, drag, and wheel events
 - HiDPI / Retina-aware rendering
 - Shared logging with console/file fallback and category filtering
-- Thin app layer with separate window, renderer, font, grid, and Neovim modules
+- Thin app layer with separate window, renderer, font, and grid modules
 
 ## Requirements
 
@@ -35,13 +35,11 @@ Spectre is a cross-platform Neovim GUI frontend with native GPU rendering:
 - CMake 3.25+
 - Visual Studio 2022
 - Vulkan SDK with `glslc`
-- `nvim` on `PATH`
 
 ### macOS
 
 - CMake 3.25+
 - Xcode Command Line Tools
-- `nvim` on `PATH`
 
 All other dependencies are fetched automatically with CMake `FetchContent`.
 
@@ -86,28 +84,28 @@ cmake --build build --parallel
 Debug:
 
 ```powershell
-.\build\Debug\spectre.exe
+.\build\Debug\megacitycode.exe
 ```
 
 Release:
 
 ```powershell
-.\build\Release\spectre.exe
+.\build\Release\megacitycode.exe
 ```
 
 To open a console window for logs:
 
 ```powershell
-.\build\Release\spectre.exe --console
+.\build\Release\megacitycode.exe --console
 ```
 
 ### macOS
 
 ```bash
-./build/spectre
+./build/megacitycode
 ```
 
-Spectre starts an embedded Neovim child process automatically.
+MegaCityCode starts directly into the current visualization scene.
 
 ## Convenience Scripts
 
@@ -132,7 +130,7 @@ The root wrappers delegate to the larger scripts under `scripts/`.
 
 ## Testing
 
-The repository includes lightweight native tests for grid logic, redraw parsing, input translation, RPC behavior, renderer state, and Unicode width conformance against headless Neovim.
+The repository includes lightweight native tests for config parsing, retained grid storage, renderer helpers, snapshot parsing, and renderer state utilities that are still kept around internally.
 
 ### Windows
 
@@ -170,23 +168,23 @@ The test scripts reuse the existing CMake cache when possible and only reconfigu
 
 The CTest suite also includes:
 
-- an app startup smoke test when `nvim` is available on `PATH`
-- a render snapshot regression test when the platform reference image exists under `tests/render/reference/`
+- an app startup smoke test
+- a render snapshot regression test for the fixed plane scene when the platform reference image exists under `tests/render/reference/`
 
 ## Render Snapshots
 
-Spectre can now run deterministic render-snapshot tests by capturing pixels directly from the renderer output instead of taking a desktop screenshot.
+MegaCityCode can now run deterministic render-snapshot tests by capturing pixels directly from the renderer output instead of taking a desktop screenshot.
 
 Example compare run:
 
 ```powershell
-.\build\Debug\spectre.exe --console --render-test D:\dev\spectre\tests\render\basic-view.toml
+.\build\Debug\megacitycode.exe --console --render-test D:\dev\megacitycode\tests\render\plane-view.toml
 ```
 
 Bless a new reference image:
 
 ```powershell
-.\build\Debug\spectre.exe --console --render-test D:\dev\spectre\tests\render\basic-view.toml --bless-render-test
+.\build\Debug\megacitycode.exe --console --render-test D:\dev\megacitycode\tests\render\plane-view.toml --bless-render-test
 ```
 
 Update the documentation screenshot for the current platform:
@@ -197,35 +195,33 @@ python .\scripts\update_screenshot.py
 
 Notes:
 
-- `update_screenshot.py` uses the presentation-oriented `tests/render/readme-hero.toml` scenario by default, so it captures your normal Neovim theme and statusline instead of the clean `-u NONE --noplugin` regression setup.
-- The deterministic render regression scenarios remain under `tests/render/` and continue to use fixed startup settings for stable compare/bless behavior.
+- The deterministic render regression scenario lives under `tests/render/plane-view.toml`.
+- The current render path is scene-driven rather than text/grid-driven.
 
 Behavior:
 
-- the scenario fixes window size, font, and Neovim startup commands
-- Spectre waits for redraw activity to settle
+- the scenario fixes window size and capture tolerances
+- MegaCityCode waits briefly for the scene to settle
 - the renderer reads back the presented frame
 - output is compared against a platform-specific reference image
-- `actual`, `diff`, and `report` artifacts are written under `tests/render/out/`
+- `actual` and `report` artifacts are written under `tests/render/out/`
 
-Reference images live under `tests/render/reference/` with platform suffixes like `basic-view.windows.bmp` and `basic-view.macos.bmp`.
+Reference images live under `tests/render/reference/` with platform suffixes like `plane-view.windows.bmp` and `plane-view.macos.bmp`.
 
 Current scenarios:
 
-- `basic-view`: line numbers, signcolumn, cursorline, and baseline text layout
-- `cmdline-view`: bottom-row command-line rendering
-- `unicode-view`: graphemes, emoji, wide glyphs, and Nerd Font/plugin icons
+- `plane-view`: a fixed 3D plane viewed from a 45-degree elevated camera
 
 ## Logging
 
-Spectre now uses a shared repo-local logger across the app, RPC/process layer, windowing, font stack, and renderers.
+MegaCityCode now uses a shared repo-local logger across the app, RPC/process layer, windowing, font stack, and renderers.
 
 Environment controls:
 
 ```powershell
-$env:SPECTRE_LOG = "debug"
-$env:SPECTRE_LOG_CATEGORIES = "app,rpc,font"
-$env:SPECTRE_LOG_FILE = "logs\\spectre.log"
+$env:MEGACITYCODE_LOG = "debug"
+$env:MEGACITYCODE_LOG_CATEGORIES = "app,rpc,font"
+$env:MEGACITYCODE_LOG_FILE = "logs\\megacitycode.log"
 ```
 
 Notes:
@@ -235,44 +231,17 @@ Notes:
 - GUI launches without a console will fall back to a log file automatically.
 - The DPI diagnostics in the window layer are now `debug`-only instead of always-on.
 
-## Debug Overlay
-
-Press `F12` to toggle the built-in debug overlay.
-
-It renders through the normal text and atlas path and exposes the state that tends to matter most while working on UI and performance issues:
-
-- display DPI
-- cell size
-- grid size
-- last frame time
-- rolling average frame time
-- dirty-cell count from the last flush
-- atlas usage, glyph count, and reset count
-
-Windows example:
-
-![Spectre debug overlay on Windows](screenshots/spectre-overlay-pc.png)
-
-This is useful when changing startup, redraw, or renderer code because it makes "why is this redrawing?" and "what size are we actually rendering at?" visible without attaching a debugger.
-
-To refresh the overlay screenshot locally:
-
-```powershell
-python .\scripts\update_screenshot.py --scenario tests\render\readme-overlay.toml --output screenshots\spectre-overlay-pc.png
-```
-
 ## Project Layout
 
 ```text
-spectre/
+megacitycode/
 ├── app/                    # App startup and main orchestration
 ├── libs/
-│   ├── spectre-types/      # Shared POD types and event structs
-│   ├── spectre-window/     # Window abstraction and SDL implementation
-│   ├── spectre-renderer/   # Public renderer API and platform backends
-│   ├── spectre-font/       # Font loading, shaping, glyph cache
-│   ├── spectre-grid/       # Cell grid and highlight state
-│   └── spectre-nvim/       # Neovim process, RPC, redraw handling, input
+│   ├── megacitycode-types/      # Shared POD types and event structs
+│   ├── megacitycode-window/     # Window abstraction and SDL implementation
+│   ├── megacitycode-renderer/   # Public renderer API and platform backends
+│   ├── megacitycode-font/       # Font loading, shaping, glyph cache
+│   └── megacitycode-grid/       # Thin retained cell storage for future text work
 ├── shaders/                # Vulkan and Metal shader sources
 ├── fonts/                  # Bundled font assets copied next to the app
 ├── tests/                  # Native test executable and fixture helpers
@@ -293,8 +262,8 @@ The workflow uses the same repo-local test scripts as local development, includi
 ## Notes
 
 - Windows uses a multi-config Visual Studio generator through `CMakePresets.json`.
-- The renderer boundary is owned by `spectre-renderer`; app code should not include backend-private headers.
-- Grapheme handling is much better than the original single-codepoint path, but broad Unicode width conformance against Neovim is still future hardening work.
+- The renderer boundary is owned by `megacitycode-renderer`; app code should not include backend-private headers.
+- The font and grid layers are retained for future text work, but the current viewer render path is scene-driven rather than cell-driven.
 - Visual regression testing now prefers direct swapchain/drawable readback over desktop screenshots so comparisons stay deterministic across window-manager state.
 
 ## Architecture Diagrams
@@ -307,11 +276,11 @@ Regenerate with `python scripts/build_docs.py`.
 
 ### Class Diagram
 
-![C++ class diagram](docs/uml/spectre_classes.svg)
+![C++ class diagram](docs/uml/megacitycode_classes.svg)
 
 ### API Docs
 
-The live API reference is published automatically to **[chrismaughan.com/spectre](http://chrismaughan.com/spectre/)** on every push to `main`.
+The live API reference is published automatically to **[chrismaughan.com/megacitycode](http://chrismaughan.com/megacitycode/)** on every push to `main`.
 
 To generate locally:
 
@@ -321,24 +290,23 @@ python scripts/gen_api_docs.py
 
 This writes a local Doxygen site to `docs/api/index.html`.
 
-## Unicode Snapshot Example
+## Plane Snapshot Example
 
 Reference image:
 
-![Unicode render reference](tests/render/reference/unicode-view.windows.bmp)
+![Plane render reference](tests/render/reference/plane-view.windows.bmp)
 
 What the render smoke does:
 
-- launches a deterministic Neovim UI scenario at a fixed size with fixed fonts and commands
-- waits for redraw activity to settle instead of capturing a half-initialized frame
+- launches the fixed 3D plane scene at a deterministic size
+- waits briefly for the renderer to settle instead of capturing a half-initialized frame
 - reads pixels back from the renderer output directly, not from the desktop compositor
 - compares the captured image against a blessed platform reference
-- writes `actual`, `diff`, and `report` artifacts under `tests/render/out/`
+- writes `actual` and `report` artifacts under `tests/render/out/`
 
 Why this is useful:
 
-- it catches visual regressions that ordinary unit tests miss, such as tofu, broken fallback fonts, missing line numbers, layout shifts, or highlight mistakes
-- the `diff` artifact makes it obvious what changed and roughly how much changed
+- it catches visual regressions that ordinary unit tests miss, such as camera, shading, or material drift
 - the `report` gives a mechanical pass/fail threshold instead of relying on guesswork
 - `--bless-render-test` gives a controlled way to accept intentional visual changes
 

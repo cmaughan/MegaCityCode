@@ -17,7 +17,7 @@ Move tests closer to supported seams and fill the remaining lifecycle/failure ho
 ## Implementation Plan
 
 1. ~~Reduce private-source reach-through.~~ **ASSESSED — minimal change made**
-   - `libs/spectre-font/src`, `libs/spectre-renderer/src`, `libs/spectre-nvim/src` are needed by tests that directly test internal APIs (font rasterization, renderer state, RPC codec). Moving them would require exposing internal headers publicly or significant PIMPL refactoring — deferred.
+   - `libs/megacitycode-font/src`, `libs/megacitycode-renderer/src`, `libs/megacitycode-nvim/src` are needed by tests that directly test internal APIs (font rasterization, renderer state, RPC codec). Moving them would require exposing internal headers publicly or significant PIMPL refactoring — deferred.
    - `../app/render_test.cpp` compiled into tests is the only practical way to test scenario parsing without making it a separate library — acceptable as-is.
    - Added `../app/app_config.cpp` and `../app/cursor_blinker.cpp` to the test build as they now have direct test coverage.
 2. ~~Add lifecycle-focused coverage.~~ **PARTIALLY DONE**

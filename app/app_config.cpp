@@ -6,7 +6,7 @@
 #include <fstream>
 #include <sstream>
 
-namespace spectre
+namespace megacitycode
 {
 
 namespace
@@ -24,16 +24,16 @@ std::filesystem::path config_path()
 #ifdef _WIN32
     const char* appdata = std::getenv("APPDATA");
     std::filesystem::path base = appdata ? appdata : ".";
-    return base / "spectre" / "config.toml";
+    return base / "megacitycode" / "config.toml";
 #elif defined(__APPLE__)
     const char* home = std::getenv("HOME");
     std::filesystem::path base = home ? home : ".";
-    return base / "Library" / "Application Support" / "spectre" / "config.toml";
+    return base / "Library" / "Application Support" / "megacitycode" / "config.toml";
 #else
     const char* xdg = std::getenv("XDG_CONFIG_HOME");
     const char* home = std::getenv("HOME");
     std::filesystem::path base = xdg ? xdg : (home ? std::filesystem::path(home) / ".config" : std::filesystem::path("."));
-    return base / "spectre" / "config.toml";
+    return base / "megacitycode" / "config.toml";
 #endif
 }
 
@@ -76,7 +76,7 @@ int parse_font_size(const std::string& value, int fallback)
 AppConfig AppConfig::parse(std::string_view content)
 {
     AppConfig config;
-    std::istringstream in{std::string(content)};
+    std::istringstream in{ std::string(content) };
     std::string line;
     while (std::getline(in, line))
     {
@@ -138,7 +138,7 @@ AppConfig AppConfig::load()
         return {};
 
     std::ifstream in(path);
-    std::string content{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>{}};
+    std::string content{ std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>{} };
     return parse(content);
 }
 
@@ -150,4 +150,4 @@ void AppConfig::save() const
     out << serialize();
 }
 
-} // namespace spectre
+} // namespace megacitycode

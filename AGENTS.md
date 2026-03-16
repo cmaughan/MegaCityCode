@@ -1,13 +1,13 @@
-# Spectre Agent Guide
+# MegaCityCode Agent Guide
 
 ## Scope
 
-This repository is a cross-platform Neovim GUI frontend with:
+This repository is a cross-platform native 3D viewer with:
 
 - Vulkan rendering on Windows
 - Metal rendering on macOS
 - SDL3 windowing/input
-- msgpack-RPC communication with `nvim --embed`
+- a fixed-camera visualization scene today, with font/grid foundations retained for later use
 
 The codebase is intentionally split into small libraries. Keep app code thin and push platform or subsystem logic downward into `libs/`.
 
@@ -20,8 +20,6 @@ Requirements:
 - CMake 3.25+
 - Visual Studio 2022
 - Vulkan SDK with `glslc`
-- `nvim` on `PATH` for runtime checks
-
 Commands:
 
 ```powershell
@@ -33,8 +31,8 @@ ctest --test-dir build --build-config Release --output-on-failure
 Run:
 
 ```powershell
-.\build\Release\spectre.exe
-.\build\Release\spectre.exe --console
+.\build\Release\megacitycode.exe
+.\build\Release\megacitycode.exe --console
 ```
 
 ### macOS
@@ -43,8 +41,6 @@ Requirements:
 
 - CMake 3.25+
 - Xcode Command Line Tools
-- `nvim` on `PATH` for runtime checks
-
 Commands:
 
 ```bash
@@ -56,44 +52,32 @@ ctest --test-dir build --output-on-failure
 Run:
 
 ```bash
-./build/spectre
+./build/megacitycode
 ```
 
 ## Architecture
 
-- `libs/spectre-types`: shared POD types and event structs
-- `libs/spectre-window`: `IWindow` abstraction and SDL implementation
-- `libs/spectre-renderer`: `IRenderer` abstraction, backend factory, Vulkan and Metal backends
-- `libs/spectre-font`: FreeType/HarfBuzz font loading, shaping, glyph atlas management
-- `libs/spectre-grid`: terminal grid model, dirty tracking, highlights
-- `libs/spectre-nvim`: embedded Neovim process, RPC transport, redraw parsing, input translation
+- `libs/megacitycode-types`: shared POD types and event structs
+- `libs/megacitycode-window`: `IWindow` abstraction and SDL implementation
+- `libs/megacitycode-renderer`: `IRenderer` abstraction, backend factory, Vulkan and Metal backends
+- `libs/megacitycode-font`: FreeType/HarfBuzz font loading, shaping, glyph atlas management
+- `libs/megacitycode-grid`: thin array-backed cell storage reserved for future text/layout work
 - `app/`: orchestration only
 
 Preferred dependency direction:
 
 - `app` depends on public headers only
-- renderer backends stay private to `spectre-renderer`
-- pure logic stays testable without launching Neovim or opening a window
+- renderer backends stay private to `megacitycode-renderer`
+- pure logic stays testable without opening a window
 
 ## Validation Expectations
 
-- If you touch RPC, redraw handling, or input translation, run `ctest`.
 - If you touch renderer code, build the platform-specific app target and verify startup at least once.
-- After implementing a user-facing feature or rendering-affecting change, run the render smoke/snapshot suite with `t.bat` or `ctest` and confirm the relevant `spectre-render-*` scenario still passes.
-- When blessing render references, use `py do.py blessbasic`, `py do.py blesscmdline`, `py do.py blessunicode`, or `py do.py blessall` from the repo root instead of calling `spectre.exe --render-test` manually. The helper passes repo-rooted scenario paths and avoids working-directory mistakes.
+- After implementing a user-facing feature or rendering-affecting change, run the render smoke/snapshot suite with `t.bat` or `ctest` and confirm the relevant `megacitycode-render-*` scenario still passes.
+- When blessing render references, use `py do.py blessplane` or `py do.py blessall` from the repo root instead of calling `megacitycode.exe --render-test` manually. The helper passes repo-rooted scenario paths and avoids working-directory mistakes.
 - If you change build wiring, keep both Windows and macOS paths valid in CI.
 - After every completed work item, run one final `clang-format` pass across all touched source files in a single shot instead of formatting piecemeal during the work.
 - When you complete a work item or a concrete subtask from `plans/work-items/*.md`, update that markdown file in the same turn and mark the completed entries with Markdown task ticks (`- [x]`). Leave incomplete follow-ups as unchecked items so progress stays visible in the file itself.
-
-## Replay Fixtures
-
-Use `tests/support/replay_fixture.h` for redraw-oriented tests. It provides small builders for:
-
-- msgpack-like arrays and maps
-- `grid_line` cell batches
-- full `redraw` event vectors
-
-This is the preferred way to reproduce UI parsing bugs without launching Neovim.
 
 ## Review Consensus
 
@@ -112,9 +96,9 @@ The result should read like a conversation and planning review for fixes, with a
 ## Known Pitfalls
 
 - Do not include backend-private renderer headers from `app/`.
-- Keep shutdown paths non-blocking; a stuck Neovim child must not hang the UI on exit.
-- Font-size changes must relayout existing grid geometry even before Neovim acknowledges a resize.
-- Unicode rendering is still cell-oriented. Be careful when changing shaping or grid-line parsing because combining clusters and wide glyphs are easy to regress.
+- The grid is intentionally storage-only right now; changing it must not affect rendering until the text layer is reintroduced deliberately.
+- Font-size changes still matter for the retained font/grid foundation even though the current plane scene does not consume that data visually.
+- Do not include backend-private renderer headers from `app/`.
 ## Consensus Shortcut
 
 When the user says `come to consensus`, treat that as a direct instruction to execute the saved consensus prompt in `plans/prompts/consensus_review.md`.

@@ -48,9 +48,9 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: spectre-windows
+          name: megacitycode-windows
           path: |
-            build/Release/spectre.exe
+            build/Release/megacitycode.exe
             build/Release/shaders/
             build/Release/fonts/
 

@@ -2,8 +2,8 @@
 
 #include "app_config.h"
 
-using namespace spectre;
-using namespace spectre::tests;
+using namespace megacitycode;
+using namespace megacitycode::tests;
 
 void run_app_config_tests()
 {
@@ -18,12 +18,11 @@ void run_app_config_tests()
     });
 
     run_test("app config parse reads all fields", []() {
-        const char* content =
-            "window_width = 1920\n"
-            "window_height = 1080\n"
-            "font_size = 14\n"
-            "font_path = \"/usr/share/fonts/mono.ttf\"\n"
-            "fallback_paths = [\"/fonts/a.ttf\", \"/fonts/b.ttf\"]\n";
+        const char* content = "window_width = 1920\n"
+                              "window_height = 1080\n"
+                              "font_size = 14\n"
+                              "font_path = \"/usr/share/fonts/mono.ttf\"\n"
+                              "fallback_paths = [\"/fonts/a.ttf\", \"/fonts/b.ttf\"]\n";
 
         AppConfig config = AppConfig::parse(content);
         expect_eq(config.window_width, 1920, "window_width parsed");
@@ -36,11 +35,10 @@ void run_app_config_tests()
     });
 
     run_test("app config parse ignores comments and blank lines", []() {
-        const char* content =
-            "# this is a comment\n"
-            "\n"
-            "window_width = 1600 # inline comment\n"
-            "\n";
+        const char* content = "# this is a comment\n"
+                              "\n"
+                              "window_width = 1600 # inline comment\n"
+                              "\n";
 
         AppConfig config = AppConfig::parse(content);
         expect_eq(config.window_width, 1600, "window_width parsed past comments");
@@ -48,9 +46,8 @@ void run_app_config_tests()
     });
 
     run_test("app config parse clamps out-of-range window dimensions to defaults", []() {
-        const char* content =
-            "window_width = 99999\n"
-            "window_height = -5\n";
+        const char* content = "window_width = 99999\n"
+                              "window_height = -5\n";
 
         AppConfig config = AppConfig::parse(content);
         AppConfig defaults;

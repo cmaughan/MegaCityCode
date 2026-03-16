@@ -5,7 +5,7 @@ Requirements: cmake, dot (graphviz)
 Usage:
     python scripts/gen_deps.py                       # output to docs/deps/
     python scripts/gen_deps.py --output docs/my      # custom output directory
-    python scripts/gen_deps.py --exclude spectre-tests  # hide specific targets
+    python scripts/gen_deps.py --exclude megacitycode-tests  # hide specific targets
     python scripts/gen_deps.py --prune SDL3-static    # keep node, drop its deps
     python scripts/gen_deps.py --dry-run              # print commands without running
 
@@ -192,13 +192,12 @@ def prune_deps_of(dot_text: str, prune_patterns: list[str]) -> str:
 # Each entry: (label_regex, fillcolor, fontcolor)
 # First match wins.
 NODE_COLORS: list[tuple[str, str, str]] = [
-    (r"^spectre$",                      "#2d6a9f", "white"),   # app executable — deep blue
-    (r"^spectre-nvim$",                 "#5b8dd9", "white"),   # integration layer — mid blue
-    (r"^spectre-(window|renderer)$",    "#7ec8a4", "black"),   # platform/GPU layer — green
-    (r"^spectre-(font|grid)$",          "#f0a868", "black"),   # domain layer — orange
-    (r"^spectre-types$",                "#c9a8e0", "black"),   # shared types — purple
-    (r"^spectre-tests$",                "#f4e04d", "black"),   # test targets — yellow
-    (r"^spectre-rpc",                   "#f4e04d", "black"),   # test helpers — yellow
+    (r"^megacitycode$",                      "#2d6a9f", "white"),   # app executable — deep blue
+    (r"^megacitycode-(window|renderer)$",    "#7ec8a4", "black"),   # platform/GPU layer — green
+    (r"^megacitycode-(font|grid)$",          "#f0a868", "black"),   # domain layer — orange
+    (r"^megacitycode-types$",                "#c9a8e0", "black"),   # shared types — purple
+    (r"^megacitycode-tests$",                "#f4e04d", "black"),   # test targets — yellow
+    (r"^megacitycode-rpc",                   "#f4e04d", "black"),   # test helpers — yellow
 ]
 
 
@@ -290,7 +289,7 @@ def main() -> int:
         default=[],
         metavar="PATTERN",
         help="Exclude targets whose names match PATTERN (substring or regex). Repeatable. "
-             "Example: --exclude spectre-tests --exclude 'spectre-rpc.*'",
+             "Example: --exclude megacitycode-tests --exclude 'megacitycode-rpc.*'",
     )
     parser.add_argument("--dry-run", action="store_true", help="Print commands without executing them")
     args = parser.parse_args()

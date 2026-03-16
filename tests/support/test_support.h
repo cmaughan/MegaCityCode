@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 
-namespace spectre::tests
+namespace megacitycode::tests
 {
 
 class TestSkipped : public std::runtime_error
@@ -58,4 +58,4 @@ inline void run_test(std::string_view name, Fn&& fn)
     }
 }
 
-} // namespace spectre::tests
+} // namespace megacitycode::tests

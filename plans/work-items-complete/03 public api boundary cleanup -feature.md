@@ -10,7 +10,7 @@ Current verified issues:
 - `IWindow` exposes `SDL_Window*`
 - `nvim.h` still bundles process, RPC, value model, redraw, and input concerns
 - `font.h` is just a passthrough
-- `GLYPH_ATLAS_SIZE` still lives in shared `spectre-types`
+- `GLYPH_ATLAS_SIZE` still lives in shared `megacitycode-types`
 
 ## Goal
 
@@ -27,11 +27,11 @@ Reduce rebuild/merge blast radius and make module ownership clearer to humans an
    - `nvim.h` kept as a convenience re-export of both
    - Internal sources and `ui_request_worker.h` updated to narrower headers
 3. [x] Remove misleading passthroughs.
-   - Deleted `libs/spectre-font/include/spectre/font.h` (nothing included it)
+   - Deleted `libs/megacitycode-font/include/megacitycode/font.h` (nothing included it)
 4. [x] Move implementation constants down.
-   - Removed `GLYPH_ATLAS_SIZE` from `spectre-types/types.h`
+   - Removed `GLYPH_ATLAS_SIZE` from `megacitycode-types/types.h`
    - Inlined `2048` directly in `font_engine.h`, `metal_renderer.h`, `vk_atlas.h`
-   - Removed now-unused `#include <spectre/types.h>` from `vk_atlas.h`
+   - Removed now-unused `#include <megacitycode/types.h>` from `vk_atlas.h`
 
 ## Tests
 
@@ -46,6 +46,6 @@ Reduce rebuild/merge blast radius and make module ownership clearer to humans an
 
 ## Sub-Agent Split
 
-- one agent on `spectre-window`
+- one agent on `megacitycode-window`
 - one agent on font/shared-types cleanup
-- one agent on `spectre-nvim` header partitioning
+- one agent on `megacitycode-nvim` header partitioning

@@ -14,10 +14,10 @@ def build_dir(root: pathlib.Path) -> pathlib.Path:
     return root / "build"
 
 
-def spectre_path(root: pathlib.Path) -> pathlib.Path:
+def megacitycode_path(root: pathlib.Path) -> pathlib.Path:
     if sys.platform.startswith("win"):
-        return build_dir(root) / "Debug" / "spectre.exe"
-    return build_dir(root) / "spectre"
+        return build_dir(root) / "Debug" / "megacitycode.exe"
+    return build_dir(root) / "megacitycode"
 
 
 def scenario_path(root: pathlib.Path, name: str) -> pathlib.Path:
@@ -68,7 +68,7 @@ def run(command: list[str], cwd: pathlib.Path) -> int:
 
 
 def ensure_built(root: pathlib.Path) -> int:
-    exe = spectre_path(root)
+    exe = megacitycode_path(root)
     if exe.exists():
         return 0
 
@@ -82,7 +82,7 @@ def help_text() -> str:
   python do.py <command> [--skip-build]
 
 Single-word shortcuts:
-  run          Run Spectre normally with a console
+  run          Run MegaCityCode normally with a console
   smoke        Run the app smoke test
   test         Run the full local test suite (t.bat / run_tests.sh)
   shot         Regenerate the README hero screenshot
@@ -90,20 +90,16 @@ Single-word shortcuts:
   docs         Build all docs artifacts
 
 Deterministic render snapshots:
-  basic        Run basic-view compare
-  cmdline      Run cmdline-view compare
-  unicode      Run unicode-view compare
-  renderall    Run all three compare snapshots
+  plane        Run plane-view compare
+  renderall    Run all configured compare snapshots
 
 Bless render references:
-  blessbasic   Bless basic-view
-  blesscmdline Bless cmdline-view
-  blessunicode Bless unicode-view
-  blessall     Bless all three deterministic references
+  blessplane   Bless plane-view
+  blessall     Bless all configured deterministic references
 
 Examples:
   python do.py smoke
-  python do.py basic
+  python do.py plane
   python do.py blessall
   python do.py shot
   python do.py api
@@ -142,29 +138,25 @@ def main() -> int:
     if command == "run":
         if ensure_built(root) != 0:
             return 1
-        exe = spectre_path(root)
+        exe = megacitycode_path(root)
         return run([str(exe), "--console"], root)
 
     if command == "smoke":
         if ensure_built(root) != 0:
             return 1
-        exe = spectre_path(root)
+        exe = megacitycode_path(root)
         return run([str(exe), "--console", "--smoke-test"], root)
 
     render_map = {
-        "basic": ("basic-view", False),
-        "cmdline": ("cmdline-view", False),
-        "unicode": ("unicode-view", False),
-        "blessbasic": ("basic-view", True),
-        "blesscmdline": ("cmdline-view", True),
-        "blessunicode": ("unicode-view", True),
+        "plane": ("plane-view", False),
+        "blessplane": ("plane-view", True),
     }
 
     if command in render_map:
         if ensure_built(root) != 0:
             return 1
         scenario_name, bless = render_map[command]
-        exe = spectre_path(root)
+        exe = megacitycode_path(root)
         cmd = [str(exe), "--console", "--render-test", str(scenario_path(root, scenario_name))]
         if bless:
             cmd.append("--bless-render-test")
@@ -176,8 +168,8 @@ def main() -> int:
         if ensure_built(root) != 0:
             return 1
         overall_rc = 0
-        for scenario_name in ("basic-view", "cmdline-view", "unicode-view"):
-            rc = run([str(spectre_path(root)), "--console", "--render-test", str(scenario_path(root, scenario_name))], root)
+        for scenario_name in ("plane-view",):
+            rc = run([str(megacitycode_path(root)), "--console", "--render-test", str(scenario_path(root, scenario_name))], root)
             print_render_report(root, scenario_name)
             if rc != 0:
                 overall_rc = rc
@@ -186,9 +178,9 @@ def main() -> int:
     if command == "blessall":
         if ensure_built(root) != 0:
             return 1
-        for scenario_name in ("basic-view", "cmdline-view", "unicode-view"):
+        for scenario_name in ("plane-view",):
             rc = run(
-                [str(spectre_path(root)), "--console", "--render-test", str(scenario_path(root, scenario_name)), "--bless-render-test"],
+                [str(megacitycode_path(root)), "--console", "--render-test", str(scenario_path(root, scenario_name)), "--bless-render-test"],
                 root,
             )
             if rc != 0:

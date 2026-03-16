@@ -1,22 +1,22 @@
-/* Spectre Doxygen overrides: keep stock output, remove the dated blue chrome. */
+/* MegaCityCode Doxygen overrides: keep stock output, remove the dated blue chrome. */
 
 :root {
-  --spectre-bg: #f7f8fa;
-  --spectre-surface: #ffffff;
-  --spectre-surface-alt: #f1f4f8;
-  --spectre-text: #17212b;
-  --spectre-text-muted: #506173;
-  --spectre-border: #d6dee6;
-  --spectre-accent: #2f6f9f;
-  --spectre-accent-soft: #e6f0f7;
-  --spectre-code-bg: #f3f5f7;
-  --spectre-shadow: 0 8px 24px rgba(16, 24, 40, 0.06);
+  --megacitycode-bg: #f7f8fa;
+  --megacitycode-surface: #ffffff;
+  --megacitycode-surface-alt: #f1f4f8;
+  --megacitycode-text: #17212b;
+  --megacitycode-text-muted: #506173;
+  --megacitycode-border: #d6dee6;
+  --megacitycode-accent: #2f6f9f;
+  --megacitycode-accent-soft: #e6f0f7;
+  --megacitycode-code-bg: #f3f5f7;
+  --megacitycode-shadow: 0 8px 24px rgba(16, 24, 40, 0.06);
 }
 
 html,
 body {
-  background: var(--spectre-bg);
-  color: var(--spectre-text);
+  background: var(--megacitycode-bg);
+  color: var(--megacitycode-text);
   font-family: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
@@ -31,18 +31,18 @@ div.contents {
 }
 
 #titlearea {
-  border-bottom: 1px solid var(--spectre-border);
+  border-bottom: 1px solid var(--megacitycode-border);
   background: linear-gradient(180deg, #fbfcfd 0%, #f2f6fa 100%);
 }
 
 #projectname {
-  color: var(--spectre-text);
+  color: var(--megacitycode-text);
   font-size: 1.9rem;
   font-weight: 700;
 }
 
 #projectbrief {
-  color: var(--spectre-text-muted);
+  color: var(--megacitycode-text-muted);
   font-size: 0.98rem;
   margin-top: 0.2rem;
 }
@@ -63,7 +63,7 @@ div.contents {
   margin: 0 4px 8px 0;
   border: 1px solid transparent;
   background: transparent;
-  color: var(--spectre-text-muted);
+  color: var(--megacitycode-text-muted);
   transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 
@@ -73,17 +73,17 @@ div.contents {
 .tabs ul li.current a,
 .tabs2 ul li.current a,
 .tabs3 ul li.current a {
-  background: var(--spectre-accent-soft);
+  background: var(--megacitycode-accent-soft);
   border-color: #c7dced;
-  color: var(--spectre-accent);
+  color: var(--megacitycode-accent);
 }
 
 #doc-content,
 .contents {
-  background: var(--spectre-surface);
-  border: 1px solid var(--spectre-border);
+  background: var(--megacitycode-surface);
+  border: 1px solid var(--megacitycode-border);
   border-radius: 14px;
-  box-shadow: var(--spectre-shadow);
+  box-shadow: var(--megacitycode-shadow);
   padding: 1.6rem 2rem;
   margin-top: 1rem;
 }
@@ -94,17 +94,17 @@ h3,
 h4,
 h5,
 h6 {
-  color: var(--spectre-text);
+  color: var(--megacitycode-text);
   font-weight: 700;
 }
 
 h1 {
-  border-bottom: 1px solid var(--spectre-border);
+  border-bottom: 1px solid var(--megacitycode-border);
   padding-bottom: 0.35rem;
 }
 
 a {
-  color: var(--spectre-accent);
+  color: var(--megacitycode-accent);
 }
 
 a:hover {
@@ -118,7 +118,7 @@ table.doxtable,
 table.params,
 .memberdecls td,
 .fieldtable td {
-  border-color: var(--spectre-border);
+  border-color: var(--megacitycode-border);
 }
 
 table.memberdecls,
@@ -127,16 +127,16 @@ table.directory,
 table.doxtable {
   border-radius: 10px;
   overflow: hidden;
-  background: var(--spectre-surface);
+  background: var(--megacitycode-surface);
 }
 
 .memitem,
 .fragment,
 div.fragment,
 pre.fragment {
-  border: 1px solid var(--spectre-border);
+  border: 1px solid var(--megacitycode-border);
   border-radius: 10px;
-  background: var(--spectre-code-bg);
+  background: var(--megacitycode-code-bg);
   box-shadow: none;
 }
 
@@ -148,40 +148,40 @@ pre.fragment {
 .memproto,
 dl.reflist dt {
   background: #eef4f8;
-  border: 1px solid var(--spectre-border);
+  border: 1px solid var(--megacitycode-border);
   border-radius: 10px;
-  color: var(--spectre-text);
+  color: var(--megacitycode-text);
 }
 
 .memdoc,
 dl.reflist dd {
-  border: 1px solid var(--spectre-border);
+  border: 1px solid var(--megacitycode-border);
   border-top: 0;
   border-radius: 0 0 10px 10px;
-  background: var(--spectre-surface);
+  background: var(--megacitycode-surface);
 }
 
 #side-nav {
-  border-right: 1px solid var(--spectre-border);
+  border-right: 1px solid var(--megacitycode-border);
   background: linear-gradient(180deg, #f7f9fb 0%, #eef3f7 100%);
 }
 
 #nav-tree .selected,
 .ui-resizable-handle {
-  background: var(--spectre-accent-soft);
+  background: var(--megacitycode-accent-soft);
 }
 
 #nav-tree .selected a {
-  color: var(--spectre-accent);
+  color: var(--megacitycode-accent);
 }
 
 #nav-tree a,
 #nav-tree .label {
-  color: var(--spectre-text-muted);
+  color: var(--megacitycode-text-muted);
 }
 
 #nav-tree a:hover {
-  color: var(--spectre-accent);
+  color: var(--megacitycode-accent);
 }
 
 .summary,
@@ -189,14 +189,14 @@ dl.reflist dd {
 .levels,
 .navpath,
 .sm-dox {
-  color: var(--spectre-text-muted);
+  color: var(--megacitycode-text-muted);
 }
 
 .qindex,
 .sdesc,
 .memname,
 .mlabel {
-  color: var(--spectre-text);
+  color: var(--megacitycode-text);
 }
 
 code,

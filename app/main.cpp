@@ -3,13 +3,16 @@
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
+#include <megacitycode/log.h>
 #include <optional>
-#include <spectre/log.h>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <shellapi.h>
 #include <windows.h>
 #endif
@@ -114,29 +117,29 @@ int main(int argc, char* argv[])
 
     update_current_directory(args);
 
-    spectre::configure_default_logging();
+    megacitycode::configure_default_logging();
 
-    std::optional<spectre::RenderTestScenario> render_test;
-    spectre::AppOptions options;
+    std::optional<megacitycode::RenderTestScenario> render_test;
+    megacitycode::AppOptions options;
     if (!parsed.render_test_path.empty())
     {
         std::string load_error;
-        render_test = spectre::load_render_test_scenario(parsed.render_test_path, &load_error);
+        render_test = megacitycode::load_render_test_scenario(parsed.render_test_path, &load_error);
         if (!render_test)
         {
-            SPECTRE_LOG_ERROR(spectre::LogCategory::App, "%s", load_error.c_str());
-            spectre::shutdown_logging();
+            MEGACITYCODE_LOG_ERROR(megacitycode::LogCategory::App, "%s", load_error.c_str());
+            megacitycode::shutdown_logging();
             return 1;
         }
         options = render_test->make_app_options();
     }
 
-    spectre::App app(std::move(options));
+    megacitycode::App app(std::move(options));
 
     if (!app.initialize())
     {
-        SPECTRE_LOG_ERROR(spectre::LogCategory::App, "Failed to initialize spectre");
-        spectre::shutdown_logging();
+        MEGACITYCODE_LOG_ERROR(megacitycode::LogCategory::App, "Failed to initialize megacitycode");
+        megacitycode::shutdown_logging();
         return 1;
     }
 
@@ -147,7 +150,7 @@ int main(int argc, char* argv[])
             std::chrono::milliseconds(render_test->settle_ms));
         if (!frame)
         {
-            spectre::write_render_test_failure_report(*render_test, app.last_render_test_error());
+            megacitycode::write_render_test_failure_report(*render_test, app.last_render_test_error());
             status = 1;
         }
         else
@@ -155,14 +158,14 @@ int main(int argc, char* argv[])
             std::string finalize_error;
             bool ok = false;
             if (!parsed.export_render_test_path.empty())
-                ok = spectre::export_render_test_frame(parsed.export_render_test_path, *frame, &finalize_error);
+                ok = megacitycode::export_render_test_frame(parsed.export_render_test_path, *frame, &finalize_error);
             else
-                ok = spectre::finalize_render_test_result(*render_test, *frame, parsed.bless_render_test, &finalize_error);
+                ok = megacitycode::finalize_render_test_result(*render_test, *frame, parsed.bless_render_test, &finalize_error);
 
             if (!ok)
             {
-                spectre::write_render_test_failure_report(*render_test, finalize_error);
-                SPECTRE_LOG_ERROR(spectre::LogCategory::App, "%s", finalize_error.c_str());
+                megacitycode::write_render_test_failure_report(*render_test, finalize_error);
+                MEGACITYCODE_LOG_ERROR(megacitycode::LogCategory::App, "%s", finalize_error.c_str());
                 status = 1;
             }
         }
@@ -177,7 +180,7 @@ int main(int argc, char* argv[])
         app.run();
     }
     app.shutdown();
-    spectre::shutdown_logging();
+    megacitycode::shutdown_logging();
 
     return status;
 }

@@ -4,8 +4,8 @@
 
 #include <vector>
 
-using namespace spectre;
-using namespace spectre::tests;
+using namespace megacitycode;
+using namespace megacitycode::tests;
 
 void run_renderer_state_tests()
 {

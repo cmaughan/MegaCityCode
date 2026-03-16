@@ -48,6 +48,6 @@ Make the RPC transport safe under concurrent use and predictable under shutdown.
 
 ## Sub-Agent Split
 
-- one agent on `spectre-nvim` transport changes
+- one agent on `megacitycode-nvim` transport changes
 - one agent on app-side request callsites and clipboard flow
 - merge only after the transport contract is settled

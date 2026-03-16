@@ -118,7 +118,7 @@ def main() -> int:
 
     rendered_config = base_config + "\n\n# Overrides injected by scripts/gen_api_docs.py\n" + "\n".join(overrides) + "\n"
 
-    with tempfile.TemporaryDirectory(prefix="spectre-doxygen-") as temp_dir:
+    with tempfile.TemporaryDirectory(prefix="megacitycode-doxygen-") as temp_dir:
         config_path = Path(temp_dir) / "Doxyfile"
         config_path.write_text(rendered_config, encoding="utf-8")
         run([str(doxygen), str(config_path)], cwd=repo_root, dry_run=args.dry_run)

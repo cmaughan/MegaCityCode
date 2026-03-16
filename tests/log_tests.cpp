@@ -1,12 +1,12 @@
 #include "support/test_support.h"
 
-#include <spectre/log.h>
+#include <megacitycode/log.h>
 
 #include <string>
 #include <vector>
 
-using namespace spectre;
-using namespace spectre::tests;
+using namespace megacitycode;
+using namespace megacitycode::tests;
 
 namespace
 {

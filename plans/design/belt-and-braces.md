@@ -13,8 +13,8 @@ This note captures the remaining "belt and braces" hardening around the Neovim n
 
 Relevant code:
 
-- `libs/spectre-nvim/include/spectre/nvim.h`
-- `libs/spectre-nvim/src/rpc.cpp`
+- `libs/megacitycode-nvim/include/megacitycode/nvim.h`
+- `libs/megacitycode-nvim/src/rpc.cpp`
 - `app/app.cpp`
 
 ## Why This Matters

@@ -47,7 +47,7 @@ if exist "%SCRIPT_DIR%\CMakePresets.json" (
 pushd "%ROOT%" >nul || exit /b 1
 
 set "CACHE_FILE=build\CMakeCache.txt"
-set "EXE=build\%CONFIG%\spectre.exe"
+set "EXE=build\%CONFIG%\megacitycode.exe"
 
 echo.
 echo === %CONFIG% ===
