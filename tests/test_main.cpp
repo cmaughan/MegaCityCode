@@ -11,6 +11,7 @@ void run_ui_events_tests();
 void run_input_tests();
 void run_unicode_tests();
 void run_renderer_state_tests();
+void run_vk_resource_helpers_tests();
 void run_rpc_codec_tests();
 void run_rpc_integration_tests();
 void run_render_test_parser_tests();
@@ -29,6 +30,7 @@ int main()
         run_input_tests();
         run_unicode_tests();
         run_renderer_state_tests();
+        run_vk_resource_helpers_tests();
         run_rpc_codec_tests();
         run_rpc_integration_tests();
         run_render_test_parser_tests();

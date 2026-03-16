@@ -40,9 +40,15 @@ void VkRenderer::upload_dirty_state()
         return;
 
     if (state_.has_dirty_cells())
+    {
         state_.copy_dirty_cells_to(mapped + state_.dirty_cell_offset_bytes());
+        grid_buffer_.flush_range(ctx_.allocator(), state_.dirty_cell_offset_bytes(), state_.dirty_cell_size_bytes());
+    }
     if (state_.overlay_region_dirty())
+    {
         state_.copy_overlay_region_to(mapped + state_.overlay_offset_bytes());
+        grid_buffer_.flush_range(ctx_.allocator(), state_.overlay_offset_bytes(), state_.overlay_region_size_bytes());
+    }
 
     state_.clear_dirty();
 }
@@ -127,13 +133,13 @@ bool VkRenderer::initialize(IWindow& window)
         return false;
     if (!grid_buffer_.initialize(ctx_, 80 * 24 * sizeof(GpuCell)))
         return false;
-    if (!pipeline_.initialize(ctx_, "shaders"))
+    if (!pipeline_.initialize(ctx_.device(), ctx_.render_pass(), "shaders"))
         return false;
     if (!create_command_buffers())
         return false;
     if (!create_sync_objects())
         return false;
-    if (!create_descriptor_pool())
+    if (!create_descriptor_pool(pipeline_, desc_pool_, bg_desc_sets_, fg_desc_sets_))
         return false;
     update_all_descriptor_sets();
     return true;
@@ -200,7 +206,8 @@ bool VkRenderer::create_command_buffers()
     return vkAllocateCommandBuffers(ctx_.device(), &alloc_info, cmd_buffers_.data()) == VK_SUCCESS;
 }
 
-bool VkRenderer::create_descriptor_pool()
+bool VkRenderer::create_descriptor_pool(const VkPipelineManager& pipeline, VkDescriptorPool& pool,
+    std::vector<VkDescriptorSet>& bg_desc_sets, std::vector<VkDescriptorSet>& fg_desc_sets)
 {
     VkDescriptorPoolSize pool_sizes[] = {
         { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, (uint32_t)(MAX_FRAMES_IN_FLIGHT * 2) },
@@ -212,25 +219,25 @@ bool VkRenderer::create_descriptor_pool()
     pool_ci.poolSizeCount = 2;
     pool_ci.pPoolSizes = pool_sizes;
     pool_ci.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    if (vkCreateDescriptorPool(ctx_.device(), &pool_ci, nullptr, &desc_pool_) != VK_SUCCESS)
+    if (vkCreateDescriptorPool(ctx_.device(), &pool_ci, nullptr, &pool) != VK_SUCCESS)
         return false;
 
-    bg_desc_sets_.resize(MAX_FRAMES_IN_FLIGHT);
-    fg_desc_sets_.resize(MAX_FRAMES_IN_FLIGHT);
+    bg_desc_sets.resize(MAX_FRAMES_IN_FLIGHT);
+    fg_desc_sets.resize(MAX_FRAMES_IN_FLIGHT);
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-        VkDescriptorSetLayout bg_layout = pipeline_.bg_desc_layout();
+        VkDescriptorSetLayout bg_layout = pipeline.bg_desc_layout();
         VkDescriptorSetAllocateInfo alloc_info = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
-        alloc_info.descriptorPool = desc_pool_;
+        alloc_info.descriptorPool = pool;
         alloc_info.descriptorSetCount = 1;
         alloc_info.pSetLayouts = &bg_layout;
-        if (vkAllocateDescriptorSets(ctx_.device(), &alloc_info, &bg_desc_sets_[i]) != VK_SUCCESS)
+        if (vkAllocateDescriptorSets(ctx_.device(), &alloc_info, &bg_desc_sets[i]) != VK_SUCCESS)
             return false;
 
-        VkDescriptorSetLayout fg_layout = pipeline_.fg_desc_layout();
+        VkDescriptorSetLayout fg_layout = pipeline.fg_desc_layout();
         alloc_info.pSetLayouts = &fg_layout;
-        if (vkAllocateDescriptorSets(ctx_.device(), &alloc_info, &fg_desc_sets_[i]) != VK_SUCCESS)
+        if (vkAllocateDescriptorSets(ctx_.device(), &alloc_info, &fg_desc_sets[i]) != VK_SUCCESS)
             return false;
     }
 
@@ -239,23 +246,50 @@ bool VkRenderer::create_descriptor_pool()
 
 bool VkRenderer::recreate_frame_resources()
 {
-    if (!ctx_.recreate_swapchain(pixel_w_, pixel_h_))
+    PendingSwapchainResources pending_swapchain;
+    if (!ctx_.build_swapchain_resources(pixel_w_, pixel_h_, pending_swapchain))
         return false;
-    pipeline_.shutdown(ctx_.device());
-    if (!pipeline_.initialize(ctx_, "shaders"))
-        return false;
-    if (desc_pool_)
+
+    VkPipelineManager pending_pipeline;
+    if (!pending_pipeline.initialize(ctx_.device(), pending_swapchain.render_pass, "shaders"))
     {
-        vkDestroyDescriptorPool(ctx_.device(), desc_pool_, nullptr);
-        desc_pool_ = VK_NULL_HANDLE;
-    }
-    if (!create_descriptor_pool())
+        ctx_.destroy_pending_swapchain_resources(pending_swapchain);
         return false;
-    update_all_descriptor_sets();
+    }
+
+    VkDescriptorPool pending_desc_pool = VK_NULL_HANDLE;
+    std::vector<VkDescriptorSet> pending_bg_desc_sets;
+    std::vector<VkDescriptorSet> pending_fg_desc_sets;
+    if (!create_descriptor_pool(pending_pipeline, pending_desc_pool, pending_bg_desc_sets, pending_fg_desc_sets))
+    {
+        if (pending_desc_pool != VK_NULL_HANDLE)
+            vkDestroyDescriptorPool(ctx_.device(), pending_desc_pool, nullptr);
+        pending_pipeline.shutdown(ctx_.device());
+        ctx_.destroy_pending_swapchain_resources(pending_swapchain);
+        return false;
+    }
+
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+        update_descriptor_sets_for_frame(pending_bg_desc_sets[(size_t)i], pending_fg_desc_sets[(size_t)i]);
+
+    VkDescriptorPool old_desc_pool = desc_pool_;
+    ctx_.commit_swapchain_resources(std::move(pending_swapchain));
+
+    pipeline_.swap(pending_pipeline);
+    pending_pipeline.shutdown(ctx_.device());
+
+    desc_pool_ = pending_desc_pool;
+    bg_desc_sets_ = std::move(pending_bg_desc_sets);
+    fg_desc_sets_ = std::move(pending_fg_desc_sets);
+    if (old_desc_pool != VK_NULL_HANDLE)
+        vkDestroyDescriptorPool(ctx_.device(), old_desc_pool, nullptr);
+
+    needs_descriptor_update_ = false;
+    desc_update_pending_frames_ = 0;
     return true;
 }
 
-void VkRenderer::update_descriptor_sets_for_frame(int frame)
+void VkRenderer::update_descriptor_sets_for_frame(VkDescriptorSet bg_desc_set, VkDescriptorSet fg_desc_set)
 {
     VkDescriptorBufferInfo buf_info = {};
     buf_info.buffer = grid_buffer_.buffer();
@@ -264,14 +298,14 @@ void VkRenderer::update_descriptor_sets_for_frame(int frame)
 
     VkWriteDescriptorSet writes[3] = {};
     writes[0] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
-    writes[0].dstSet = bg_desc_sets_[frame];
+    writes[0].dstSet = bg_desc_set;
     writes[0].dstBinding = 0;
     writes[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     writes[0].descriptorCount = 1;
     writes[0].pBufferInfo = &buf_info;
 
     writes[1] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
-    writes[1].dstSet = fg_desc_sets_[frame];
+    writes[1].dstSet = fg_desc_set;
     writes[1].dstBinding = 0;
     writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     writes[1].descriptorCount = 1;
@@ -283,7 +317,7 @@ void VkRenderer::update_descriptor_sets_for_frame(int frame)
     img_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     writes[2] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
-    writes[2].dstSet = fg_desc_sets_[frame];
+    writes[2].dstSet = fg_desc_set;
     writes[2].dstBinding = 1;
     writes[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     writes[2].descriptorCount = 1;
@@ -295,14 +329,24 @@ void VkRenderer::update_descriptor_sets_for_frame(int frame)
 void VkRenderer::update_all_descriptor_sets()
 {
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-        update_descriptor_sets_for_frame(i);
+        update_descriptor_sets_for_frame(bg_desc_sets_[(size_t)i], fg_desc_sets_[(size_t)i]);
     needs_descriptor_update_ = false;
 }
 
 void VkRenderer::set_grid_size(int cols, int rows)
 {
-    state_.set_grid_size(cols, rows, padding_);
-    if (grid_buffer_.ensure_size(ctx_.allocator(), ctx_.device(), state_.buffer_size_bytes()))
+    RendererState next_state = state_;
+    next_state.set_grid_size(cols, rows, padding_);
+
+    const auto resize_result = grid_buffer_.ensure_size(ctx_.allocator(), next_state.buffer_size_bytes());
+    if (resize_result == BufferResizeResult::Failed)
+    {
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to resize Vulkan grid buffer for %dx%d grid", cols, rows);
+        return;
+    }
+
+    state_ = std::move(next_state);
+    if (resize_result == BufferResizeResult::Resized)
         needs_descriptor_update_ = true;
     upload_dirty_state();
 }
@@ -321,13 +365,12 @@ void VkRenderer::set_overlay_cells(std::span<const CellUpdate> updates)
 
 void VkRenderer::set_atlas_texture(const uint8_t* data, int w, int h)
 {
-    atlas_.upload(ctx_, data, w, h);
-    needs_descriptor_update_ = true;
+    queue_full_atlas_upload(pending_atlas_uploads_, data, w, h);
 }
 
 void VkRenderer::update_atlas_region(int x, int y, int w, int h, const uint8_t* data)
 {
-    atlas_.upload_region(ctx_, x, y, w, h, data);
+    queue_atlas_region_upload(pending_atlas_uploads_, x, y, w, h, data);
 }
 
 void VkRenderer::set_cursor(int col, int row, const CursorStyle& style)
@@ -402,7 +445,7 @@ bool VkRenderer::begin_frame()
 
     if (needs_descriptor_update_)
     {
-        update_descriptor_sets_for_frame((int)current_frame_);
+        update_descriptor_sets_for_frame(bg_desc_sets_[current_frame_], fg_desc_sets_[current_frame_]);
         desc_update_pending_frames_ |= ((1u << MAX_FRAMES_IN_FLIGHT) - 1u);
         desc_update_pending_frames_ &= ~(1u << current_frame_);
         if (desc_update_pending_frames_ == 0)
@@ -410,7 +453,7 @@ bool VkRenderer::begin_frame()
     }
     else if (desc_update_pending_frames_ & (1u << current_frame_))
     {
-        update_descriptor_sets_for_frame((int)current_frame_);
+        update_descriptor_sets_for_frame(bg_desc_sets_[current_frame_], fg_desc_sets_[current_frame_]);
         desc_update_pending_frames_ &= ~(1u << current_frame_);
     }
 
@@ -423,6 +466,9 @@ void VkRenderer::record_command_buffer(VkCommandBuffer cmd, uint32_t image_index
 {
     VkCommandBufferBeginInfo begin_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
     vkBeginCommandBuffer(cmd, &begin_info);
+
+    if (!flush_pending_atlas_uploads(cmd))
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to record pending atlas uploads");
 
     VkClearValue clear_value = {};
     clear_value.color = { { 0.1f, 0.1f, 0.1f, 1.0f } };
@@ -499,6 +545,26 @@ void VkRenderer::record_command_buffer(VkCommandBuffer cmd, uint32_t image_index
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
     }
     vkEndCommandBuffer(cmd);
+}
+
+bool VkRenderer::flush_pending_atlas_uploads(VkCommandBuffer cmd)
+{
+    if (pending_atlas_uploads_.empty())
+        return true;
+
+    for (size_t frame = 0; frame < in_flight_fences_.size(); ++frame)
+    {
+        if (frame == current_frame_)
+            continue;
+        if (vkWaitForFences(ctx_.device(), 1, &in_flight_fences_[frame], VK_TRUE, UINT64_MAX) != VK_SUCCESS)
+            return false;
+    }
+
+    if (!atlas_.record_uploads(ctx_, cmd, pending_atlas_uploads_))
+        return false;
+
+    pending_atlas_uploads_.clear();
+    return true;
 }
 
 void VkRenderer::end_frame()

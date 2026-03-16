@@ -16,21 +16,24 @@ Make the Vulkan backend less fragile under resize/resource pressure and reduce u
 
 ## Implementation Plan
 
-1. Audit recreation/error paths.
-   - check allocation return values consistently
-   - avoid destroying the old resource before the replacement is known-good where possible
-2. Simplify swapchain/resource rebuild flow.
-   - reduce duplicated rebuild sequencing
-   - keep failure cleanup explicit
-3. Rework atlas upload scheduling.
-   - move away from fully synchronous per-upload waits if possible
-   - integrate uploads more cleanly into the frame path
+- [x] Audit recreation/error paths.
+  - [x] check allocation return values consistently
+  - [x] avoid destroying the old resource before the replacement is known-good where possible
+- [x] Simplify swapchain/resource rebuild flow.
+  - [x] reduce duplicated rebuild sequencing
+  - [x] keep failure cleanup explicit
+- [x] Rework atlas upload scheduling.
+  - [x] move away from fully synchronous per-upload waits by batching atlas uploads into the frame path
+  - [x] keep pending full-atlas snapshots coherent when later dirty-region uploads arrive before the next frame
+- [x] Add focused regression coverage for safe buffer replacement and atlas upload queue behavior.
+- [ ] Reconcile the remaining local render snapshot drift in `spectre-render-basic-view`, `spectre-render-cmdline-view`, and `spectre-render-unicode-view`.
 
 ## Tests
 
-- add failure-injection or mock-path tests where feasible
-- at minimum add regression tests around safe failure returns
-- keep render snapshots and smoke green after the changes
+- [x] add regression tests around safe failure returns
+- [x] `spectre-app-smoke`
+- [x] `spectre-tests` after building `spectre-rpc-fake`
+- [ ] `ctest --test-dir build --build-config Release --output-on-failure` still reports render snapshot drift in the three `spectre-render-*` scenarios
 
 ## Suggested Slice Order
 

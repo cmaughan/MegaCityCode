@@ -39,12 +39,14 @@ public:
 private:
     bool create_sync_objects();
     bool create_command_buffers();
-    bool create_descriptor_pool();
+    bool create_descriptor_pool(const VkPipelineManager& pipeline, VkDescriptorPool& pool,
+        std::vector<VkDescriptorSet>& bg_desc_sets, std::vector<VkDescriptorSet>& fg_desc_sets);
     bool recreate_frame_resources();
-    void update_descriptor_sets_for_frame(int frame);
+    void update_descriptor_sets_for_frame(VkDescriptorSet bg_desc_set, VkDescriptorSet fg_desc_set);
     void update_all_descriptor_sets();
     void record_command_buffer(VkCommandBuffer cmd, uint32_t image_index);
     void upload_dirty_state();
+    bool flush_pending_atlas_uploads(VkCommandBuffer cmd);
     bool ensure_capture_buffer(size_t required_size);
     void destroy_capture_buffer();
     void finish_capture_readback();
@@ -76,6 +78,7 @@ private:
     int pixel_h_ = 0;
 
     RendererState state_;
+    std::vector<PendingAtlasUpload> pending_atlas_uploads_;
     bool needs_descriptor_update_ = true;
     uint32_t desc_update_pending_frames_ = 0;
     bool capture_requested_ = false;

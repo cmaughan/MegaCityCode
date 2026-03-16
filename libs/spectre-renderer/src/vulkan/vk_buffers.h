@@ -1,4 +1,6 @@
 #pragma once
+#include "vk_resource_helpers.h"
+
 #include <cstdint>
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
@@ -15,28 +17,26 @@ public:
     bool initialize(VkContext& ctx, size_t initial_size);
     void shutdown(VmaAllocator allocator);
 
-    // Resize buffer if needed. Returns true if resized.
-    bool ensure_size(VmaAllocator allocator, VkDevice device, size_t required_size);
+    BufferResizeResult ensure_size(VmaAllocator allocator, size_t required_size);
+    void flush_range(VmaAllocator allocator, VkDeviceSize offset, VkDeviceSize size) const;
 
     void* mapped() const
     {
-        return mapped_;
+        return buffer_.mapped;
     }
     VkBuffer buffer() const
     {
-        return buffer_;
+        return buffer_.buffer;
     }
     size_t size() const
     {
-        return size_;
+        return buffer_.size;
     }
 
 private:
-    VkBuffer buffer_ = VK_NULL_HANDLE;
-    VmaAllocation allocation_ = VK_NULL_HANDLE;
-    void* mapped_ = nullptr;
-    size_t size_ = 0;
-    VmaAllocator allocator_ = VK_NULL_HANDLE;
+    using BufferState = OwnedMappedBuffer<VkBuffer, VmaAllocation>;
+
+    BufferState buffer_;
 };
 
 // Staging buffer for atlas uploads

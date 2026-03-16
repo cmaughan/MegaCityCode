@@ -1,8 +1,8 @@
 #include "vk_pipeline.h"
-#include "vk_context.h"
 
 #include <fstream>
 #include <spectre/log.h>
+#include <utility>
 #include <vector>
 
 namespace spectre
@@ -35,18 +35,34 @@ VkShaderModule VkPipelineManager::load_shader(VkDevice device, const std::string
     return module;
 }
 
-bool VkPipelineManager::initialize(VkContext& ctx, const std::string& shader_dir)
+bool VkPipelineManager::initialize(VkDevice device, VkRenderPass render_pass, const std::string& shader_dir)
 {
-    VkDevice device = ctx.device();
-    reset_objects(device);
-
     auto bg_vert = load_shader(device, shader_dir + "/grid_bg.vert.spv");
     auto bg_frag = load_shader(device, shader_dir + "/grid_bg.frag.spv");
     auto fg_vert = load_shader(device, shader_dir + "/grid_fg.vert.spv");
     auto fg_frag = load_shader(device, shader_dir + "/grid_fg.frag.spv");
 
     if (!bg_vert || !bg_frag || !fg_vert || !fg_frag)
+    {
+        if (bg_vert)
+            vkDestroyShaderModule(device, bg_vert, nullptr);
+        if (bg_frag)
+            vkDestroyShaderModule(device, bg_frag, nullptr);
+        if (fg_vert)
+            vkDestroyShaderModule(device, fg_vert, nullptr);
+        if (fg_frag)
+            vkDestroyShaderModule(device, fg_frag, nullptr);
         return false;
+    }
+
+    VkPipelineManager pending;
+    auto cleanup = [&]() {
+        pending.shutdown(device);
+        vkDestroyShaderModule(device, bg_vert, nullptr);
+        vkDestroyShaderModule(device, bg_frag, nullptr);
+        vkDestroyShaderModule(device, fg_vert, nullptr);
+        vkDestroyShaderModule(device, fg_frag, nullptr);
+    };
 
     VkPushConstantRange push_range = {};
     push_range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
@@ -63,8 +79,11 @@ bool VkPipelineManager::initialize(VkContext& ctx, const std::string& shader_dir
         VkDescriptorSetLayoutCreateInfo layout_ci = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
         layout_ci.bindingCount = 1;
         layout_ci.pBindings = &ssbo_binding;
-        if (vkCreateDescriptorSetLayout(device, &layout_ci, nullptr, &bg_desc_layout_) != VK_SUCCESS)
+        if (vkCreateDescriptorSetLayout(device, &layout_ci, nullptr, &pending.bg_desc_layout_) != VK_SUCCESS)
+        {
+            cleanup();
             return false;
+        }
     }
 
     {
@@ -81,22 +100,31 @@ bool VkPipelineManager::initialize(VkContext& ctx, const std::string& shader_dir
         VkDescriptorSetLayoutCreateInfo layout_ci = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
         layout_ci.bindingCount = 2;
         layout_ci.pBindings = bindings;
-        if (vkCreateDescriptorSetLayout(device, &layout_ci, nullptr, &fg_desc_layout_) != VK_SUCCESS)
+        if (vkCreateDescriptorSetLayout(device, &layout_ci, nullptr, &pending.fg_desc_layout_) != VK_SUCCESS)
+        {
+            cleanup();
             return false;
+        }
     }
 
     {
         VkPipelineLayoutCreateInfo layout_ci = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
         layout_ci.setLayoutCount = 1;
-        layout_ci.pSetLayouts = &bg_desc_layout_;
+        layout_ci.pSetLayouts = &pending.bg_desc_layout_;
         layout_ci.pushConstantRangeCount = 1;
         layout_ci.pPushConstantRanges = &push_range;
-        if (vkCreatePipelineLayout(device, &layout_ci, nullptr, &bg_layout_) != VK_SUCCESS)
+        if (vkCreatePipelineLayout(device, &layout_ci, nullptr, &pending.bg_layout_) != VK_SUCCESS)
+        {
+            cleanup();
             return false;
+        }
 
-        layout_ci.pSetLayouts = &fg_desc_layout_;
-        if (vkCreatePipelineLayout(device, &layout_ci, nullptr, &fg_layout_) != VK_SUCCESS)
+        layout_ci.pSetLayouts = &pending.fg_desc_layout_;
+        if (vkCreatePipelineLayout(device, &layout_ci, nullptr, &pending.fg_layout_) != VK_SUCCESS)
+        {
+            cleanup();
             return false;
+        }
     }
 
     VkPipelineVertexInputStateCreateInfo vertex_input = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
@@ -146,12 +174,15 @@ bool VkPipelineManager::initialize(VkContext& ctx, const std::string& shader_dir
         pi.pMultisampleState = &multisample;
         pi.pColorBlendState = &blend;
         pi.pDynamicState = &dynamic_state;
-        pi.layout = bg_layout_;
-        pi.renderPass = ctx.render_pass();
+        pi.layout = pending.bg_layout_;
+        pi.renderPass = render_pass;
         pi.subpass = 0;
 
-        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pi, nullptr, &bg_pipeline_) != VK_SUCCESS)
+        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pi, nullptr, &pending.bg_pipeline_) != VK_SUCCESS)
+        {
+            cleanup();
             return false;
+        }
     }
 
     {
@@ -189,24 +220,43 @@ bool VkPipelineManager::initialize(VkContext& ctx, const std::string& shader_dir
         pi.pMultisampleState = &multisample;
         pi.pColorBlendState = &blend;
         pi.pDynamicState = &dynamic_state;
-        pi.layout = fg_layout_;
-        pi.renderPass = ctx.render_pass();
+        pi.layout = pending.fg_layout_;
+        pi.renderPass = render_pass;
         pi.subpass = 0;
 
-        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pi, nullptr, &fg_pipeline_) != VK_SUCCESS)
+        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pi, nullptr, &pending.fg_pipeline_) != VK_SUCCESS)
+        {
+            cleanup();
             return false;
+        }
     }
 
     vkDestroyShaderModule(device, bg_vert, nullptr);
     vkDestroyShaderModule(device, bg_frag, nullptr);
     vkDestroyShaderModule(device, fg_vert, nullptr);
     vkDestroyShaderModule(device, fg_frag, nullptr);
+
+    reset_objects(device);
+    swap(pending);
+    pending.shutdown(device);
     return true;
 }
 
 void VkPipelineManager::shutdown(VkDevice device)
 {
     reset_objects(device);
+}
+
+void VkPipelineManager::swap(VkPipelineManager& other) noexcept
+{
+    using std::swap;
+
+    swap(bg_pipeline_, other.bg_pipeline_);
+    swap(fg_pipeline_, other.fg_pipeline_);
+    swap(bg_layout_, other.bg_layout_);
+    swap(fg_layout_, other.fg_layout_);
+    swap(bg_desc_layout_, other.bg_desc_layout_);
+    swap(fg_desc_layout_, other.fg_desc_layout_);
 }
 
 void VkPipelineManager::reset_objects(VkDevice device)

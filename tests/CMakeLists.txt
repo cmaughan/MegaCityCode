@@ -21,6 +21,7 @@ add_executable(spectre-tests
     input_tests.cpp
     unicode_tests.cpp
     renderer_state_tests.cpp
+    vk_resource_helpers_tests.cpp
     rpc_codec_tests.cpp
     rpc_integration_tests.cpp
     render_test_parser_tests.cpp

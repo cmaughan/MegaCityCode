@@ -74,30 +74,17 @@ bool VkAtlas::initialize(VkContext& ctx)
         return false;
     }
 
-    VkBufferCreateInfo buf_ci = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-    buf_ci.size = static_cast<VkDeviceSize>(ATLAS_SIZE) * ATLAS_SIZE * kAtlasPixelSize;
-    buf_ci.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-
-    VmaAllocationCreateInfo staging_ci = {};
-    staging_ci.usage = VMA_MEMORY_USAGE_AUTO;
-    staging_ci.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-
-    VmaAllocationInfo staging_info = {};
-    if (vmaCreateBuffer(ctx.allocator(), &buf_ci, &staging_ci, &staging_buffer_, &staging_alloc_, &staging_info) != VK_SUCCESS)
-    {
-        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create atlas staging buffer");
+    if (!ensure_staging_capacity(ctx, static_cast<size_t>(ATLAS_SIZE) * ATLAS_SIZE * kAtlasPixelSize))
         return false;
-    }
-    staging_mapped_ = staging_info.pMappedData;
 
-    return upload_internal(ctx, 0, 0, 0, 0, nullptr);
+    return transition_to_shader_read(ctx);
 }
 
 void VkAtlas::shutdown(VkContext& ctx)
 {
     VkDevice device = ctx.device();
-    if (staging_buffer_)
-        vmaDestroyBuffer(ctx.allocator(), staging_buffer_, staging_alloc_);
+    if (staging_.buffer)
+        vmaDestroyBuffer(ctx.allocator(), staging_.buffer, staging_.allocation);
     if (sampler_)
         vkDestroySampler(device, sampler_, nullptr);
     if (image_view_)
@@ -106,18 +93,57 @@ void VkAtlas::shutdown(VkContext& ctx)
         vmaDestroyImage(ctx.allocator(), image_, allocation_);
     if (cmd_pool_)
         vkDestroyCommandPool(device, cmd_pool_, nullptr);
+    staging_ = {};
 }
 
-void VkAtlas::upload(VkContext& ctx, const uint8_t* data, int w, int h)
+bool VkAtlas::ensure_staging_capacity(VkContext& ctx, size_t required_size)
 {
-    if (!upload_internal(ctx, 0, 0, w, h, data))
-        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to upload full atlas");
+    return ensure_buffer_size(staging_, required_size, [&](size_t requested_size, BufferState& replacement) {
+            VkBufferCreateInfo buf_ci = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+            buf_ci.size = requested_size;
+            buf_ci.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+            VmaAllocationCreateInfo staging_ci = {};
+            staging_ci.usage = VMA_MEMORY_USAGE_AUTO;
+            staging_ci.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+            VmaAllocationInfo staging_info = {};
+            if (vmaCreateBuffer(ctx.allocator(), &buf_ci, &staging_ci, &replacement.buffer, &replacement.allocation, &staging_info) != VK_SUCCESS)
+            {
+                SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create atlas staging buffer");
+                return false;
+            }
+
+            replacement.mapped = staging_info.pMappedData;
+            replacement.size = requested_size;
+            return true; }, [&](const BufferState& existing) { vmaDestroyBuffer(ctx.allocator(), existing.buffer, existing.allocation); }) != BufferResizeResult::Failed;
 }
 
-void VkAtlas::upload_region(VkContext& ctx, int x, int y, int w, int h, const uint8_t* data)
+bool VkAtlas::transition_to_shader_read(VkContext& ctx)
 {
-    if (!upload_internal(ctx, x, y, w, h, data))
-        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to upload atlas region");
+    VkCommandBuffer cmd = begin_single_command(ctx);
+    if (cmd == VK_NULL_HANDLE)
+        return false;
+
+    VkImageMemoryBarrier barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = image_;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.oldLayout = current_layout_;
+    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barrier.srcAccessMask = 0;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    if (!end_single_command(ctx, cmd))
+        return false;
+
+    current_layout_ = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    return true;
 }
 
 VkCommandBuffer VkAtlas::begin_single_command(VkContext& ctx)
@@ -169,19 +195,30 @@ bool VkAtlas::end_single_command(VkContext& ctx, VkCommandBuffer cmd)
     return ok;
 }
 
-bool VkAtlas::upload_internal(VkContext& ctx, int x, int y, int w, int h, const uint8_t* data)
+bool VkAtlas::record_uploads(VkContext& ctx, VkCommandBuffer cmd, std::span<const PendingAtlasUpload> uploads)
 {
-    VkCommandBuffer cmd = begin_single_command(ctx);
-    if (cmd == VK_NULL_HANDLE)
+    if (uploads.empty())
+        return true;
+
+    size_t total_bytes = 0;
+    for (const auto& upload : uploads)
+        total_bytes += upload.pixels.size();
+    if (total_bytes == 0)
+        return true;
+
+    if (!ensure_staging_capacity(ctx, total_bytes))
         return false;
 
-    if (data && w > 0 && h > 0)
+    auto* dst = static_cast<uint8_t*>(staging_.mapped);
+    size_t buffer_offset = 0;
+    for (const auto& upload : uploads)
     {
-        uint8_t* dst = static_cast<uint8_t*>(staging_mapped_);
-        for (int row = 0; row < h; row++)
-            memcpy(dst + (size_t)row * w * kAtlasPixelSize, data + (size_t)row * w * kAtlasPixelSize,
-                (size_t)w * kAtlasPixelSize);
+        if (upload.pixels.empty())
+            continue;
+        std::memcpy(dst + buffer_offset, upload.pixels.data(), upload.pixels.size());
+        buffer_offset += upload.pixels.size();
     }
+    vmaFlushAllocation(ctx.allocator(), staging_.allocation, 0, buffer_offset);
 
     VkImageMemoryBarrier barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -199,15 +236,20 @@ bool VkAtlas::upload_internal(VkContext& ctx, int x, int y, int w, int h, const 
         VK_PIPELINE_STAGE_TRANSFER_BIT,
         0, 0, nullptr, 0, nullptr, 1, &barrier);
 
-    if (data && w > 0 && h > 0)
+    buffer_offset = 0;
+    for (const auto& upload : uploads)
     {
+        if (upload.pixels.empty())
+            continue;
+
         VkBufferImageCopy region = {};
-        region.bufferOffset = 0;
+        region.bufferOffset = buffer_offset;
         region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         region.imageSubresource.layerCount = 1;
-        region.imageOffset = { x, y, 0 };
-        region.imageExtent = { (uint32_t)w, (uint32_t)h, 1 };
-        vkCmdCopyBufferToImage(cmd, staging_buffer_, image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+        region.imageOffset = { upload.x, upload.y, 0 };
+        region.imageExtent = { static_cast<uint32_t>(upload.w), static_cast<uint32_t>(upload.h), 1 };
+        vkCmdCopyBufferToImage(cmd, staging_.buffer, image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+        buffer_offset += upload.pixels.size();
     }
 
     barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
@@ -216,9 +258,6 @@ bool VkAtlas::upload_internal(VkContext& ctx, int x, int y, int w, int h, const 
     barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
     vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
         0, 0, nullptr, 0, nullptr, 1, &barrier);
-
-    if (!end_single_command(ctx, cmd))
-        return false;
 
     current_layout_ = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     return true;

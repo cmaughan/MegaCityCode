@@ -151,6 +151,16 @@ All grid and GPU state is only touched by the main thread.
 
 All fetched automatically via CMake FetchContent (in `cmake/FetchDependencies.cmake`): SDL3, FreeType, HarfBuzz, MPack. On Windows: vk-bootstrap, VMA. Shaders compiled from GLSL to SPIR-V via glslc (Windows, `cmake/CompileShaders.cmake`) or from Metal to metallib via xcrun (macOS, `cmake/CompileShaders_Metal.cmake`).
 
+## Validation Expectations
+
+- If you touch RPC, redraw handling, or input translation, run `ctest`.
+- If you touch renderer code, build the platform-specific app target and verify startup at least once.
+- After implementing a user-facing feature or rendering-affecting change, run the render smoke/snapshot suite with `t.bat` or `ctest` and confirm the relevant `spectre-render-*` scenario still passes.
+- When blessing render references, use `py do.py blessbasic`, `py do.py blesscmdline`, `py do.py blessunicode`, or `py do.py blessall` from the repo root instead of calling `spectre.exe --render-test` manually.
+- If you change build wiring, keep both Windows and macOS paths valid in CI.
+- After every completed work item, run one final `clang-format` pass across all touched source files in a single shot instead of formatting piecemeal during the work.
+- When you complete a work item or a concrete subtask from `plans/work-items/*.md`, update that markdown file in the same turn and mark completed entries with Markdown task ticks (`- [x]`).
+
 ## Platform
 
 - **Windows**: MSVC/Visual Studio 2022. Process spawning uses `CreateProcess` with piped stdin/stdout. Built as a Windows GUI app (`WIN32_EXECUTABLE`).

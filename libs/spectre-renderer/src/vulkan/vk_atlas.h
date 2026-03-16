@@ -1,4 +1,7 @@
 #pragma once
+#include "vk_resource_helpers.h"
+
+#include <span>
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
 
@@ -14,9 +17,7 @@ public:
 
     bool initialize(VkContext& ctx);
     void shutdown(VkContext& ctx);
-
-    void upload(VkContext& ctx, const uint8_t* data, int w, int h);
-    void upload_region(VkContext& ctx, int x, int y, int w, int h, const uint8_t* data);
+    bool record_uploads(VkContext& ctx, VkCommandBuffer cmd, std::span<const PendingAtlasUpload> uploads);
 
     VkImageView image_view() const
     {
@@ -28,7 +29,10 @@ public:
     }
 
 private:
-    bool upload_internal(VkContext& ctx, int x, int y, int w, int h, const uint8_t* data);
+    using BufferState = OwnedMappedBuffer<VkBuffer, VmaAllocation>;
+
+    bool ensure_staging_capacity(VkContext& ctx, size_t required_size);
+    bool transition_to_shader_read(VkContext& ctx);
     VkCommandBuffer begin_single_command(VkContext& ctx);
     bool end_single_command(VkContext& ctx, VkCommandBuffer cmd);
 
@@ -37,9 +41,7 @@ private:
     VkImageView image_view_ = VK_NULL_HANDLE;
     VkSampler sampler_ = VK_NULL_HANDLE;
     VkCommandPool cmd_pool_ = VK_NULL_HANDLE;
-    VkBuffer staging_buffer_ = VK_NULL_HANDLE;
-    VmaAllocation staging_alloc_ = VK_NULL_HANDLE;
-    void* staging_mapped_ = nullptr;
+    BufferState staging_;
     VkImageLayout current_layout_ = VK_IMAGE_LAYOUT_UNDEFINED;
 };
 

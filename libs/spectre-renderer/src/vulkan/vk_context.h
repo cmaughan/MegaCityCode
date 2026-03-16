@@ -19,6 +19,12 @@ struct SwapchainInfo
     std::vector<VkFramebuffer> framebuffers;
 };
 
+struct PendingSwapchainResources
+{
+    SwapchainInfo swapchain;
+    VkRenderPass render_pass = VK_NULL_HANDLE;
+};
+
 class VkContext
 {
 public:
@@ -26,8 +32,9 @@ public:
     void shutdown();
 
     bool recreate_swapchain(int width, int height);
-    void create_framebuffers();
-    void destroy_swapchain();
+    bool build_swapchain_resources(int width, int height, PendingSwapchainResources& pending);
+    void commit_swapchain_resources(PendingSwapchainResources&& pending);
+    void destroy_pending_swapchain_resources(PendingSwapchainResources& pending);
 
     VkInstance instance() const
     {
@@ -67,7 +74,9 @@ public:
     }
 
 private:
-    bool create_render_pass(VkFormat format);
+    bool create_render_pass(VkFormat format, VkRenderPass& render_pass);
+    bool create_framebuffers(SwapchainInfo& swapchain, VkRenderPass render_pass);
+    void destroy_swapchain();
 
     VkInstance instance_ = VK_NULL_HANDLE;
     VkDebugUtilsMessengerEXT debug_messenger_ = VK_NULL_HANDLE;

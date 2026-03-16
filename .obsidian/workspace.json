@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "plans/work-items/05 vulkan robustness and atlas upload rework -bug.md",
+                "file": "plans/reviews/review-concensus.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "05 vulkan robustness and atlas upload rework -bug"
+              "title": "review-concensus"
             }
           }
         ]
@@ -78,7 +78,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 396.5
+    "width": 579.4999961853027
   },
   "right": {
     "id": "65410c6e45089559",
@@ -185,38 +185,37 @@
   },
   "active": "c378cd0fc68e32e5",
   "lastOpenFiles": [
-    "plans/work-items/02 render test extraction and parser unification -feature.md",
-    "plans/work-items-complete/02 render test extraction and parser unification -feature.md",
-    "build/Testing/Temporary/CTestCheckpoint.txt",
-    "build/Testing/Temporary/LastTest.log.tmpf82ff",
-    "build/CMakeFiles/Progress/98",
-    "build/CMakeFiles/Progress/97",
-    "build/CMakeFiles/Progress/96",
-    "build/CMakeFiles/Progress/95",
-    "build/CMakeFiles/Progress/99",
-    "build/tests/CMakeFiles/spectre-tests.dir/render_test_parser_tests.cpp-e4eb3160.o.tmp",
-    "build/tests/CMakeFiles/spectre-tests.dir/__/app/render_test.cpp-363cff09.o.tmp",
-    "build/CMakeFiles/Progress/74",
     "plans/work-items/05 vulkan robustness and atlas upload rework -bug.md",
-    "plans/work-items/07 platform text and display integration -feature.md",
-    "plans/work-items/08 gui ergonomics and observability -feature.md",
-    "plans/work-items-complete/00 rpc transport serialization and shutdown hardening -bug.md",
-    "plans/work-items-complete/01 app loop and ui request decomposition -feature.md",
-    "plans/work-items-complete/03 public api boundary cleanup -feature.md",
-    "plans/work-items-complete/04 grid wide-cell repair and redraw robustness -bug.md",
-    "plans/work-items-complete/06 test seam cleanup and lifecycle coverage -test.md",
-    "plans/work-items/03 public api boundary cleanup -feature.md",
-    "tests/render/out/cmdline-view.macos.diff.bmp",
-    "tests/render/out/basic-view.macos.diff.bmp",
-    "plans/reviews/review-concensus.md",
     "plans/prompts/consensus_review.md",
-    "plans/reviews/review-latest.claude.md",
-    "plans/reviews/review-latest.gpt.md",
+    "build/Testing/Temporary/CTestCheckpoint.txt",
+    "build/Testing/Temporary/LastTest.log.tmp",
+    "build/spectre.dir/Release/spectre.tlog/link-cvtres.write.1.tlog",
+    "build/spectre.dir/Release/spectre.tlog/link-cvtres.read.1.tlog",
+    "build/spectre.dir/Release/spectre.tlog/link-rc.write.1.tlog",
+    "build/spectre.dir/Release/spectre.tlog/link-rc.read.1.tlog",
+    "build/spectre.dir/Release/spectre.tlog/unsuccessfulbuild",
+    "build/libs/spectre-renderer/spectre-renderer.dir/Release/spectre-renderer.tlog/unsuccessfulbuild",
+    "build/libs/spectre-window/spectre-window.dir/Release/spectre-window.tlog/unsuccessfulbuild",
+    "build/libs/spectre-nvim/spectre-nvim.dir/Release/spectre-nvim.tlog/unsuccessfulbuild",
+    "plans/reviews/review-concensus.md",
     "plans/prompts/review.md",
-    "plans/work-items/06 test seam cleanup and lifecycle coverage -test.md",
-    "plans/work-items/01 app loop and ui request decomposition -feature.md",
+    "plans/work-items/07 platform text and display integration -feature.md",
+    "plans/design/belt-and-braces.md",
     "plans/work-items/04 grid wide-cell repair and redraw robustness -bug.md",
+    "plans/work-items-complete/06 test seam cleanup and lifecycle coverage -test.md",
+    "plans/work-items-complete/04 grid wide-cell repair and redraw robustness -bug.md",
+    "plans/work-items-complete/03 public api boundary cleanup -feature.md",
+    "plans/work-items-complete/02 render test extraction and parser unification -feature.md",
+    "plans/work-items-complete/01 app loop and ui request decomposition -feature.md",
+    "plans/work-items-complete/00 rpc transport serialization and shutdown hardening -bug.md",
+    "plans/work-items/03 public api boundary cleanup -feature.md",
+    "plans/work-items/01 app loop and ui request decomposition -feature.md",
+    "plans/work-items/08 gui ergonomics and observability -feature.md",
+    "plans/work-items/06 test seam cleanup and lifecycle coverage -test.md",
     "plans/work-items/00 rpc transport serialization and shutdown hardening -bug.md",
+    "plans/work-items/02 render test extraction and parser unification -feature.md",
+    "plans/reviews/review-latest.gpt.md",
+    "plans/reviews/review-latest.claude.md",
     "plans/reviews/all_code.md",
     "tests/render/out/unicode-view.windows.diff.bmp",
     "tests/render/out/cmdline-view.windows.diff.bmp",
@@ -226,10 +225,11 @@
     "tests/render/out/cmdline-view.windows.actual.bmp",
     "tests/render/out/basic-view.windows.diff.bmp",
     "tests/render/reference/basic-view.windows.bmp",
+    "tests/render/out/basic-view.windows.actual.bmp",
+    "build-tools/_deps/vulkanmemoryallocator-src/tools/GpuMemDumpVis/README_files/Legend_Image_Linear.png",
     "build-tools/_deps/vulkanmemoryallocator-src/tools/GpuMemDumpVis/README.md",
     "build-tools/_deps/freetype-src/tests/README.md",
     "plans/design/learnings.md",
-    "build-tools/_deps/mpack-src/test/README.md",
-    "build-tools/_deps/mpack-src/docs/reader.md"
+    "build-tools/_deps/mpack-src/test/README.md"
   ]
 }

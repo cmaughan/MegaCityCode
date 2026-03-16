@@ -7,61 +7,48 @@ namespace spectre
 
 bool VkGridBuffer::initialize(VkContext& ctx, size_t initial_size)
 {
-    allocator_ = ctx.allocator();
-
-    VkBufferCreateInfo buf_ci = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-    buf_ci.size = initial_size;
-    buf_ci.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-    buf_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    VmaAllocationCreateInfo alloc_ci = {};
-    alloc_ci.usage = VMA_MEMORY_USAGE_AUTO;
-    alloc_ci.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-
-    VmaAllocationInfo alloc_info;
-    if (vmaCreateBuffer(allocator_, &buf_ci, &alloc_ci, &buffer_, &allocation_, &alloc_info) != VK_SUCCESS)
-    {
-        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create grid SSBO");
-        return false;
-    }
-
-    mapped_ = alloc_info.pMappedData;
-    size_ = initial_size;
-    return true;
+    return ensure_size(ctx.allocator(), initial_size) != BufferResizeResult::Failed;
 }
 
 void VkGridBuffer::shutdown(VmaAllocator allocator)
 {
-    if (buffer_)
+    if (buffer_.buffer)
     {
-        vmaDestroyBuffer(allocator, buffer_, allocation_);
-        buffer_ = VK_NULL_HANDLE;
-        allocation_ = VK_NULL_HANDLE;
-        mapped_ = nullptr;
+        vmaDestroyBuffer(allocator, buffer_.buffer, buffer_.allocation);
+        buffer_ = {};
     }
 }
 
-bool VkGridBuffer::ensure_size(VmaAllocator allocator, VkDevice device, size_t required_size)
+BufferResizeResult VkGridBuffer::ensure_size(VmaAllocator allocator, size_t required_size)
 {
-    if (required_size <= size_)
-        return false;
+    return ensure_buffer_size(buffer_, required_size, [&](size_t requested_size, BufferState& replacement) {
+            VkBufferCreateInfo buf_ci = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+            buf_ci.size = requested_size;
+            buf_ci.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+            buf_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    vmaDestroyBuffer(allocator, buffer_, allocation_);
+            VmaAllocationCreateInfo alloc_ci = {};
+            alloc_ci.usage = VMA_MEMORY_USAGE_AUTO;
+            alloc_ci.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
-    VkBufferCreateInfo buf_ci = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-    buf_ci.size = required_size;
-    buf_ci.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-    buf_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+            VmaAllocationInfo alloc_info = {};
+            if (vmaCreateBuffer(allocator, &buf_ci, &alloc_ci, &replacement.buffer, &replacement.allocation, &alloc_info) != VK_SUCCESS)
+            {
+                SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create grid SSBO");
+                return false;
+            }
 
-    VmaAllocationCreateInfo alloc_ci = {};
-    alloc_ci.usage = VMA_MEMORY_USAGE_AUTO;
-    alloc_ci.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+            replacement.mapped = alloc_info.pMappedData;
+            replacement.size = requested_size;
+            return true; }, [&](const BufferState& existing) { vmaDestroyBuffer(allocator, existing.buffer, existing.allocation); });
+}
 
-    VmaAllocationInfo alloc_info;
-    vmaCreateBuffer(allocator, &buf_ci, &alloc_ci, &buffer_, &allocation_, &alloc_info);
-    mapped_ = alloc_info.pMappedData;
-    size_ = required_size;
-    return true;
+void VkGridBuffer::flush_range(VmaAllocator allocator, VkDeviceSize offset, VkDeviceSize size) const
+{
+    if (buffer_.buffer == VK_NULL_HANDLE)
+        return;
+
+    vmaFlushAllocation(allocator, buffer_.allocation, offset, size);
 }
 
 bool VkStagingBuffer::initialize(VmaAllocator allocator, size_t size)

@@ -10,6 +10,22 @@
 namespace spectre
 {
 
+namespace
+{
+
+void destroy_swapchain_info(VkDevice device, SwapchainInfo& swapchain)
+{
+    for (auto fb : swapchain.framebuffers)
+        vkDestroyFramebuffer(device, fb, nullptr);
+    for (auto iv : swapchain.image_views)
+        vkDestroyImageView(device, iv, nullptr);
+    if (swapchain.swapchain != VK_NULL_HANDLE)
+        vkDestroySwapchainKHR(device, swapchain.swapchain, nullptr);
+    swapchain = {};
+}
+
+} // namespace
+
 bool VkContext::initialize(SDL_Window* window)
 {
     window_ = window;
@@ -93,7 +109,7 @@ bool VkContext::initialize(SDL_Window* window)
     return recreate_swapchain(w, h);
 }
 
-bool VkContext::create_render_pass(VkFormat format)
+bool VkContext::create_render_pass(VkFormat format, VkRenderPass& render_pass)
 {
     VkAttachmentDescription color_attachment = {};
     color_attachment.format = format;
@@ -129,7 +145,7 @@ bool VkContext::create_render_pass(VkFormat format)
     rp_info.dependencyCount = 1;
     rp_info.pDependencies = &dependency;
 
-    if (vkCreateRenderPass(device_, &rp_info, nullptr, &render_pass_) != VK_SUCCESS)
+    if (vkCreateRenderPass(device_, &rp_info, nullptr, &render_pass) != VK_SUCCESS)
     {
         SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create render pass");
         return false;
@@ -140,14 +156,17 @@ bool VkContext::create_render_pass(VkFormat format)
 
 bool VkContext::recreate_swapchain(int width, int height)
 {
-    vkDeviceWaitIdle(device_);
+    PendingSwapchainResources pending;
+    if (!build_swapchain_resources(width, height, pending))
+        return false;
 
-    for (auto fb : swapchain_.framebuffers)
-        vkDestroyFramebuffer(device_, fb, nullptr);
-    swapchain_.framebuffers.clear();
-    for (auto iv : swapchain_.image_views)
-        vkDestroyImageView(device_, iv, nullptr);
-    swapchain_.image_views.clear();
+    commit_swapchain_resources(std::move(pending));
+    return true;
+}
+
+bool VkContext::build_swapchain_resources(int width, int height, PendingSwapchainResources& pending)
+{
+    destroy_pending_swapchain_resources(pending);
 
     vkb::SwapchainBuilder sc_builder(physical_device_, device_, surface_);
     auto sc_ret = sc_builder
@@ -164,58 +183,105 @@ bool VkContext::recreate_swapchain(int width, int height)
         return false;
     }
 
-    if (swapchain_.swapchain != VK_NULL_HANDLE)
-        vkDestroySwapchainKHR(device_, swapchain_.swapchain, nullptr);
-
     auto vkb_sc = sc_ret.value();
-    swapchain_.swapchain = vkb_sc.swapchain;
-    swapchain_.format = vkb_sc.image_format;
-    swapchain_.extent = vkb_sc.extent;
-    swapchain_.images = vkb_sc.get_images().value();
-    swapchain_.image_views = vkb_sc.get_image_views().value();
+    pending.swapchain.swapchain = vkb_sc.swapchain;
+    pending.swapchain.format = vkb_sc.image_format;
+    pending.swapchain.extent = vkb_sc.extent;
 
+    auto images_ret = vkb_sc.get_images();
+    if (!images_ret)
+    {
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to get swapchain images: %s", images_ret.error().message().c_str());
+        destroy_pending_swapchain_resources(pending);
+        return false;
+    }
+    pending.swapchain.images = images_ret.value();
+
+    auto views_ret = vkb_sc.get_image_views();
+    if (!views_ret)
+    {
+        SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to get swapchain image views: %s", views_ret.error().message().c_str());
+        destroy_pending_swapchain_resources(pending);
+        return false;
+    }
+    pending.swapchain.image_views = views_ret.value();
+
+    if (!create_render_pass(pending.swapchain.format, pending.render_pass))
+    {
+        destroy_pending_swapchain_resources(pending);
+        return false;
+    }
+
+    if (!create_framebuffers(pending.swapchain, pending.render_pass))
+    {
+        destroy_pending_swapchain_resources(pending);
+        return false;
+    }
+
+    return true;
+}
+
+void VkContext::commit_swapchain_resources(PendingSwapchainResources&& pending)
+{
+    vkDeviceWaitIdle(device_);
+
+    destroy_swapchain();
     if (render_pass_ != VK_NULL_HANDLE)
     {
         vkDestroyRenderPass(device_, render_pass_, nullptr);
         render_pass_ = VK_NULL_HANDLE;
     }
-    if (!create_render_pass(swapchain_.format))
-        return false;
 
-    create_framebuffers();
+    swapchain_ = std::move(pending.swapchain);
+    render_pass_ = pending.render_pass;
+    pending.render_pass = VK_NULL_HANDLE;
+}
+
+bool VkContext::create_framebuffers(SwapchainInfo& swapchain, VkRenderPass render_pass)
+{
+    swapchain.framebuffers.clear();
+    swapchain.framebuffers.reserve(swapchain.image_views.size());
+
+    for (size_t i = 0; i < swapchain.image_views.size(); i++)
+    {
+        VkFramebufferCreateInfo fb_info = { VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO };
+        fb_info.renderPass = render_pass;
+        fb_info.attachmentCount = 1;
+        fb_info.pAttachments = &swapchain.image_views[i];
+        fb_info.width = swapchain.extent.width;
+        fb_info.height = swapchain.extent.height;
+        fb_info.layers = 1;
+
+        VkFramebuffer framebuffer = VK_NULL_HANDLE;
+        if (vkCreateFramebuffer(device_, &fb_info, nullptr, &framebuffer) != VK_SUCCESS)
+        {
+            SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create framebuffer");
+            for (auto existing : swapchain.framebuffers)
+                vkDestroyFramebuffer(device_, existing, nullptr);
+            swapchain.framebuffers.clear();
+            return false;
+        }
+
+        swapchain.framebuffers.push_back(framebuffer);
+    }
+
     return true;
 }
 
-void VkContext::create_framebuffers()
+void VkContext::destroy_pending_swapchain_resources(PendingSwapchainResources& pending)
 {
-    swapchain_.framebuffers.resize(swapchain_.image_views.size());
-    for (size_t i = 0; i < swapchain_.image_views.size(); i++)
+    if (pending.render_pass != VK_NULL_HANDLE)
     {
-        VkFramebufferCreateInfo fb_info = { VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO };
-        fb_info.renderPass = render_pass_;
-        fb_info.attachmentCount = 1;
-        fb_info.pAttachments = &swapchain_.image_views[i];
-        fb_info.width = swapchain_.extent.width;
-        fb_info.height = swapchain_.extent.height;
-        fb_info.layers = 1;
-
-        if (vkCreateFramebuffer(device_, &fb_info, nullptr, &swapchain_.framebuffers[i]) != VK_SUCCESS)
-        {
-            SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create framebuffer");
-            swapchain_.framebuffers[i] = VK_NULL_HANDLE;
-        }
+        vkDestroyRenderPass(device_, pending.render_pass, nullptr);
+        pending.render_pass = VK_NULL_HANDLE;
     }
+
+    destroy_swapchain_info(device_, pending.swapchain);
 }
 
 void VkContext::destroy_swapchain()
 {
-    for (auto fb : swapchain_.framebuffers)
-        vkDestroyFramebuffer(device_, fb, nullptr);
-    for (auto iv : swapchain_.image_views)
-        vkDestroyImageView(device_, iv, nullptr);
-    if (swapchain_.swapchain != VK_NULL_HANDLE)
-        vkDestroySwapchainKHR(device_, swapchain_.swapchain, nullptr);
-    swapchain_ = {};
+    destroy_swapchain_info(device_, swapchain_);
 }
 
 void VkContext::shutdown()
