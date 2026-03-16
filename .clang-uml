@@ -31,7 +31,7 @@ diagrams:
       - libs/megacitycode-font/src/glyph_cache.cpp
       # text_service.cpp excluded: clang-uml 0.6.2 on Windows hits STATUS_STACK_OVERFLOW,
       # but TextService still appears in the diagram through included headers.
-      - libs/megacitycode-grid/src/grid.cpp
+      # grid.cpp excluded: clang-uml 0.6.2 on Windows still crashes on it in this repo.
       - app/app.cpp
     include:
       namespaces:
