@@ -1,7 +1,6 @@
 #include "app_config.h"
+#include "toml_util.h"
 
-#include <algorithm>
-#include <cctype>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -12,6 +11,8 @@ namespace spectre
 
 namespace
 {
+
+using namespace toml;
 
 constexpr int kMinWindowWidth = 640;
 constexpr int kMinWindowHeight = 400;
@@ -34,41 +35,6 @@ std::filesystem::path config_path()
     std::filesystem::path base = xdg ? xdg : (home ? std::filesystem::path(home) / ".config" : std::filesystem::path("."));
     return base / "spectre" / "config.toml";
 #endif
-}
-
-std::string trim(std::string value)
-{
-    auto not_space = [](unsigned char ch) { return !std::isspace(ch); };
-    value.erase(value.begin(), std::find_if(value.begin(), value.end(), not_space));
-    value.erase(std::find_if(value.rbegin(), value.rend(), not_space).base(), value.end());
-    return value;
-}
-
-std::string unquote(std::string value)
-{
-    value = trim(std::move(value));
-    if (value.size() >= 2 && value.front() == '"' && value.back() == '"')
-        return value.substr(1, value.size() - 2);
-    return value;
-}
-
-std::vector<std::string> parse_string_array(const std::string& value)
-{
-    std::vector<std::string> result;
-    std::string trimmed = trim(value);
-    if (trimmed.size() < 2 || trimmed.front() != '[' || trimmed.back() != ']')
-        return result;
-
-    trimmed = trimmed.substr(1, trimmed.size() - 2);
-    std::stringstream stream(trimmed);
-    std::string item;
-    while (std::getline(stream, item, ','))
-    {
-        item = trim(item);
-        if (!item.empty())
-            result.push_back(unquote(item));
-    }
-    return result;
 }
 
 int parse_window_dimension(const std::string& value, int fallback, int min_value, int max_value)

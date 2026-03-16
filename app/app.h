@@ -24,19 +24,6 @@
 namespace spectre
 {
 
-struct AppOptions
-{
-    bool load_user_config = true;
-    bool save_user_config = true;
-    bool activate_window_on_startup = true;
-    bool show_debug_overlay_on_startup = false;
-    bool clamp_window_to_display = true;
-    AppConfig initial_config = {};
-    std::vector<std::string> nvim_args;
-    std::vector<std::string> startup_commands;
-    std::string nvim_working_dir;
-};
-
 class App
 {
 public:

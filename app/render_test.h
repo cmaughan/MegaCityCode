@@ -1,8 +1,9 @@
 #pragma once
 
-#include "app.h"
+#include "app_config.h"
 #include <filesystem>
 #include <optional>
+#include <spectre/renderer.h>
 #include <string>
 #include <vector>
 

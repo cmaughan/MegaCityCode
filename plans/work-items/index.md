@@ -4,8 +4,7 @@ This index tracks the current backlog extracted from [[../reviews/review-concens
 
 Priority order:
 
-1. [[02 render test extraction and parser unification -feature]]
-2. [[05 vulkan robustness and atlas upload rework -bug]]
+1. [[05 vulkan robustness and atlas upload rework -bug]]
 3. [[07 platform text and display integration -feature]]
 4. [[08 gui ergonomics and observability -feature]]
 
@@ -13,6 +12,7 @@ Completed (moved to `../work-items-complete/`):
 
 - 00 rpc transport serialization and shutdown hardening
 - 01 app loop and ui request decomposition
+- 02 render test extraction and parser unification
 - 03 public api boundary cleanup
 - 04 grid wide-cell repair and redraw robustness
 - 06 test seam cleanup and lifecycle coverage

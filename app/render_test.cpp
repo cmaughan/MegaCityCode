@@ -1,8 +1,7 @@
 #include "render_test.h"
+#include "toml_util.h"
 
-#include <algorithm>
 #include <array>
-#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -20,118 +19,11 @@ namespace spectre
 namespace
 {
 
+using namespace toml;
+
 constexpr int kBmpHeaderSize = 14;
 constexpr int kBmpInfoSize = 40;
 constexpr uint32_t kBmpMagic = 0x4D42;
-
-std::string trim(std::string value)
-{
-    auto not_space = [](unsigned char ch) { return !std::isspace(ch); };
-    value.erase(value.begin(), std::find_if(value.begin(), value.end(), not_space));
-    value.erase(std::find_if(value.rbegin(), value.rend(), not_space).base(), value.end());
-    return value;
-}
-
-std::string unquote(std::string value)
-{
-    value = trim(std::move(value));
-    if (value.size() >= 2 && value.front() == '"' && value.back() == '"')
-        return value.substr(1, value.size() - 2);
-    return value;
-}
-
-std::vector<std::string> parse_string_array(const std::string& value)
-{
-    std::vector<std::string> items;
-    std::string trimmed = trim(value);
-    if (trimmed.size() < 2 || trimmed.front() != '[' || trimmed.back() != ']')
-        return items;
-
-    std::string current;
-    bool in_string = false;
-    bool escaping = false;
-    for (size_t i = 1; i + 1 < trimmed.size(); ++i)
-    {
-        char ch = trimmed[i];
-        if (escaping)
-        {
-            current.push_back(ch);
-            escaping = false;
-            continue;
-        }
-        if (ch == '\\')
-        {
-            escaping = true;
-            continue;
-        }
-        if (ch == '"')
-        {
-            in_string = !in_string;
-            continue;
-        }
-        if (!in_string && ch == ',')
-        {
-            std::string item = trim(current);
-            if (!item.empty())
-                items.push_back(item);
-            current.clear();
-            continue;
-        }
-        current.push_back(ch);
-    }
-
-    std::string item = trim(current);
-    if (!item.empty())
-        items.push_back(item);
-
-    for (auto& entry : items)
-        entry = entry;
-    return items;
-}
-
-bool is_complete_array_literal(const std::string& value)
-{
-    bool in_string = false;
-    bool escaping = false;
-    int depth = 0;
-    bool saw_open = false;
-
-    for (char ch : value)
-    {
-        if (escaping)
-        {
-            escaping = false;
-            continue;
-        }
-
-        if (ch == '\\' && in_string)
-        {
-            escaping = true;
-            continue;
-        }
-
-        if (ch == '"')
-        {
-            in_string = !in_string;
-            continue;
-        }
-
-        if (in_string)
-            continue;
-
-        if (ch == '[')
-        {
-            saw_open = true;
-            ++depth;
-        }
-        else if (ch == ']')
-        {
-            --depth;
-        }
-    }
-
-    return saw_open && depth == 0 && !in_string && !escaping;
-}
 
 std::string platform_suffix()
 {
@@ -166,44 +58,6 @@ std::string expand_placeholders(std::string value, const std::filesystem::path& 
         }
     }
     return value;
-}
-
-int parse_int(const std::string& value, int fallback)
-{
-    try
-    {
-        return std::stoi(value);
-    }
-    catch (const std::exception&)
-    {
-        return fallback;
-    }
-}
-
-double parse_double(const std::string& value, double fallback)
-{
-    try
-    {
-        return std::stod(value);
-    }
-    catch (const std::exception&)
-    {
-        return fallback;
-    }
-}
-
-bool parse_bool(const std::string& value, bool fallback)
-{
-    std::string normalized = trim(value);
-    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
-    });
-
-    if (normalized == "true")
-        return true;
-    if (normalized == "false")
-        return false;
-    return fallback;
 }
 
 void append_u16(std::vector<uint8_t>& out, uint16_t value)
@@ -389,7 +243,7 @@ bool write_report(const std::filesystem::path& path, const RenderTestScenario& s
         return false;
 
     out << "{\n";
-    out << "  \"name\": \"" << scenario.name << "\",\n";
+    out << "  \"name\": \"" << json_escape_string(scenario.name) << "\",\n";
     out << "  \"platform\": \"" << platform_suffix() << "\",\n";
     out << "  \"width\": " << actual.width << ",\n";
     out << "  \"height\": " << actual.height << ",\n";
@@ -421,9 +275,9 @@ void write_failure_report(const std::filesystem::path& path, const RenderTestSce
         return;
 
     out << "{\n";
-    out << "  \"name\": \"" << scenario.name << "\",\n";
+    out << "  \"name\": \"" << json_escape_string(scenario.name) << "\",\n";
     out << "  \"platform\": \"" << platform_suffix() << "\",\n";
-    out << "  \"error\": \"" << error_message << "\"\n";
+    out << "  \"error\": \"" << json_escape_string(error_message) << "\"\n";
     out << "}\n";
 }
 
