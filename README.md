@@ -1,6 +1,6 @@
 # Spectre
 
-API docs: **[cmaughan.github.io/spectre](https://cmaughan.github.io/spectre)** — or generate locally with `python scripts/gen_api_docs.py`.
+API docs: **[chrismaughan.com/spectre](http://chrismaughan.com/spectre/)** — or generate locally with `python scripts/gen_api_docs.py`.
 
 Spectre is a cross-platform Neovim GUI frontend with native GPU rendering:
 
@@ -311,7 +311,7 @@ Regenerate with `python scripts/build_docs.py`.
 
 ### API Docs
 
-The live API reference is published automatically to **[cmaughan.github.io/spectre](https://cmaughan.github.io/spectre)** on every push to `main`.
+The live API reference is published automatically to **[chrismaughan.com/spectre](http://chrismaughan.com/spectre/)** on every push to `main`.
 
 To generate locally:
 

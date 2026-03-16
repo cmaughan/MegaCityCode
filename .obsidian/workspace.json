@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "plans/work-items-complete/06 test seam cleanup and lifecycle coverage -test.md",
+                "file": "plans/work-items/02 render test extraction and parser unification -feature.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "06 test seam cleanup and lifecycle coverage -test"
+              "title": "02 render test extraction and parser unification -feature"
             }
           }
         ]
@@ -185,6 +185,11 @@
   },
   "active": "c378cd0fc68e32e5",
   "lastOpenFiles": [
+    "plans/work-items/05 vulkan robustness and atlas upload rework -bug.md",
+    "plans/work-items/07 platform text and display integration -feature.md",
+    "plans/work-items/08 gui ergonomics and observability -feature.md",
+    "plans/work-items-complete/04 grid wide-cell repair and redraw robustness -bug.md",
+    "plans/work-items-complete/06 test seam cleanup and lifecycle coverage -test.md",
     "plans/work-items/03 public api boundary cleanup -feature.md",
     "plans/work-items-complete/03 public api boundary cleanup -feature.md",
     "tests/render/out/cmdline-view.macos.diff.bmp",
@@ -199,7 +204,6 @@
     "build/CMakeFiles/Progress/98",
     "build/tests/CMakeFiles/spectre-tests.dir/unicode_tests.cpp-3f38a716.o.tmp",
     "build/tests/CMakeFiles/spectre-tests.dir/input_tests.cpp-44186370.o.tmp",
-    "plans/work-items-complete/06 test seam cleanup and lifecycle coverage -test.md",
     "plans/work-items-complete/00 rpc transport serialization and shutdown hardening -bug.md",
     "plans/work-items/02 render test extraction and parser unification -feature.md",
     "plans/reviews/review-concensus.md",
@@ -207,10 +211,7 @@
     "plans/reviews/review-latest.claude.md",
     "plans/reviews/review-latest.gpt.md",
     "plans/prompts/review.md",
-    "plans/work-items/05 vulkan robustness and atlas upload rework -bug.md",
     "plans/work-items/06 test seam cleanup and lifecycle coverage -test.md",
-    "plans/work-items/07 platform text and display integration -feature.md",
-    "plans/work-items/08 gui ergonomics and observability -feature.md",
     "plans/work-items-complete/01 app loop and ui request decomposition -feature.md",
     "plans/work-items/01 app loop and ui request decomposition -feature.md",
     "plans/work-items/04 grid wide-cell repair and redraw robustness -bug.md",
@@ -229,7 +230,6 @@
     "plans/design/learnings.md",
     "build-tools/_deps/mpack-src/test/README.md",
     "build-tools/_deps/mpack-src/docs/reader.md",
-    "build-tools/_deps/mpack-src/docs/protocol.md",
-    "build-tools/_deps/mpack-src/docs/node.md"
+    "build-tools/_deps/mpack-src/docs/protocol.md"
   ]
 }
