@@ -61,9 +61,8 @@ bool App::initialize()
     saw_flush_ = false;
     saw_frame_ = false;
     frame_requested_ = false;
-    cursor_visible_ = true;
     cursor_busy_ = false;
-    next_blink_deadline_.reset();
+    cursor_blinker_ = {};
     last_activity_time_ = std::chrono::steady_clock::now();
 
     if (!attach_ui())
@@ -79,6 +78,7 @@ bool App::initialize()
 
 bool App::initialize_window_and_renderer()
 {
+    window_.set_clamp_to_display(options_.clamp_window_to_display);
     if (!window_.initialize("Spectre", config_.window_width, config_.window_height))
     {
         SPECTRE_LOG_ERROR(LogCategory::App, "Failed to create window");
@@ -366,7 +366,8 @@ bool App::pump_once(std::optional<std::chrono::steady_clock::time_point> wait_de
             }
         }
 
-        advance_cursor_blink(std::chrono::steady_clock::now());
+        if (cursor_blinker_.advance(std::chrono::steady_clock::now()))
+            apply_cursor_visibility();
 
         if (frame_requested_)
         {
@@ -542,80 +543,25 @@ void App::refresh_cursor_style(bool restart_blink)
     }
 }
 
-void App::restart_cursor_blink(std::chrono::steady_clock::time_point now)
+BlinkTiming App::current_blink_timing() const
 {
-    const ModeInfo* mode_info = nullptr;
     int mode = ui_events_.current_mode();
-    if (mode >= 0 && mode < (int)ui_events_.modes().size())
-        mode_info = &ui_events_.modes()[mode];
-
-    if (cursor_busy_)
-    {
-        cursor_visible_ = false;
-        cursor_blink_phase_ = CursorBlinkPhase::Steady;
-        next_blink_deadline_.reset();
-        apply_cursor_visibility();
-        return;
-    }
-
-    bool blink_enabled = mode_info && mode_info->blinkwait > 0 && mode_info->blinkon > 0 && mode_info->blinkoff > 0;
-    cursor_visible_ = true;
-    if (!blink_enabled)
-    {
-        cursor_blink_phase_ = CursorBlinkPhase::Steady;
-        next_blink_deadline_.reset();
-    }
-    else
-    {
-        cursor_blink_phase_ = CursorBlinkPhase::Wait;
-        next_blink_deadline_ = now + std::chrono::milliseconds(mode_info->blinkwait);
-    }
-    apply_cursor_visibility();
+    if (mode < 0 || mode >= (int)ui_events_.modes().size())
+        return {};
+    const auto& m = ui_events_.modes()[mode];
+    return { m.blinkwait, m.blinkon, m.blinkoff };
 }
 
-void App::advance_cursor_blink(std::chrono::steady_clock::time_point now)
+void App::restart_cursor_blink(std::chrono::steady_clock::time_point now)
 {
-    if (!next_blink_deadline_ || now < *next_blink_deadline_)
-        return;
-
-    const ModeInfo* mode_info = nullptr;
-    int mode = ui_events_.current_mode();
-    if (mode >= 0 && mode < (int)ui_events_.modes().size())
-        mode_info = &ui_events_.modes()[mode];
-
-    if (cursor_busy_ || !mode_info || mode_info->blinkwait <= 0 || mode_info->blinkon <= 0 || mode_info->blinkoff <= 0)
-    {
-        restart_cursor_blink(now);
-        return;
-    }
-
-    switch (cursor_blink_phase_)
-    {
-    case CursorBlinkPhase::Wait:
-    case CursorBlinkPhase::On:
-        cursor_visible_ = false;
-        cursor_blink_phase_ = CursorBlinkPhase::Off;
-        next_blink_deadline_ = now + std::chrono::milliseconds(mode_info->blinkoff);
-        break;
-
-    case CursorBlinkPhase::Off:
-        cursor_visible_ = true;
-        cursor_blink_phase_ = CursorBlinkPhase::On;
-        next_blink_deadline_ = now + std::chrono::milliseconds(mode_info->blinkon);
-        break;
-
-    case CursorBlinkPhase::Steady:
-        restart_cursor_blink(now);
-        return;
-    }
-
+    cursor_blinker_.restart(now, cursor_busy_, current_blink_timing());
     apply_cursor_visibility();
 }
 
 void App::apply_cursor_visibility()
 {
-    int cursor_col = cursor_visible_ ? ui_events_.cursor_col() : -1;
-    int cursor_row = cursor_visible_ ? ui_events_.cursor_row() : -1;
+    int cursor_col = cursor_blinker_.visible() ? ui_events_.cursor_col() : -1;
+    int cursor_row = cursor_blinker_.visible() ? ui_events_.cursor_row() : -1;
     renderer_->set_cursor(cursor_col, cursor_row, cursor_style_);
     update_text_input_area();
     request_frame();
@@ -674,7 +620,7 @@ void App::queue_resize_request(int cols, int rows, const char* reason)
 
 int App::wait_timeout_ms(std::optional<std::chrono::steady_clock::time_point> wait_deadline) const
 {
-    auto deadline = next_blink_deadline_;
+    auto deadline = cursor_blinker_.next_deadline();
     if (wait_deadline && (!deadline || *wait_deadline < *deadline))
         deadline = wait_deadline;
 

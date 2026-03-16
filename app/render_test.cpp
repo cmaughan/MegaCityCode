@@ -482,6 +482,7 @@ AppOptions RenderTestScenario::make_app_options() const
     options.save_user_config = false;
     options.activate_window_on_startup = false;
     options.show_debug_overlay_on_startup = debug_overlay;
+    options.clamp_window_to_display = false;
     options.initial_config.window_width = static_cast<int>(std::round(width / display_scale));
     options.initial_config.window_height = static_cast<int>(std::round(height / display_scale));
     options.initial_config.font_size = font_size;

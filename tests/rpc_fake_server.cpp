@@ -81,6 +81,14 @@ int main()
     if (current_mode == "abort_after_read")
         return 0;
 
+    if (current_mode == "hang")
+    {
+        // Read and discard stdin until the client closes the pipe.
+        // Simulates a server that received the request but never responds.
+        while (std::fgetc(stdin) != EOF) {}
+        return 0;
+    }
+
     if (current_mode == "malformed_response")
     {
         static const char malformed[] = { char(0x91), char(0xC1) };

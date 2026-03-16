@@ -107,14 +107,10 @@ int parse_font_size(const std::string& value, int fallback)
 
 } // namespace
 
-AppConfig AppConfig::load()
+AppConfig AppConfig::parse(std::string_view content)
 {
     AppConfig config;
-    auto path = config_path();
-    if (!std::filesystem::exists(path))
-        return config;
-
-    std::ifstream in(path);
+    std::istringstream in{std::string(content)};
     std::string line;
     while (std::getline(in, line))
     {
@@ -147,12 +143,9 @@ AppConfig AppConfig::load()
     return config;
 }
 
-void AppConfig::save() const
+std::string AppConfig::serialize() const
 {
-    auto path = config_path();
-    std::filesystem::create_directories(path.parent_path());
-
-    std::ofstream out(path, std::ios::trunc);
+    std::ostringstream out;
     out << "window_width = " << clamp_window_dimension(window_width, AppConfig{}.window_width, kMinWindowWidth, kMaxWindowWidth) << "\n";
     out << "window_height = " << clamp_window_dimension(window_height, AppConfig{}.window_height, kMinWindowHeight, kMaxWindowHeight) << "\n";
     out << "font_size = " << std::clamp(font_size, TextService::MIN_POINT_SIZE, TextService::MAX_POINT_SIZE) << "\n";
@@ -169,6 +162,26 @@ void AppConfig::save() const
         }
         out << "]\n";
     }
+    return out.str();
+}
+
+AppConfig AppConfig::load()
+{
+    auto path = config_path();
+    if (!std::filesystem::exists(path))
+        return {};
+
+    std::ifstream in(path);
+    std::string content{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>{}};
+    return parse(content);
+}
+
+void AppConfig::save() const
+{
+    auto path = config_path();
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream out(path, std::ios::trunc);
+    out << serialize();
 }
 
 } // namespace spectre

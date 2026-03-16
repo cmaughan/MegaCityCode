@@ -7,8 +7,12 @@ target_include_directories(spectre-rpc-fake PRIVATE
 target_link_libraries(spectre-rpc-fake PRIVATE spectre-nvim)
 
 add_executable(spectre-tests
+    ../app/app_config.cpp
+    ../app/cursor_blinker.cpp
     ../app/render_test.cpp
     test_main.cpp
+    app_config_tests.cpp
+    cursor_blinker_tests.cpp
     log_tests.cpp
     highlight_tests.cpp
     font_tests.cpp

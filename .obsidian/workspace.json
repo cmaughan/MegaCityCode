@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "plans/work-items/04 grid wide-cell repair and redraw robustness -bug.md",
+                "file": "plans/work-items/02 render test extraction and parser unification -feature.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "04 grid wide-cell repair and redraw robustness -bug"
+              "title": "02 render test extraction and parser unification -feature"
             }
           }
         ]
@@ -185,24 +185,26 @@
   },
   "active": "c378cd0fc68e32e5",
   "lastOpenFiles": [
-    "build/Testing/Temporary/CTestCheckpoint.txt",
-    "build/tests/spectre-tests.dir/Debug/spectre-tests.tlog/link.112604.write.1.tlog",
-    "build/tests/spectre-tests.dir/Debug/spectre-tests.tlog/link.112604.read.1.tlog",
-    "build/tests/spectre-tests.dir/Debug/spectre-tests.tlog/link.112604.read.6.tlog",
-    "build/tests/spectre-tests.dir/Debug/spectre-tests.tlog/link.112604-cvtres.write.1.tlog",
-    "build/tests/spectre-tests.dir/Debug/spectre-tests.tlog/link.112604-cvtres.read.1.tlog",
-    "build/tests/spectre-tests.dir/Debug/spectre-tests.tlog/link.112604-rc.write.1.tlog",
-    "build/tests/spectre-tests.dir/Debug/spectre-tests.tlog/link.112604-rc.read.1.tlog",
-    "build/tests/spectre-tests.dir/Debug/spectre-tests.tlog/link.112604.read.2.tlog",
-    "build/tests/spectre-tests.dir/Debug/spectre-tests.tlog/link.112604.read.3.tlog",
-    "build/tests/spectre-tests.dir/Debug/spectre-tests.tlog/link.112604.read.5.tlog",
+    "build/CMakeFiles/Progress/98",
+    "build/CMakeFiles/Progress/97",
+    "build/CMakeFiles/Progress/96",
+    "build/CMakeFiles/Progress/95",
+    "build/CMakeFiles/Progress/90",
+    "build/CMakeFiles/Progress/89",
+    "build/tests/CMakeFiles/spectre-tests.dir/compiler_depend.internal.tmp72cfa",
+    "build/tests/CMakeFiles/spectre-tests.dir/compiler_depend.make.tmp0efc7",
+    "build/CMakeFiles/Progress/94",
+    "build/CMakeFiles/Progress/93",
+    "build/CMakeFiles/Progress/100",
+    "plans/work-items-complete/06 test seam cleanup and lifecycle coverage -test.md",
     "plans/work-items/03 public api boundary cleanup -feature.md",
-    "plans/work-items/01 app loop and ui request decomposition -feature.md",
-    "plans/work-items/04 grid wide-cell repair and redraw robustness -bug.md",
     "plans/work-items/05 vulkan robustness and atlas upload rework -bug.md",
+    "plans/work-items/06 test seam cleanup and lifecycle coverage -test.md",
     "plans/work-items/07 platform text and display integration -feature.md",
     "plans/work-items/08 gui ergonomics and observability -feature.md",
-    "plans/work-items/06 test seam cleanup and lifecycle coverage -test.md",
+    "plans/work-items-complete/01 app loop and ui request decomposition -feature.md",
+    "plans/work-items/01 app loop and ui request decomposition -feature.md",
+    "plans/work-items/04 grid wide-cell repair and redraw robustness -bug.md",
     "plans/work-items/00 rpc transport serialization and shutdown hardening -bug.md",
     "plans/work-items/02 render test extraction and parser unification -feature.md",
     "plans/reviews/review-latest.gpt.md",
@@ -228,8 +230,6 @@
     "build-tools/_deps/mpack-src/docs/node.md",
     "build-tools/_deps/mpack-src/docs/features.md",
     "build-tools/_deps/mpack-src/docs/expect.md",
-    "build-tools/_deps/mpack-src/README.md",
-    "build-tools/_deps/mpack-src/CHANGELOG.md",
-    "build-tools/_deps/mpack-src/AUTHORS.md"
+    "build-tools/_deps/mpack-src/README.md"
   ]
 }

@@ -45,6 +45,7 @@ if(APPLE)
         app/main.cpp
         app/app.cpp
         app/app_config.cpp
+        app/cursor_blinker.cpp
         app/grid_rendering_pipeline.cpp
         app/render_test.cpp
         app/ui_request_worker.cpp
@@ -54,6 +55,7 @@ else()
         app/main.cpp
         app/app.cpp
         app/app_config.cpp
+        app/cursor_blinker.cpp
         app/grid_rendering_pipeline.cpp
         app/render_test.cpp
         app/ui_request_worker.cpp

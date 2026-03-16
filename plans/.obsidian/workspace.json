@@ -78,7 +78,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 455.5
   },
   "right": {
     "id": "68ed475471191a76",
@@ -185,15 +185,15 @@
   },
   "active": "d445dc176b0557ff",
   "lastOpenFiles": [
+    "work-items-complete/04 grid wide-cell repair and redraw robustness -bug.md",
+    "reviews/review-concensus.md",
+    "work-items/01 app loop and ui request decomposition -feature.md",
     "work-items/08 gui ergonomics and observability -feature.md",
     "work-items-complete/00 rpc transport serialization and shutdown hardening -bug.md",
-    "reviews/review-concensus.md",
     "reviews/review-latest.claude.md",
     "reviews/review-latest.gpt.md",
     "work-items/03 public api boundary cleanup -feature.md",
     "work-items/02 render test extraction and parser unification -feature.md",
-    "work-items/01 app loop and ui request decomposition -feature.md",
-    "work-items-complete/04 grid wide-cell repair and redraw robustness -bug.md",
     "work-items/04 grid wide-cell repair and redraw robustness -bug.md",
     "work-items-complete",
     "work-items/00 rpc transport serialization and shutdown hardening -bug.md"

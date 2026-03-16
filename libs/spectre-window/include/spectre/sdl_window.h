@@ -10,6 +10,7 @@ namespace spectre
 class SdlWindow : public IWindow
 {
 public:
+    void set_clamp_to_display(bool clamp) { clamp_to_display_ = clamp; }
     bool initialize(const std::string& title, int width, int height) override;
     void shutdown() override;
     bool poll_events() override;
@@ -32,6 +33,7 @@ private:
     bool handle_event(const SDL_Event& event);
     SDL_Window* window_ = nullptr;
     unsigned int wake_event_type_ = 0;
+    bool clamp_to_display_ = true;
 };
 
 } // namespace spectre

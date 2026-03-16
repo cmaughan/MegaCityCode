@@ -1,5 +1,6 @@
 #pragma once
 #include "app_config.h"
+#include "cursor_blinker.h"
 #include "grid_rendering_pipeline.h"
 #include "ui_request_worker.h"
 #include <array>
@@ -29,6 +30,7 @@ struct AppOptions
     bool save_user_config = true;
     bool activate_window_on_startup = true;
     bool show_debug_overlay_on_startup = false;
+    bool clamp_window_to_display = true;
     AppConfig initial_config = {};
     std::vector<std::string> nvim_args;
     std::vector<std::string> startup_commands;
@@ -57,14 +59,6 @@ private:
     void wire_ui_callbacks();
     void wire_window_callbacks();
 
-    enum class CursorBlinkPhase
-    {
-        Steady,
-        Wait,
-        Off,
-        On,
-    };
-
     bool pump_once(std::optional<std::chrono::steady_clock::time_point> wait_deadline = std::nullopt);
     void on_flush();
     void on_busy(bool busy);
@@ -75,7 +69,6 @@ private:
     void refresh_cursor_style(bool restart_blink);
     bool execute_startup_commands();
     void restart_cursor_blink(std::chrono::steady_clock::time_point now);
-    void advance_cursor_blink(std::chrono::steady_clock::time_point now);
     void apply_cursor_visibility();
     void toggle_debug_overlay();
     void update_debug_overlay();
@@ -83,6 +76,7 @@ private:
     void queue_resize_request(int cols, int rows, const char* reason);
     int wait_timeout_ms(std::optional<std::chrono::steady_clock::time_point> wait_deadline) const;
     double average_frame_ms() const;
+    BlinkTiming current_blink_timing() const;
 
     AppOptions options_;
     AppConfig config_;
@@ -104,13 +98,11 @@ private:
     bool saw_flush_ = false;
     bool saw_frame_ = false;
     bool frame_requested_ = false;
-    bool cursor_visible_ = true;
     bool cursor_busy_ = false;
     bool debug_overlay_enabled_ = false;
     bool startup_resize_pending_ = false;
     CursorStyle cursor_style_ = {};
-    CursorBlinkPhase cursor_blink_phase_ = CursorBlinkPhase::Steady;
-    std::optional<std::chrono::steady_clock::time_point> next_blink_deadline_;
+    CursorBlinker cursor_blinker_;
     int pending_startup_resize_cols_ = 0;
     int pending_startup_resize_rows_ = 0;
     int grid_cols_ = 0, grid_rows_ = 0;

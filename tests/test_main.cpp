@@ -1,6 +1,8 @@
 #include <exception>
 #include <iostream>
 
+void run_app_config_tests();
+void run_cursor_blinker_tests();
 void run_font_tests();
 void run_log_tests();
 void run_highlight_tests();
@@ -17,6 +19,8 @@ int main()
 {
     try
     {
+        run_app_config_tests();
+        run_cursor_blinker_tests();
         run_log_tests();
         run_highlight_tests();
         run_font_tests();

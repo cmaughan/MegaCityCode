@@ -146,20 +146,23 @@ bool SdlWindow::initialize(const std::string& title, int width, int height)
     Uint64 window_flags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
 #endif
 
-    SDL_Rect usable_bounds = {};
-    SDL_DisplayID display = SDL_GetPrimaryDisplay();
-    if (display && SDL_GetDisplayUsableBounds(display, &usable_bounds))
+    if (clamp_to_display_)
     {
-        int max_width = usable_bounds.w - 80;
-        int max_height = usable_bounds.h - 80;
-        if (max_width < 640)
-            max_width = 640;
-        if (max_height < 400)
-            max_height = 400;
-        if (width > max_width)
-            width = max_width;
-        if (height > max_height)
-            height = max_height;
+        SDL_Rect usable_bounds = {};
+        SDL_DisplayID display = SDL_GetPrimaryDisplay();
+        if (display && SDL_GetDisplayUsableBounds(display, &usable_bounds))
+        {
+            int max_width = usable_bounds.w - 80;
+            int max_height = usable_bounds.h - 80;
+            if (max_width < 640)
+                max_width = 640;
+            if (max_height < 400)
+                max_height = 400;
+            if (width > max_width)
+                width = max_width;
+            if (height > max_height)
+                height = max_height;
+        }
     }
 
     window_ = SDL_CreateWindow(

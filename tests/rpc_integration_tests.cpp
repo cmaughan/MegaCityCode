@@ -6,6 +6,7 @@
 #include <spectre/log.h>
 #include <spectre/nvim.h>
 #include <string>
+#include <thread>
 
 using namespace spectre;
 using namespace spectre::tests;
@@ -164,6 +165,33 @@ void run_rpc_integration_tests()
         expect(!result.transport_ok, "malformed response reports transport failure");
         expect(!result.ok(), "malformed response is not successful");
         expect(elapsed < std::chrono::seconds(2), "malformed response returns promptly without timing out");
+    });
+
+    run_test("nvim rpc close() unblocks an in-flight request without waiting for timeout", []() {
+        ScopedEnvVar env("SPECTRE_RPC_FAKE_MODE", "hang");
+        NvimProcess process;
+        expect(process.spawn(helper_path()), "fake RPC server spawns");
+
+        NvimRpc rpc;
+        expect(rpc.initialize(process), "rpc initializes");
+
+        // Send a request that will block forever (server never responds in hang mode).
+        std::thread requester([&rpc]() {
+            rpc.request("fake_method", { NvimRpc::make_int(7) });
+        });
+
+        // Give the request time to send and block on the response CV.
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+        auto start = std::chrono::steady_clock::now();
+        rpc.close();
+        requester.join();
+        auto elapsed = std::chrono::steady_clock::now() - start;
+
+        expect(elapsed < std::chrono::seconds(2), "close() unblocks in-flight request promptly, not after 5s timeout");
+
+        process.shutdown();
+        rpc.shutdown();
     });
 
     run_test("nvim rpc logs a warning when the transport aborts before a response arrives", []() {
