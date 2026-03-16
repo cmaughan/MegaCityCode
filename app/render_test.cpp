@@ -260,11 +260,6 @@ bool write_report(const std::filesystem::path& path, const RenderTestScenario& s
         out << "  \"mean_abs_channel_diff\": " << diff->mean_abs_channel_diff << ",\n";
         out << "  \"max_channel_diff\": " << static_cast<int>(diff->max_channel_diff) << ",\n";
         out << "  \"passed\": " << (diff->passed ? "true" : "false") << '\n';
-
-        SPECTRE_LOG_INFO(spectre::LogCategory::Test,
-            "[%s] diff: %.4f%% changed pixels (%zu/%d), max_channel_delta=%d, mean_abs=%.4f [%s]",
-            scenario.name.c_str(), diff->changed_pixels_pct, diff->changed_pixels, actual.width * actual.height,
-            static_cast<int>(diff->max_channel_diff), diff->mean_abs_channel_diff, diff->passed ? "PASS" : "FAIL");
     }
     else
     {
