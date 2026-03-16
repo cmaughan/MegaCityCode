@@ -27,7 +27,10 @@ diagrams:
       - libs/spectre-window/src/*.cpp
       - libs/spectre-renderer/src/*.cpp
       - libs/spectre-renderer/src/vulkan/*.cpp
-      - libs/spectre-font/src/*.cpp
+      - libs/spectre-font/src/font_manager.cpp
+      - libs/spectre-font/src/glyph_cache.cpp
+      # text_service.cpp excluded: clang-uml 0.6.2 on Windows hits STATUS_STACK_OVERFLOW,
+      # but TextService still appears in the diagram through included headers.
       # grid.cpp excluded: triggers a clang-uml 0.6.2 crash (STATUS_ILLEGAL_INSTRUCTION)
       - libs/spectre-nvim/src/nvim_process.cpp
       - libs/spectre-nvim/src/rpc.cpp

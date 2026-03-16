@@ -1,6 +1,8 @@
 #include "render_test.h"
 #include "toml_util.h"
 
+#include <spectre/log.h>
+
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -258,6 +260,11 @@ bool write_report(const std::filesystem::path& path, const RenderTestScenario& s
         out << "  \"mean_abs_channel_diff\": " << diff->mean_abs_channel_diff << ",\n";
         out << "  \"max_channel_diff\": " << static_cast<int>(diff->max_channel_diff) << ",\n";
         out << "  \"passed\": " << (diff->passed ? "true" : "false") << '\n';
+
+        SPECTRE_LOG_INFO(spectre::LogCategory::Test,
+            "[%s] diff: %.4f%% changed pixels (%zu/%d), max_channel_delta=%d, mean_abs=%.4f [%s]",
+            scenario.name.c_str(), diff->changed_pixels_pct, diff->changed_pixels, actual.width * actual.height,
+            static_cast<int>(diff->max_channel_diff), diff->mean_abs_channel_diff, diff->passed ? "PASS" : "FAIL");
     }
     else
     {
@@ -279,6 +286,9 @@ void write_failure_report(const std::filesystem::path& path, const RenderTestSce
     out << "  \"platform\": \"" << platform_suffix() << "\",\n";
     out << "  \"error\": \"" << json_escape_string(error_message) << "\"\n";
     out << "}\n";
+
+    SPECTRE_LOG_ERROR(spectre::LogCategory::Test, "[%s] %.*s", scenario.name.c_str(),
+        static_cast<int>(error_message.size()), error_message.data());
 }
 
 std::filesystem::path default_output_path(const std::filesystem::path& scenario_path, std::string_view stem_suffix, std::string_view extension)

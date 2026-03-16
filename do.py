@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import pathlib
 import subprocess
 import sys
@@ -21,6 +22,43 @@ def spectre_path(root: pathlib.Path) -> pathlib.Path:
 
 def scenario_path(root: pathlib.Path, name: str) -> pathlib.Path:
     return root / "tests" / "render" / f"{name}.toml"
+
+
+def platform_suffix() -> str:
+    if sys.platform.startswith("win"):
+        return "windows"
+    if sys.platform.startswith("darwin"):
+        return "macos"
+    return "linux"
+
+
+def print_render_report(root: pathlib.Path, scenario_name: str) -> None:
+    report_path = root / "tests" / "render" / "out" / f"{scenario_name}.{platform_suffix()}.report.json"
+    if not report_path.exists():
+        print(f"  [no report found: {report_path}]")
+        return
+    try:
+        data = json.loads(report_path.read_text())
+    except Exception as e:
+        print(f"  [failed to read report: {e}]")
+        return
+
+    if "error" in data:
+        print(f"  [{scenario_name}] ERROR: {data['error']}")
+        return
+
+    if "changed_pixels_pct" in data:
+        passed = data.get("passed", False)
+        label = "PASS" if passed else "FAIL"
+        print(
+            f"  [{scenario_name}] diff: {data['changed_pixels_pct']:.4f}% changed pixels"
+            f" ({data['changed_pixels']}/{data['width'] * data['height']})"
+            f", max_channel_delta={data['max_channel_diff']}"
+            f", mean_abs={data['mean_abs_channel_diff']:.4f}"
+            f" [{label}]"
+        )
+    elif data.get("blessed"):
+        print(f"  [{scenario_name}] blessed ({data['width']}x{data['height']})")
 
 
 def run(command: list[str], cwd: pathlib.Path) -> int:
@@ -130,14 +168,20 @@ def main() -> int:
         cmd = [str(exe), "--console", "--render-test", str(scenario_path(root, scenario_name))]
         if bless:
             cmd.append("--bless-render-test")
-        return run(cmd, root)
+        rc = run(cmd, root)
+        print_render_report(root, scenario_name)
+        return rc
 
     if command == "renderall":
+        if ensure_built(root) != 0:
+            return 1
+        overall_rc = 0
         for scenario_name in ("basic-view", "cmdline-view", "unicode-view"):
             rc = run([str(spectre_path(root)), "--console", "--render-test", str(scenario_path(root, scenario_name))], root)
+            print_render_report(root, scenario_name)
             if rc != 0:
-                return rc
-        return 0
+                overall_rc = rc
+        return overall_rc
 
     if command == "blessall":
         if ensure_built(root) != 0:
