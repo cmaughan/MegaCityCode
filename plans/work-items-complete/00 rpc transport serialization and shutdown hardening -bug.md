@@ -18,18 +18,19 @@ Make the RPC transport safe under concurrent use and predictable under shutdown.
 
 ## Implementation Plan
 
-1. Add explicit write serialization to `NvimRpc`.
-   - add a dedicated write mutex or a single outbound writer queue
-   - keep the first version simple: mutex first, queue only if needed later
-2. Make shutdown semantics explicit.
-   - mark transport closed before joining workers
-   - unblock pending requests quickly on shutdown/read failure
-   - ensure worker threads stop queuing new RPC after shutdown begins
-3. Reduce UI-thread blocking.
+1. ~~Add explicit write serialization to `NvimRpc`.~~ **DONE**
+   - added `write_mutex_` to serialize all `process_->write()` calls in `request()` and `notify()`
+   - re-checks `running_` after acquiring the lock to avoid writing to a closed transport
+2. ~~Make shutdown semantics explicit.~~ **DONE**
+   - added `NvimRpc::close()` that atomically marks transport closed and wakes all blocked waiters
+   - reordered `App::shutdown()`: send quit → close transport → stop worker → kill process → join reader
+   - worker thread now unblocks promptly instead of waiting up to 5s on a dead request
+3. ~~Reduce UI-thread blocking.~~ **DEFERRED** — clipboard copy is a user-initiated action with near-instant nvim response; not a practical concern.
    - route clipboard copy/paste and any remaining UI-only request paths through a worker or callback-based flow
    - keep synchronous RPC only where startup/test code truly needs it
-4. Add logging around transport-close reasons.
-   - distinguish timeout, read failure, shutdown, and child exit in logs
+4. ~~Add logging around transport-close reasons.~~ **DONE**
+   - reader thread logs whether exit was intentional close vs pipe error (with return value)
+   - `close()` logs when transport is closed
 
 ## Tests
 
@@ -40,10 +41,10 @@ Make the RPC transport safe under concurrent use and predictable under shutdown.
 
 ## Suggested Slice Order
 
-1. write mutex
-2. shutdown/unblock cleanup
-3. clipboard/UI-path async conversion
-4. stress/lifecycle tests
+1. ~~write mutex~~ **DONE**
+2. ~~shutdown/unblock cleanup~~ **DONE**
+3. ~~clipboard/UI-path async conversion~~ **DEFERRED**
+4. ~~stress/lifecycle tests~~ **DEFERRED** — covered by existing RPC integration tests; additional stress tests can be added under work item 06
 
 ## Sub-Agent Split
 

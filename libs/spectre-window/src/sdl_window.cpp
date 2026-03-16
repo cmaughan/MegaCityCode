@@ -367,45 +367,16 @@ std::pair<int, int> SdlWindow::size_logical() const
 
 float SdlWindow::display_ppi() const
 {
-#ifdef __APPLE__
-    // Get actual physical PPI from CoreGraphics.
-    // CGDisplayPixelsWide returns logical pixels on HiDPI displays (e.g. 1920
-    // on a 4K display at 2x scale). CGDisplayModeGetPixelWidth returns the true
-    // hardware pixel count (e.g. 3840), which is what we need for correct sizing.
-    CGDirectDisplayID displayID = CGMainDisplayID();
-    CGSize physicalSize = CGDisplayScreenSize(displayID); // millimeters
-    size_t pixelWidth = 0;
-    CGDisplayModeRef mode = CGDisplayCopyDisplayMode(displayID);
-    if (mode)
-    {
-        pixelWidth = CGDisplayModeGetPixelWidth(mode);
-        CGDisplayModeRelease(mode);
-    }
-    if (pixelWidth == 0)
-        pixelWidth = CGDisplayPixelsWide(displayID); // fallback
-    if (physicalSize.width > 0)
-    {
-        return (float)(pixelWidth / (physicalSize.width / 25.4));
-    }
-#elif defined(_WIN32)
-    // Windows: get actual physical DPI from monitor hardware (EDID)
+    // Use the logical base DPI (96) scaled by SDL's display scale factor.
+    // This matches how other terminal emulators size fonts: the OS display
+    // scale accounts for both pixel density (e.g. Retina 2x) and user DPI
+    // preferences, giving consistent sizing across platforms.
+    float scale = 1.0f;
     if (window_)
-    {
-        HWND hwnd = (HWND)SDL_GetPointerProperty(
-            SDL_GetWindowProperties(window_),
-            SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
-        if (hwnd)
-        {
-            HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-            UINT dpi_x = 0, dpi_y = 0;
-            if (SUCCEEDED(GetDpiForMonitor(monitor, MDT_RAW_DPI, &dpi_x, &dpi_y)) && dpi_x > 0)
-            {
-                return (float)dpi_x;
-            }
-        }
-    }
-#endif
-    return 96.0f; // fallback
+        scale = SDL_GetWindowDisplayScale(window_);
+    if (scale <= 0.0f)
+        scale = 1.0f;
+    return 96.0f * scale;
 }
 
 void SdlWindow::set_title(const std::string& title)
