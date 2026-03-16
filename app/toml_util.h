@@ -2,6 +2,8 @@
 // Internal helpers shared by app_config.cpp and render_test.cpp.
 // All functions are in namespace spectre::toml.
 
+#include <spectre/string_util.h>
+
 #include <algorithm>
 #include <cctype>
 #include <string>
@@ -10,13 +12,7 @@
 namespace spectre::toml
 {
 
-inline std::string trim(std::string value)
-{
-    auto not_space = [](unsigned char ch) { return !std::isspace(ch); };
-    value.erase(value.begin(), std::find_if(value.begin(), value.end(), not_space));
-    value.erase(std::find_if(value.rbegin(), value.rend(), not_space).base(), value.end());
-    return value;
-}
+using spectre::trim;
 
 inline std::string unquote(std::string value)
 {

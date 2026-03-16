@@ -7,162 +7,110 @@ This document synthesizes:
 - [[review-latest.gpt]]
 - [[review-latest.claude]]
 
-Both reviews were static snapshot reviews, not fresh runtime investigations. The consensus below reconciles those reviews against the current tree so already-landed work is not blindly re-opened.
+Both source reviews were static snapshot reviews. This refresh reconciles those notes against the current repository state so finished work is not reopened as if it were still pending.
 
-## What Is Already Done And Should Not Be Reopened
+## Current Tree Reconciliation
 
-The current tree already has several areas that older review cycles used to flag:
+The main correctness and architecture concerns from the last review cycle have already been executed as concrete work items and should stay closed:
 
-- render snapshots and blessed UI regression images
-- startup smoke coverage in CTest/CI
-- logging infrastructure
-- user config persistence
-- Unicode width conformance checks against headless Neovim
-- title updates, clipboard shortcuts, and basic IME plumbing
-- shared CPU-side renderer state across Vulkan and Metal
+- [[../work-items-complete/00 rpc transport serialization and shutdown hardening -bug]]
+- [[../work-items-complete/01 app loop and ui request decomposition -feature]]
+- [[../work-items-complete/02 render test extraction and parser unification -feature]]
+- [[../work-items-complete/03 public api boundary cleanup -feature]]
+- [[../work-items-complete/04 grid wide-cell repair and redraw robustness -bug]]
+- [[../work-items-complete/05 vulkan robustness and atlas upload rework -bug]]
+- [[../work-items-complete/06 test seam cleanup and lifecycle coverage -test]]
 
-Those are not current backlog items unless a new concrete bug appears.
+That means the old consensus priorities around RPC hardening, `App` decomposition, render-test extraction, boundary cleanup, grid correctness, Vulkan robustness, and lifecycle coverage are no longer the active planning problem.
 
-## Where The Reviews Strongly Agree
+## Where The Reviews Still Agree
 
-### 1. RPC is still the main correctness hotspot
+### 1. Platform-facing polish is the main remaining product gap
 
-GPT is strongest here, but Claude’s review supports the same direction indirectly through the blocking-UI and broad-surface observations.
-
-Current verified issues:
-
-- `NvimRpc` still writes to the pipe without a write mutex, even though requests and notifications can come from different threads.
-- the UI thread still performs blocking RPC for clipboard copy/paste paths
-- worker-thread shutdown can still wait on slow RPC activity
+GPT is strongest on the concrete user-facing items here: clipboard behavior, IME composition visibility, display-following DPI behavior, and default presentation polish. Claude is directionally aligned that the remaining work is less about core architecture and more about quality of integration.
 
 Consensus:
 
-- harden the transport before adding more UI features on top of it
-- make request ownership and shutdown behavior explicit
-- remove avoidable blocking RPC from UI-facing paths
+- keep the remaining platform work grouped as one follow-on item
+- do not treat it as a correctness blocker
+- leave it parked until platform UX becomes the next deliberate push
 
-### 2. `App` is still too thick
+Tracked item:
 
-Both reviews independently land on the same conclusion: the repo-level architecture is good, but `app/app.cpp` is still the main merge hotspot.
+- [[../work-items-icebox/07 platform text and display integration -feature]]
 
-Current verified issues:
+### 2. GUI ergonomics and observability are still useful, but optional
 
-- cursor blink state machine
-- startup and resize policy
-- clipboard policy
-- render-test/smoke-mode execution
-- config persistence hooks
-- top-level event routing
+Claude emphasizes observability, config UX, and keeping medium-priority GUI work separate from correctness. GPT’s QoL ideas overlap on discoverability, diagnostics, and richer user affordances, even if the specific feature list differs.
 
 Consensus:
 
-- keep `App` as orchestration only
-- move policy-heavy subflows into smaller helpers
-- make the run loop, UI request handling, and test harness paths easier to evolve independently
+- keep GUI ergonomics separate from platform integration
+- preserve the existing split between low-risk ergonomics and larger affordances
+- leave this work in the icebox until there is explicit appetite for UX investment
 
-### 3. Test harness code is still too entangled with production code
+Tracked item:
 
-Both reviews call this out from different angles.
-
-Current verified issues:
-
-- `app/render_test.cpp` is compiled into `spectre.exe`
-- the test target also compiles `../app/render_test.cpp` directly
-- tests still include private `src` directories from multiple libraries
-- `app_config.cpp` and `render_test.cpp` still duplicate TOML-like parsing helpers
-
-Consensus:
-
-- extract reusable parsing/reporting helpers into a small shared implementation layer
-- keep render-test mechanics available to tests and tools without making them part of the shipping app surface
-- shift tests toward public seams and narrower internal test utilities
-
-### 4. Public boundaries still leak implementation detail
-
-The reviews agree here even when they emphasize different examples.
-
-Current verified issues:
-
-- `IWindow` still exposes `SDL_Window*`
-- `font.h` is still only a passthrough to `text_service.h`
-- `GLYPH_ATLAS_SIZE` still lives in shared `spectre-types`
-- `nvim.h` still exports process, RPC, msgpack, redraw, and input concerns together
-
-Consensus:
-
-- reduce rebuild and merge blast radius by narrowing public surfaces
-- move implementation constants and raw backend handles downward
-- split broad headers when the split improves ownership, not just file count
-
-### 5. Vulkan and redraw edge cases still deserve targeted hardening
-
-GPT is stronger on lifecycle and grid correctness; Claude is stronger on specific Vulkan resource-management smells. Together they point at the same thing: the remaining risk is now in edge-path robustness, not the happy path.
-
-Current verified issues or likely hotspots:
-
-- unchecked or awkward Vulkan resource recreation paths
-- synchronous atlas upload stalls
-- wide-cell overwrite/repair edge behavior in `Grid`
-- redraw/parser fuzz coverage still focused more on valid traffic than hostile or malformed traffic
-
-Consensus:
-
-- do not start with broad rewrites
-- target the remaining correctness/perf hotspots surgically and back them with regression tests
+- [[../work-items-icebox/08 gui ergonomics and observability -feature]]
 
 ## Where The Reviews Differ
 
 ### GPT review bias
 
-GPT is more useful on:
+GPT pushes harder on larger product-facing features:
 
-- RPC correctness
-- shutdown and threading risk
-- blocking UI paths
-- concrete public-boundary leaks
+- IME composition as a real UI feature
+- configurable keybindings
+- `ext_multigrid`
+- dynamic atlas growth
+- broader GUI convenience features
 
 ### Claude review bias
 
-Claude is more useful on:
+Claude pushes harder on structural cleanup:
 
-- refactoring seams
-- render-test and parser duplication
-- code smell cleanup
-- medium-priority GUI ergonomics ideas
+- keeping `App` thin
+- extracting reusable seams
+- reducing duplication
+- improving testability around subsystem boundaries
 
 ### Consensus resolution
 
-The codebase is no longer in “big missing architecture” territory. The right ordering now is:
+The structural items Claude pushed are mostly the things that became work items `00` through `06`, and those are now complete. GPT still identifies real user-facing gaps, but they are no longer urgent enough to pull back into the active backlog automatically.
 
-1. correctness and blocking-risk fixes
-2. interface and ownership cleanup
-3. test harness extraction and seam cleanup
-4. lower-priority GUI/platform polish
+The current shared position is:
 
-That means the GPT concerns set the order, and the Claude concerns shape the extraction plan.
+1. keep the active backlog empty rather than inventing new urgency
+2. thaw `07` first when platform integration becomes the goal
+3. thaw `08` first when ergonomics or observability becomes the goal
+4. keep bigger GPT-only ideas like `ext_multigrid` or dynamic atlas growth in reserve until a concrete need justifies their scope
 
-## Current Recommended Work Order
+## Recommended Path Forward
 
-1. Serialize RPC writes and harden RPC shutdown semantics.
-2. Remove blocking UI-thread RPC where it still exists.
-3. Split `App` responsibilities so loop policy, request execution, and test harness logic stop colliding.
-4. Extract render-test/config parsing helpers and stop compiling ad hoc test plumbing directly into both production and tests.
-5. Narrow `IWindow`, `nvim.h`, and font/shared-type boundaries.
-6. Add targeted redraw/grid/Vulkan failure coverage while fixing the known edge cases.
-7. Only then spend time on QoL features like richer clipboard integration, IME composition UI, overlays, or tab/file chrome.
+1. Leave the active backlog empty for now.
+2. If the next push is platform quality, thaw [[../work-items-icebox/07 platform text and display integration -feature]].
+3. If the next push is daily UX/debuggability, thaw [[../work-items-icebox/08 gui ergonomics and observability -feature]].
+4. Revisit larger feature ideas only after one of those tracks becomes active or a new bug forces reprioritization.
 
 ## Work Item Set
 
-The current backlog extracted from this consensus is:
+Active:
 
-1. [[00 rpc transport serialization and shutdown hardening -bug]]
-2. [[01 app loop and ui request decomposition -feature]]
-3. [[02 render test extraction and parser unification -feature]]
-4. [[03 public api boundary cleanup -feature]]
-5. [[04 grid wide-cell repair and redraw robustness -bug]]
-6. [[05 vulkan robustness and atlas upload rework -bug]]
-7. [[06 test seam cleanup and lifecycle coverage -test]]
-8. [[07 platform text and display integration -feature]]
-9. [[08 gui ergonomics and observability -feature]]
+- none
 
-See [[../work-items/index]] for the per-item execution notes.
+Icebox:
+
+- [[../work-items-icebox/07 platform text and display integration -feature]]
+- [[../work-items-icebox/08 gui ergonomics and observability -feature]]
+
+Completed from this review cycle:
+
+- [[../work-items-complete/00 rpc transport serialization and shutdown hardening -bug]]
+- [[../work-items-complete/01 app loop and ui request decomposition -feature]]
+- [[../work-items-complete/02 render test extraction and parser unification -feature]]
+- [[../work-items-complete/03 public api boundary cleanup -feature]]
+- [[../work-items-complete/04 grid wide-cell repair and redraw robustness -bug]]
+- [[../work-items-complete/05 vulkan robustness and atlas upload rework -bug]]
+- [[../work-items-complete/06 test seam cleanup and lifecycle coverage -test]]
+
+Model: Codex (GPT-5)

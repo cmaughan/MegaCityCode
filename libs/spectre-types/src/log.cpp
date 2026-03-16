@@ -1,4 +1,5 @@
 #include <spectre/log.h>
+#include <spectre/string_util.h>
 
 #include <algorithm>
 #include <cctype>
@@ -43,15 +44,6 @@ LoggerState& state()
     return logger_state;
 }
 
-std::string ascii_lower(std::string_view value)
-{
-    std::string lowered(value);
-    std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char c) {
-        return (char)std::tolower(c);
-    });
-    return lowered;
-}
-
 bool stderr_is_interactive()
 {
 #ifdef _WIN32
@@ -64,7 +56,7 @@ bool stderr_is_interactive()
 
 std::optional<LogLevel> parse_log_level(std::string_view value)
 {
-    std::string lowered = ascii_lower(value);
+    std::string lowered = spectre::ascii_lower(value);
     if (lowered == "error")
         return LogLevel::Error;
     if (lowered == "warn" || lowered == "warning")
@@ -80,7 +72,7 @@ std::optional<LogLevel> parse_log_level(std::string_view value)
 
 std::optional<LogCategory> parse_log_category(std::string_view value)
 {
-    std::string lowered = ascii_lower(value);
+    std::string lowered = spectre::ascii_lower(value);
     if (lowered == "app")
         return LogCategory::App;
     if (lowered == "rpc")
@@ -110,14 +102,10 @@ std::vector<LogCategory> parse_category_list(std::string_view value)
         if (end == std::string_view::npos)
             end = value.size();
 
-        while (start < end && std::isspace((unsigned char)value[start]))
-            ++start;
-        while (end > start && std::isspace((unsigned char)value[end - 1]))
-            --end;
-
-        if (start < end)
+        std::string token = spectre::trim(std::string(value.substr(start, end - start)));
+        if (!token.empty())
         {
-            auto parsed = parse_log_category(value.substr(start, end - start));
+            auto parsed = parse_log_category(token);
             if (parsed)
                 categories.push_back(*parsed);
         }

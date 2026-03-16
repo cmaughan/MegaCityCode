@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <vector>
 
 namespace spectre
 {
@@ -96,6 +97,18 @@ struct CellUpdate
     Color sp;
     AtlasRegion glyph;
     uint32_t style_flags = 0;
+};
+
+struct CapturedFrame
+{
+    int width = 0;
+    int height = 0;
+    std::vector<uint8_t> rgba;
+
+    bool valid() const
+    {
+        return width > 0 && height > 0 && rgba.size() == static_cast<size_t>(width * height * 4);
+    }
 };
 
 } // namespace spectre

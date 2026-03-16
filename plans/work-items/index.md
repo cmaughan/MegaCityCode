@@ -4,18 +4,22 @@ This index tracks the current backlog extracted from [[../reviews/review-concens
 
 Priority order:
 
-1. [[05 vulkan robustness and atlas upload rework -bug]]
-3. [[07 platform text and display integration -feature]]
-4. [[08 gui ergonomics and observability -feature]]
+- none
+
+Icebox (moved to `../work-items-icebox/`):
+
+- [[../work-items-icebox/07 platform text and display integration -feature]]
+- [[../work-items-icebox/08 gui ergonomics and observability -feature]]
 
 Completed (moved to `../work-items-complete/`):
 
-- 00 rpc transport serialization and shutdown hardening
-- 01 app loop and ui request decomposition
-- 02 render test extraction and parser unification
-- 03 public api boundary cleanup
-- 04 grid wide-cell repair and redraw robustness
-- 06 test seam cleanup and lifecycle coverage
+- [[../work-items-complete/00 rpc transport serialization and shutdown hardening -bug]]
+- [[../work-items-complete/01 app loop and ui request decomposition -feature]]
+- [[../work-items-complete/02 render test extraction and parser unification -feature]]
+- [[../work-items-complete/03 public api boundary cleanup -feature]]
+- [[../work-items-complete/04 grid wide-cell repair and redraw robustness -bug]]
+- [[../work-items-complete/05 vulkan robustness and atlas upload rework -bug]]
+- [[../work-items-complete/06 test seam cleanup and lifecycle coverage -test]]
 
 Execution rule:
 

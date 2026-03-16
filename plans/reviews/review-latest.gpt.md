@@ -1,94 +1,177 @@
-Based on the supplied `all_code.md` snapshot only, this is a static review of the latest exported tree. No local files, builds, binaries, or tests were used.
+# Spectre Review Report
 
-**Findings**
-1. `Critical`: RPC writes are not serialized. [`libs/spectre-nvim/src/rpc.cpp`](D:/dev/spectre/libs/spectre-nvim/src/rpc.cpp), [`app/ui_request_worker.cpp`](D:/dev/spectre/app/ui_request_worker.cpp), [`app/app.cpp`](D:/dev/spectre/app/app.cpp), and [`libs/spectre-nvim/src/input.cpp`](D:/dev/spectre/libs/spectre-nvim/src/input.cpp) all allow `request()`/`notify()` from different threads, but `NvimRpc` writes straight to the pipe with no write mutex. That can interleave msgpack frames and create rare protocol corruption.
-2. `High`: Exit is not robustly non-blocking. [`app/ui_request_worker.cpp`](D:/dev/spectre/app/ui_request_worker.cpp) joins a worker that may be stuck in a 5-second RPC call, [`libs/spectre-nvim/src/nvim_process.cpp`](D:/dev/spectre/libs/spectre-nvim/src/nvim_process.cpp) waits during shutdown, and [`libs/spectre-renderer/src/metal/metal_renderer.mm`](D:/dev/spectre/libs/spectre-renderer/src/metal/metal_renderer.mm) waits forever on the frame semaphore. A hung child or GPU can stall shutdown.
-3. `High`: The UI thread still does blocking RPC. [`app/app.cpp`](D:/dev/spectre/app/app.cpp) uses synchronous `nvim_eval` for copy, and [`libs/spectre-nvim/src/input.cpp`](D:/dev/spectre/libs/spectre-nvim/src/input.cpp) uses synchronous `nvim_paste`. Slow or wedged Neovim will freeze input and rendering.
-4. `High`: `app` is much thicker than the stated architecture. [`app/app.cpp`](D:/dev/spectre/app/app.cpp) owns lifecycle, event pump, cursor blink state machine, clipboard policy, font zoom, resize queuing, IME placement, render-test capture, and config persistence. That is one of the main merge hotspots for parallel work.
-5. `High`: The window abstraction is incomplete. [`app/app.h`](D:/dev/spectre/app/app.h) hard-depends on `SdlWindow` because [`libs/spectre-window/include/spectre/window.h`](D:/dev/spectre/libs/spectre-window/include/spectre/window.h) does not expose `wait_events()`, `wake()`, or `activate()`. The interface says “window abstraction”; the app still depends on SDL-specific behavior.
-6. `High`: Inference from [`libs/spectre-grid/src/grid.cpp`](D:/dev/spectre/libs/spectre-grid/src/grid.cpp): wide-cell repair is one-sided. `set_cell()` clears a continuation on the right when overwriting a wide leader, but does not repair the leader on the left when overwriting a former continuation cell. If redraw batches start inside a continuation column, stale wide-glyph state can survive.
-7. `Medium-High`: Tests cut through private boundaries. [`tests/CMakeLists.txt`](D:/dev/spectre/tests/CMakeLists.txt) pulls in `src` directories and compiles [`app/render_test.cpp`](D:/dev/spectre/app/render_test.cpp) directly. That makes refactors noisy and reduces the value of the public library surfaces.
-8. `Medium`: The Neovim surface is too broad and stringly typed. [`libs/spectre-nvim/include/spectre/nvim.h`](D:/dev/spectre/libs/spectre-nvim/include/spectre/nvim.h) exposes process management, msgpack value model, RPC, redraw parsing, and input translation in one public header. Small changes will force wide rebuilds and frequent merge conflicts.
-9. `Medium`: Parsing/reporting is hand-rolled and duplicated. [`app/app_config.cpp`](D:/dev/spectre/app/app_config.cpp) and [`app/render_test.cpp`](D:/dev/spectre/app/render_test.cpp) each implement partial TOML-like parsing; `render_test.cpp` also emits JSON by string concatenation without escaping. This is fragile around commas, quotes, and newlines.
-10. `Medium`: Vulkan recovery paths are weak. [`libs/spectre-renderer/src/vulkan/vk_buffers.cpp`](D:/dev/spectre/libs/spectre-renderer/src/vulkan/vk_buffers.cpp) destroys the old buffer before checking new allocation success and ignores one allocation return value; [`libs/spectre-renderer/src/vulkan/vk_context.cpp`](D:/dev/spectre/libs/spectre-renderer/src/vulkan/vk_context.cpp) can leave partial framebuffer creation failure unpropagated.
-11. `Medium`: macOS DPI handling is wrong for multi-monitor setups. [`libs/spectre-window/src/sdl_window.cpp`](D:/dev/spectre/libs/spectre-window/src/sdl_window.cpp) uses `CGMainDisplayID()` instead of the display actually hosting the window, so font metrics can be wrong after moving the window.
-12. `Low-Medium`: Repo hygiene will create review noise. [`.obsidian/workspace.json`](D:/dev/spectre/.obsidian/workspace.json) tracks user-local editor state and build detritus, which makes multi-agent review output less stable and less relevant.
+## Scope and Method
+This review is based only on the supplied `all_code.md` snapshot from `plans/reviews/all_code.md`. I did not inspect local files, build, run, or test anything. Findings below are from static review of the provided code and project layout.
 
-**Separation And Layout**
-- The first-order split into `types`, `window`, `renderer`, `font`, `grid`, and `nvim` is good and easy to understand.
-- The cleanest separation is in shared renderer state: [`libs/spectre-renderer/src/renderer_state.cpp`](D:/dev/spectre/libs/spectre-renderer/src/renderer_state.cpp) keeps a large chunk of backend logic unified.
-- The weakest seams are `app`, `nvim`, and render-test support. Those are still coarse ownership areas rather than small modules.
-- Biggest merge hotspots for multiple agents are [`app/app.cpp`](D:/dev/spectre/app/app.cpp), [`libs/spectre-nvim/include/spectre/nvim.h`](D:/dev/spectre/libs/spectre-nvim/include/spectre/nvim.h), [`libs/spectre-types/include/spectre/unicode.h`](D:/dev/spectre/libs/spectre-types/include/spectre/unicode.h), and [`app/render_test.cpp`](D:/dev/spectre/app/render_test.cpp).
-- Tests currently validate internals as much as contracts, so ownership boundaries are weaker than the directory layout suggests.
+## Executive Summary
+The repository is directionally strong: the module split is sensible, dependency direction is mostly clean, core abstractions are small, and the codebase is already more testable than many GUI frontends. The biggest risks are not raw complexity so much as boundary leakage and lifecycle coupling in a few key places: `app` still owns too much orchestration detail, renderer state/upload logic is duplicated across backends, some public APIs expose too much low-level structure, and several correctness-sensitive paths remain under-tested relative to their risk.
 
-**Testing Holes**
-- There is no stress test for concurrent RPC traffic from UI thread plus resize worker.
-- There is no shutdown-latency test for stuck RPC, stuck Neovim, or blocked renderer teardown.
-- There is no app-level test for font resize + relayout + deferred Neovim resize interaction.
-- There is no direct test for the suspected wide-cell continuation overwrite bug.
-- There is no config parser round-trip test for escaping, commas, or malformed arrays.
-- There is no malformed-redraw fuzz/passive robustness suite beyond the happy-path replay cases.
-- There is no backend-specific test for Vulkan resize/recreate failures.
-- There is no backend-specific test for Metal capture/shutdown edge cases.
-- There is no test proving macOS DPI math follows the active window display.
-- There is no contract test ensuring render-test report JSON stays valid when messages contain quotes or paths.
+The code is workable for multiple agents, but not yet optimised for parallel change throughput. The main friction points are “logic smeared across adjacent layers”, platform-specific duplication, hand-rolled parsers/protocol handling, and a few places where stateful sequencing matters but is not strongly encapsulated.
 
-**Top 10 Good**
-- The repo has a clear architectural intent and mostly follows it.
-- The renderer abstraction is practical, and `RendererState` reduces backend duplication well.
-- Grid state is simple, testable, and cheap to reason about.
-- Unicode width handling is treated seriously and compared against Neovim.
-- `tests/support/replay_fixture.h` is exactly the right kind of redraw test helper.
-- The render snapshot harness is useful and realistic for a GUI project.
-- Logging is small, configurable, and testable without framework overhead.
-- Dependency versions are pinned instead of floating.
-- CI at least exercises Windows and macOS build/test paths.
-- Most code is direct and readable, with little unnecessary abstraction.
+---
 
-**Top 10 Bad**
-- Unsynchronized RPC writes are the biggest correctness risk.
-- Shutdown paths are still blocking and brittle.
-- `app/app.cpp` is too large for safe parallel ownership.
-- `IWindow` is not strong enough to hide the SDL implementation.
-- Tests rely on private headers and compiled-in private sources.
-- Config and scenario parsing are bespoke and duplicated.
-- Error handling in Vulkan resource recreation is uneven.
-- macOS DPI logic is tied to the wrong display.
-- `nvim.h` is too wide a public surface.
-- Versioned editor workspace state adds churn unrelated to product behavior.
+## Architecture Review
 
-**Best 10 Quality-Of-Life Features To Add**
-- A GUI font picker with live preview and editable fallback chain.
-- Persistent window position and monitor restore, not just size.
-- Clickable URLs and file paths inside the grid.
-- Drag-and-drop file opening into the current or a new tab.
-- A small command palette for GUI-only actions like zoom, screenshots, logs, and config.
-- A settings UI for font size, padding, cursor blink, and renderer diagnostics.
-- A renderer/debug overlay showing DPI, cell size, atlas usage, and RPC latency.
-- Native file/folder open dialogs for non-terminal workflows.
-- Recent files and last-session restore.
-- Better clipboard UX with async operations and visible failure feedback.
+### What is working well
+- The high-level library split is good: `types`, `window`, `renderer`, `font`, `grid`, `nvim`, and thin-ish `app` is a sensible decomposition.
+- Public interfaces are mostly small and understandable: `IRenderer`, `IWindow`, `IGridSink`, `IRpcChannel`.
+- Renderer backends are properly hidden behind `create_renderer()`, which protects the app from backend-private headers.
+- `spectre-grid` is independent and pure enough to test well.
+- `spectre-nvim` contains the right kinds of concerns: process control, RPC, redraw parsing, input translation.
+- `spectre-font` isolates shaping/raster/atlas responsibilities reasonably well.
+- `RendererState` is a good seam between app-level cell updates and GPU upload details.
+- Tests already target several pure subsystems instead of only app-level smoke tests.
+- Render scenarios are expressed declaratively in `.toml`, which is good for reproducibility.
+- The repo has clear automation scripts for docs, review export, snapshot runs, and cross-agent workflows.
 
-**Best 10 Tests To Add**
-- A multi-threaded RPC stress test mixing `request()` and `notify()` from several threads.
-- A shutdown test where a resize RPC is in flight while the app exits.
-- A grid test that overwrites only the continuation half of a wide glyph.
-- An app config round-trip test with quotes, commas, and malformed arrays.
-- A redraw parser robustness suite with malformed or truncated event payloads.
-- A Vulkan resize/recreate test that simulates allocation or framebuffer failure.
-- A Metal shutdown test that proves teardown cannot block forever.
-- A DPI-provider test that verifies window-display-specific font metrics on macOS.
-- An atlas exhaustion test covering full-grid dirty replay after reset.
-- A render-test report test that verifies valid JSON escaping in failure messages.
+### Structural weaknesses
+- `app` is still too stateful and central. [`app/app.cpp`](D:/dev/spectre/app/app.cpp) is both lifecycle coordinator and policy engine for resize, capture, cursor, overlay, config persistence, startup commands, and UI interaction.
+- `GridRenderingPipeline` lives in `app/` even though it is a reusable subsystem boundary between grid/highlights/text and renderer; that makes `app` less “thin orchestration only” than intended.
+- Render-test parsing/output logic also lives in `app/`, but it behaves like an infrastructure/test-support module.
+- `spectre-nvim` mixes transport, redraw protocol interpretation, and input translation in one library. That is okay at current size, but it will become a hotspot for multi-agent conflicts.
+- Renderer backends duplicate frame lifecycle, capture handling, atlas upload plumbing, and dirty-state upload patterns that should be partially shared.
+- Public type surfaces such as `MpackValue` and `GpuCell` are low-level enough that they encourage cross-layer coupling.
+- `HighlightTable`, `UiOptions`, and cursor policy are split across `types`, `nvim`, and `app` in a way that makes ownership less obvious.
+- The repo includes planning/Obsidian workspace metadata in tracked source export, which adds noise for automated analysis and review workflows.
+- Some platform logic is embedded directly in implementation files instead of isolated behind narrower services.
+- Several “special cases” are handled inline instead of behind named policies, which makes future refactors harder.
 
-**Weakest Current Features / Behaviors**
-- Blocking quit/shutdown behavior.
-- Synchronous clipboard copy/paste through Neovim RPC.
-- Hard-coded and path-based font discovery/configuration.
-- Single-grid-only UI support with `ext_multigrid` disabled.
-- Split input policy between `App` and `NvimInput`.
-- Render-test infrastructure living inside the shipping app path.
-- Working-directory-dependent asset lookup.
-- Incomplete multi-monitor DPI handling.
-- Private-internals-heavy test strategy.
-- Versioned local editor workspace state in the main repo.
+---
+
+## Findings
+
+| Severity | Area | Finding | Why it matters |
+|---|---|---|---|
+| High | App boundary | `App` remains a god-object for runtime policy and sequencing. | Harder for multiple agents to change safely; unrelated features collide in one file. |
+| High | Renderer design | `GridRenderingPipeline` is misplaced in `app/`. | It violates the intended dependency shape and reduces reuse/test isolation. |
+| High | Cross-backend maintainability | Vulkan and Metal duplicate similar frame/upload/capture logic. | Bug fixes will drift and backend parity will get harder over time. |
+| High | RPC robustness | `NvimRpc::reader_thread_func()` does O(n) `vector::erase` from the front for accumulated input. | Fine now, but poor scaling and fragile under heavy redraw throughput. |
+| High | Protocol typing | `UiEventHandler` is stringly typed and loosely validated. | Easy to regress redraw parsing; hard to extend safely. |
+| Medium | Config parsing | Hand-rolled TOML-like parsing in [`app/app_config.cpp`](D:/dev/spectre/app/app_config.cpp) and [`app/render_test.cpp`](D:/dev/spectre/app/render_test.cpp). | Small scope today, but brittle and duplicative. |
+| Medium | Font subsystem | Fallback font selection, color-font preference, atlas reset, and glyph raster policy are all bundled into `TextService::Impl`. | Powerful but dense; hard for parallel contributors to modify confidently. |
+| Medium | Concurrency | `UiRequestWorker` is tiny but lifecycle-sensitive and RPC-close-sensitive. | Needs stronger contract tests because shutdown ordering is subtle. |
+| Medium | Test gap | No direct tests for `App`, `GridRenderingPipeline`, `SdlWindow`, or renderer backend lifecycle beyond smoke/snapshot. | Highest-risk orchestration code has the weakest direct coverage. |
+| Medium | Agent ergonomics | Large implementation files (`app.cpp`, `text_service.cpp`, `vk_renderer.cpp`, `ui_events.cpp`) are likely merge-conflict magnets. | Slows concurrent work and encourages accidental coupling. |
+
+---
+
+## Code Smells and Maintainability Risks
+- Hand-rolled parsers appear in multiple places despite already having structured formats.
+- A lot of state transitions depend on call order rather than explicit state objects.
+- Multiple subsystems use booleans as mode flags instead of explicit state enums.
+- Rendering and UI policy are intertwined in cursor/debug-overlay/update paths.
+- Platform-specific code is sometimes embedded at too low a granularity, especially in window and renderer implementations.
+- `MpackValue` is a convenient but weakly typed boundary that pushes validation burden outward.
+- Several APIs return plain `bool` when richer error reporting would help diagnosis and testability.
+- The repo currently rewards “understand the whole stack” more than “change one isolated component”.
+- `all_code.md` export includes non-code workspace/config noise, which can distract review agents and automated tooling.
+- Some abstractions are thin wrappers over mutable global-ish processes rather than explicit domain models.
+
+---
+
+## Multi-Agent Collaboration Risks
+- The most likely conflict files are [`app/app.cpp`](D:/dev/spectre/app/app.cpp), [`libs/spectre-font/src/text_service.cpp`](D:/dev/spectre/libs/spectre-font/src/text_service.cpp), [`libs/spectre-nvim/src/ui_events.cpp`](D:/dev/spectre/libs/spectre-nvim/src/ui_events.cpp), and [`libs/spectre-renderer/src/vulkan/vk_renderer.cpp`](D:/dev/spectre/libs/spectre-renderer/src/vulkan/vk_renderer.cpp).
+- Ownership lines are not always sharp enough: resize behavior spans window, app, nvim, renderer, and text.
+- Shared mutable state is passed around as direct object references instead of via narrower commands/results.
+- The current structure is good for one strong maintainer, less good for many parallel contributors changing adjacent behavior.
+
+---
+
+## Testing Holes
+- No unit coverage for `GridRenderingPipeline` dirty-cell to renderer update behavior.
+- No direct tests for `App` lifecycle sequencing, especially init failure rollback and shutdown ordering.
+- No backend-agnostic renderer contract tests against `IRenderer`.
+- No tests for `SdlWindow` event translation edge cases.
+- No tests for capture-frame paths at abstraction level; only snapshot-level validation.
+- No property/fuzz-style coverage for RPC decode or redraw event parsing.
+- No tests for atlas reset behavior under repeated overflow plus pending overlay/debug content.
+- No tests for font-size change plus pending resize plus cursor/text-input-area interaction.
+- No tests for malformed or partially valid redraw batches beyond some `ui_events` cases.
+- No tests for config file persistence behavior across invalid user data and missing directories.
+
+---
+
+## Separation and Modularity Opportunities
+1. Move `GridRenderingPipeline` into `libs/spectre-renderer` or a new `libs/spectre-presentation`.
+2. Split `App` into lifecycle/bootstrap, UI session state, and runtime controller objects.
+3. Split `spectre-nvim` into transport/protocol/input submodules, even if still one library target.
+4. Extract a typed redraw-event decoder layer before `UiEventHandler`.
+5. Extract shared renderer frame/upload/capture utilities used by both Vulkan and Metal.
+6. Move render-test scenario parsing and file IO into `tests/support` or a dedicated testing utility library.
+7. Introduce explicit state structs for startup, resize, capture, and cursor policy.
+8. Replace ad hoc bools with small enums where sequencing matters.
+9. Reduce direct cross-subsystem mutation in `App`; prefer commands and callbacks with narrower payloads.
+10. Add backend contract fixtures so backend behavior is validated from the same expectations.
+
+---
+
+## Top 10 Good Things
+1. The overall module split is clear and mostly sensible.
+2. Dependency direction is mostly disciplined, especially around renderer privacy.
+3. `RendererState` is a strong abstraction seam.
+4. `Grid` is compact, testable, and relatively self-contained.
+5. The Unicode width logic is nontrivial and already backed by conformance-style tests.
+6. RPC integration tests exist and cover several failure modes.
+7. Render snapshot scenarios are declarative and reproducible.
+8. Logging is simple, configurable, and testable.
+9. Cross-platform build/test scripts are straightforward and readable.
+10. The repository already contains explicit planning/review workflows for iterative engineering.
+
+## Top 10 Bad Things
+1. `App` still owns too much behavior.
+2. `GridRenderingPipeline` is in the wrong architectural layer.
+3. Renderer backend duplication is higher than it should be.
+4. Redraw parsing is too stringly typed.
+5. Hand-rolled config/scenario parsing is duplicated.
+6. High-risk orchestration code has limited direct tests.
+7. Some APIs are too boolean/opaque for debugging.
+8. `MpackValue` encourages weak contracts at boundaries.
+9. Large hotspot files will create merge friction for multiple agents.
+10. Tracked workspace/planning metadata adds review noise to repository exports.
+
+## Best 10 Quality-of-Life Features To Add
+1. Runtime font picker and fallback-font inspector.
+2. Live reload for config/theme/font settings.
+3. Command palette for common GUI actions.
+4. Built-in keymap/shortcut help overlay.
+5. Inspector panel for renderer/font/grid diagnostics beyond the current debug overlay.
+6. Safer clipboard integration modes and paste preview for large pastes.
+7. Window/session restore including working directory and last geometry.
+8. Config schema validation with helpful user-facing error messages.
+9. Backend info/status page for GPU, shader, atlas, DPI, and nvim session health.
+10. Optional in-app issue/export bundle for logs, config, render snapshots, and environment summary.
+
+## Best 10 Tests To Add
+1. `App` initialization rollback tests across each failure stage.
+2. `App` shutdown ordering tests with hanging/closing RPC and process edge cases.
+3. `GridRenderingPipeline` tests for dirty cells, atlas updates, and overlay interaction.
+4. Backend-neutral `IRenderer` contract tests using a fake window.
+5. Fuzz/property tests for `decode_mpack_value()` and redraw event decoding.
+6. Resize/font-change/cursor/text-input-area interaction tests.
+7. Atlas overflow/reset tests while overlays and pending cell updates are active.
+8. More redraw parser tests for malformed mixed-valid event streams.
+9. Snapshot tests for undercurl/underline/strikethrough and cursor shapes.
+10. Tests for fallback-font choice and color-font preference across ambiguous glyph cases.
+
+## Worst 10 Features
+1. The app-level god-object orchestration style.
+2. Stringly typed redraw dispatch by event name.
+3. Duplicated renderer lifecycle logic across Vulkan and Metal.
+4. Hand-rolled TOML-like parsing in production code.
+5. Mutable sequencing via many booleans in `App`.
+6. Weakly typed RPC value plumbing as a broad public surface.
+7. Render-test logic embedded in app-facing code.
+8. Hotspot files that centralize too many unrelated responsibilities.
+9. Limited abstraction around window/input platform peculiarities.
+10. Review/export tooling that includes too much nonessential repo noise.
+
+## Recommended Fix Order
+1. Thin `App` aggressively: extract grid presentation pipeline and runtime policy objects.
+2. Add tests around `App` lifecycle and `GridRenderingPipeline` before further feature growth.
+3. Introduce a typed redraw decoding layer to reduce parser fragility.
+4. Consolidate shared renderer upload/capture logic to reduce backend drift.
+5. Replace duplicated ad hoc parsers with one small internal config/scenario parser module.
+6. Split hotspot source files to make parallel work safer.
+
+## Closing Assessment
+The application has a solid foundation and a good architectural intent. It is not a messy codebase, but it is at the point where further growth will either harden the boundaries or blur them. The current biggest opportunity is not “rewrite more”; it is “finish the separation the repo already claims to have”, especially around `app`, render presentation logic, and typed protocol handling.
