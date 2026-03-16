@@ -182,6 +182,7 @@ class NvimRpc : public IRpcChannel
 {
 public:
     bool initialize(NvimProcess& process);
+    void close();
     void shutdown();
 
     RpcResult request(const std::string& method, const std::vector<MpackValue>& params) override;
@@ -206,6 +207,7 @@ private:
     std::thread reader_thread_;
     std::atomic<bool> running_{ false };
 
+    std::mutex write_mutex_;
     std::mutex notif_mutex_;
     std::queue<RpcNotification> notifications_;
 

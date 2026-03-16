@@ -23,10 +23,19 @@ bool NvimRpc::initialize(NvimProcess& process)
     return true;
 }
 
+void NvimRpc::close()
+{
+    bool was_running = running_.exchange(false);
+    if (was_running)
+    {
+        SPECTRE_LOG_INFO(LogCategory::Rpc, "RPC transport closed");
+    }
+    response_cv_.notify_all();
+}
+
 void NvimRpc::shutdown()
 {
-    running_ = false;
-    response_cv_.notify_all();
+    close();
     if (reader_thread_.joinable())
     {
         reader_thread_.join();
@@ -50,12 +59,18 @@ RpcResult NvimRpc::request(const std::string& method, const std::vector<MpackVal
         return rpc_result;
     }
 
-    if (!process_->write(reinterpret_cast<const uint8_t*>(encoded.data()), encoded.size()))
     {
-        SPECTRE_LOG_ERROR(LogCategory::Rpc, "Write failed for request %s", method.c_str());
-        read_failed_ = true;
-        response_cv_.notify_all();
-        return rpc_result;
+        std::lock_guard<std::mutex> write_lock(write_mutex_);
+        if (!running_)
+            return rpc_result;
+
+        if (!process_->write(reinterpret_cast<const uint8_t*>(encoded.data()), encoded.size()))
+        {
+            SPECTRE_LOG_ERROR(LogCategory::Rpc, "Write failed for request %s", method.c_str());
+            read_failed_ = true;
+            response_cv_.notify_all();
+            return rpc_result;
+        }
     }
 
     std::unique_lock<std::mutex> lock(response_mutex_);
@@ -92,6 +107,10 @@ void NvimRpc::notify(const std::string& method, const std::vector<MpackValue>& p
         return;
     }
 
+    std::lock_guard<std::mutex> write_lock(write_mutex_);
+    if (!running_)
+        return;
+
     if (!process_->write(reinterpret_cast<const uint8_t*>(encoded.data()), encoded.size()))
     {
         SPECTRE_LOG_ERROR(LogCategory::Rpc, "Write failed for notification %s", method.c_str());
@@ -123,8 +142,11 @@ void NvimRpc::reader_thread_func()
         if (n <= 0)
         {
             if (!running_)
+            {
+                SPECTRE_LOG_INFO(LogCategory::Rpc, "Reader thread exiting (transport closed)");
                 break;
-            SPECTRE_LOG_ERROR(LogCategory::Rpc, "nvim pipe read error");
+            }
+            SPECTRE_LOG_ERROR(LogCategory::Rpc, "nvim pipe read error (n=%d)", n);
             read_failed_ = true;
             running_ = false;
             response_cv_.notify_all();

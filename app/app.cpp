@@ -704,12 +704,17 @@ void App::shutdown()
         config_.save();
     }
 
-    ui_request_worker_.stop();
-
+    // Send quit while transport is still open
     if (nvim_process_.is_running())
     {
         rpc_.notify("nvim_input", { NvimRpc::make_str("<C-\\><C-n>:qa!<CR>") });
     }
+
+    // Close transport to unblock any pending requests (e.g. resize worker)
+    rpc_.close();
+    ui_request_worker_.stop();
+
+    // Kill/wait for nvim process (closes pipes, unblocks reader thread)
     nvim_process_.shutdown();
     rpc_.shutdown();
 
