@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "plans/work-items/02 render test extraction and parser unification -feature.md",
+                "file": "plans/work-items-complete/06 test seam cleanup and lifecycle coverage -test.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "02 render test extraction and parser unification -feature"
+              "title": "06 test seam cleanup and lifecycle coverage -test"
             }
           }
         ]
@@ -185,19 +185,28 @@
   },
   "active": "c378cd0fc68e32e5",
   "lastOpenFiles": [
-    "build/CMakeFiles/Progress/98",
-    "build/CMakeFiles/Progress/97",
-    "build/CMakeFiles/Progress/96",
-    "build/CMakeFiles/Progress/95",
-    "build/CMakeFiles/Progress/90",
-    "build/CMakeFiles/Progress/89",
-    "build/tests/CMakeFiles/spectre-tests.dir/compiler_depend.internal.tmp72cfa",
-    "build/tests/CMakeFiles/spectre-tests.dir/compiler_depend.make.tmp0efc7",
-    "build/CMakeFiles/Progress/94",
-    "build/CMakeFiles/Progress/93",
-    "build/CMakeFiles/Progress/100",
-    "plans/work-items-complete/06 test seam cleanup and lifecycle coverage -test.md",
     "plans/work-items/03 public api boundary cleanup -feature.md",
+    "plans/work-items-complete/03 public api boundary cleanup -feature.md",
+    "tests/render/out/cmdline-view.macos.diff.bmp",
+    "tests/render/out/basic-view.macos.diff.bmp",
+    "build/Testing/Temporary/CTestCheckpoint.txt",
+    "build/Testing/Temporary/LastTest.log.tmpf7366",
+    "build/CMakeFiles/Progress/99",
+    "build/tests/CMakeFiles/spectre-tests.dir/render_test_parser_tests.cpp-3938f104.o.tmp",
+    "build/tests/CMakeFiles/spectre-tests.dir/rpc_integration_tests.cpp-d4304753.o.tmp",
+    "build/tests/CMakeFiles/spectre-tests.dir/rpc_codec_tests.cpp-9c9cc0ef.o.tmp",
+    "build/tests/CMakeFiles/spectre-tests.dir/renderer_state_tests.cpp-00fe08cb.o.tmp",
+    "build/CMakeFiles/Progress/98",
+    "build/tests/CMakeFiles/spectre-tests.dir/unicode_tests.cpp-3f38a716.o.tmp",
+    "build/tests/CMakeFiles/spectre-tests.dir/input_tests.cpp-44186370.o.tmp",
+    "plans/work-items-complete/06 test seam cleanup and lifecycle coverage -test.md",
+    "plans/work-items-complete/00 rpc transport serialization and shutdown hardening -bug.md",
+    "plans/work-items/02 render test extraction and parser unification -feature.md",
+    "plans/reviews/review-concensus.md",
+    "plans/prompts/consensus_review.md",
+    "plans/reviews/review-latest.claude.md",
+    "plans/reviews/review-latest.gpt.md",
+    "plans/prompts/review.md",
     "plans/work-items/05 vulkan robustness and atlas upload rework -bug.md",
     "plans/work-items/06 test seam cleanup and lifecycle coverage -test.md",
     "plans/work-items/07 platform text and display integration -feature.md",
@@ -206,10 +215,6 @@
     "plans/work-items/01 app loop and ui request decomposition -feature.md",
     "plans/work-items/04 grid wide-cell repair and redraw robustness -bug.md",
     "plans/work-items/00 rpc transport serialization and shutdown hardening -bug.md",
-    "plans/work-items/02 render test extraction and parser unification -feature.md",
-    "plans/reviews/review-latest.gpt.md",
-    "plans/reviews/review-latest.claude.md",
-    "plans/reviews/review-concensus.md",
     "plans/reviews/all_code.md",
     "tests/render/out/unicode-view.windows.diff.bmp",
     "tests/render/out/cmdline-view.windows.diff.bmp",
@@ -219,17 +224,12 @@
     "tests/render/out/cmdline-view.windows.actual.bmp",
     "tests/render/out/basic-view.windows.diff.bmp",
     "tests/render/reference/basic-view.windows.bmp",
-    "tests/render/out/basic-view.windows.actual.bmp",
-    "build-tools/_deps/vulkanmemoryallocator-src/tools/GpuMemDumpVis/README_files/Legend_Image_Linear.png",
     "build-tools/_deps/vulkanmemoryallocator-src/tools/GpuMemDumpVis/README.md",
     "build-tools/_deps/freetype-src/tests/README.md",
     "plans/design/learnings.md",
     "build-tools/_deps/mpack-src/test/README.md",
     "build-tools/_deps/mpack-src/docs/reader.md",
     "build-tools/_deps/mpack-src/docs/protocol.md",
-    "build-tools/_deps/mpack-src/docs/node.md",
-    "build-tools/_deps/mpack-src/docs/features.md",
-    "build-tools/_deps/mpack-src/docs/expect.md",
-    "build-tools/_deps/mpack-src/README.md"
+    "build-tools/_deps/mpack-src/docs/node.md"
   ]
 }

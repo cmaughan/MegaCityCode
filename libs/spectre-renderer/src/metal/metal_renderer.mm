@@ -83,7 +83,7 @@ bool MetalRenderer::initialize(IWindow& window)
     device_ = (__bridge_retained void*)device;
 
     // Get CAMetalLayer from SDL window
-    SDL_MetalView metalView = SDL_Metal_CreateView(window.native_handle());
+    SDL_MetalView metalView = SDL_Metal_CreateView(static_cast<SDL_Window*>(window.native_handle()));
     if (!metalView)
     {
         SPECTRE_LOG_ERROR(LogCategory::Renderer, "Failed to create Metal view: %s", SDL_GetError());

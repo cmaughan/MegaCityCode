@@ -1,6 +1,6 @@
 #include <SDL3/SDL.h>
 #include <cstdio>
-#include <spectre/nvim.h>
+#include <spectre/nvim_ui.h>
 
 namespace spectre
 {

@@ -99,7 +99,7 @@ public:
         int h = 0;
     };
 
-    bool initialize(FT_Face face, int pixel_size, int atlas_size = GLYPH_ATLAS_SIZE);
+    bool initialize(FT_Face face, int pixel_size, int atlas_size = 2048);
     void reset(FT_Face face, int pixel_size);
 
     const AtlasRegion& get_cluster(const std::string& text, FT_Face face, TextShaper& shaper);
@@ -170,7 +170,7 @@ private:
 
     FT_Face face_ = nullptr;
     int pixel_size_ = 0;
-    int atlas_size_ = GLYPH_ATLAS_SIZE;
+    int atlas_size_ = 2048;
 
     std::vector<uint8_t> atlas_;
     std::unordered_map<ClusterKey, AtlasRegion, ClusterKeyHash> cluster_cache_;

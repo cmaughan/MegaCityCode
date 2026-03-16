@@ -1,11 +1,8 @@
 #pragma once
-#include <array>
 #include <cstdint>
 
 namespace spectre
 {
-
-inline constexpr int GLYPH_ATLAS_SIZE = 2048;
 
 struct Color
 {

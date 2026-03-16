@@ -1,5 +1,5 @@
 #include <spectre/log.h>
-#include <spectre/nvim.h>
+#include <spectre/nvim_rpc.h>
 
 #include <sstream>
 

@@ -116,7 +116,7 @@ void VkRenderer::finish_capture_readback()
 
 bool VkRenderer::initialize(IWindow& window)
 {
-    if (!ctx_.initialize(window.native_handle()))
+    if (!ctx_.initialize(static_cast<SDL_Window*>(window.native_handle())))
         return false;
 
     auto [w, h] = window.size_pixels();

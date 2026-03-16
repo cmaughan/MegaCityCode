@@ -2,7 +2,7 @@
 
 #include <condition_variable>
 #include <mutex>
-#include <spectre/nvim.h>
+#include <spectre/nvim_rpc.h>
 #include <string>
 #include <thread>
 

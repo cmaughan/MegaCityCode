@@ -1,6 +1,6 @@
 # Spectre
 
-API docs: generate locally with `python .\do.py api` or `python .\scripts\build_docs.py --api-only`.
+API docs: **[cmaughan.github.io/spectre](https://cmaughan.github.io/spectre)** — or generate locally with `python scripts/gen_api_docs.py`.
 
 Spectre is a cross-platform Neovim GUI frontend with native GPU rendering:
 
@@ -309,15 +309,17 @@ Regenerate with `python scripts/build_docs.py`.
 
 ![C++ class diagram](docs/uml/spectre_classes.svg)
 
-### Local API Docs
+### API Docs
 
-Generate local API/reference docs with:
+The live API reference is published automatically to **[cmaughan.github.io/spectre](https://cmaughan.github.io/spectre)** on every push to `main`.
 
-```powershell
-python .\scripts\build_docs.py --api-only
+To generate locally:
+
+```bash
+python scripts/gen_api_docs.py
 ```
 
-This writes a local Doxygen site to `docs/api/index.html`. It is generated locally and ignored in Git.
+This writes a local Doxygen site to `docs/api/index.html`.
 
 ## Unicode Snapshot Example
 

@@ -23,7 +23,7 @@ class MetalRenderer : public IRenderer
 {
 public:
     static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
-    static constexpr int ATLAS_SIZE = GLYPH_ATLAS_SIZE;
+    static constexpr int ATLAS_SIZE = 2048;
 
     bool initialize(IWindow& window) override;
     void shutdown() override;

@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include <spectre/nvim.h>
+#include <spectre/nvim_rpc.h>
 
 namespace spectre
 {

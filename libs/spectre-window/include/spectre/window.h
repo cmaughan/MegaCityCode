@@ -4,8 +4,6 @@
 #include <string>
 #include <utility>
 
-struct SDL_Window;
-
 namespace spectre
 {
 
@@ -16,7 +14,7 @@ public:
     virtual bool initialize(const std::string& title, int width, int height) = 0;
     virtual void shutdown() = 0;
     virtual bool poll_events() = 0; // returns false if quit requested
-    virtual SDL_Window* native_handle() = 0;
+    virtual void* native_handle() = 0;
     virtual std::pair<int, int> size_logical() const = 0;
     virtual std::pair<int, int> size_pixels() const = 0;
     virtual float display_ppi() const = 0; // Physical pixels per inch of the display

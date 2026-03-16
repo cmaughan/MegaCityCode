@@ -17,7 +17,7 @@ public:
     bool wait_events(int timeout_ms);
     void activate();
     void wake();
-    SDL_Window* native_handle() override
+    void* native_handle() override
     {
         return window_;
     }

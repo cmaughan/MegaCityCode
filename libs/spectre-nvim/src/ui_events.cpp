@@ -1,5 +1,5 @@
 #include <cstdio>
-#include <spectre/nvim.h>
+#include <spectre/nvim_ui.h>
 #include <spectre/unicode.h>
 
 namespace spectre
