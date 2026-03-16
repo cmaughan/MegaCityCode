@@ -10,12 +10,12 @@ layout(location = 1) out vec3 frag_world_pos;
 
 void main() {
     vec2 positions[6] = vec2[](
-        vec2(-4.0, -4.0),
-        vec2( 4.0, -4.0),
-        vec2(-4.0,  4.0),
-        vec2( 4.0, -4.0),
-        vec2( 4.0,  4.0),
-        vec2(-4.0,  4.0)
+        vec2(-24.0, -24.0),
+        vec2( 24.0, -24.0),
+        vec2(-24.0,  24.0),
+        vec2( 24.0, -24.0),
+        vec2( 24.0,  24.0),
+        vec2(-24.0,  24.0)
     );
 
     vec2 uvs[6] = vec2[](

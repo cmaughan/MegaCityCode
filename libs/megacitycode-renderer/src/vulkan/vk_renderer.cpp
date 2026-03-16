@@ -115,8 +115,8 @@ Mat4 look_at(const Vec3& eye, const Vec3& target, const Vec3& up)
 ScenePushConstants build_scene_push_constants(const VkExtent2D& extent)
 {
     const float aspect = extent.height == 0 ? 1.0f : static_cast<float>(extent.width) / static_cast<float>(extent.height);
-    const Mat4 proj = perspective(55.0f * 3.1415926535f / 180.0f, aspect, 0.1f, 100.0f);
-    const Mat4 view = look_at({ 0.0f, 4.5f, 4.5f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f });
+    const Mat4 proj = perspective(48.0f * 3.1415926535f / 180.0f, aspect, 0.1f, 100.0f);
+    const Mat4 view = look_at({ 0.0f, 2.2f, 10.0f }, { 0.0f, 0.0f, -18.0f }, { 0.0f, 1.0f, 0.0f });
     const Mat4 view_proj = multiply(proj, view);
 
     ScenePushConstants push = {};

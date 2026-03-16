@@ -210,7 +210,7 @@ Reference images live under `tests/render/reference/` with platform suffixes lik
 
 Current scenarios:
 
-- `plane-view`: a fixed 3D plane viewed from a 45-degree elevated camera
+- `plane-view`: a low-angle 3D plane view with a visible horizon line
 
 ## Logging
 
